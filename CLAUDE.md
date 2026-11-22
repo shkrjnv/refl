@@ -36,6 +36,7 @@ refl — платформа изучения английского (general Eng
 | Аудио-конвейер, плеер, speaking | `docs/05-audio-player-speaking.md` |
 | Компаньоны: пакеты, состояния, главы по вехам, реплики i+1 | `docs/06-companions.md` |
 | Темы, ачивки, рамки, модель разблокировок | `docs/07-themes-achievements-frames.md` |
+| Дизайн-код интерфейса | `docs/08-design.md` |
 | Эталонный урок (демо), ссылки на исходники | `docs/README.md` |
 
 ## Этапы

@@ -11,6 +11,7 @@
 | 05-audio-player-speaking.md | аудио, плеер, speaking | https://claude.ai/artifact/9JyYVNfL2x49NaGTMqrHcX |
 | 06-companions.md | компаньоны: система, вехи и эпизоды, Iella, Sendo, приватность | — |
 | 07-themes-achievements-frames.md | темы, ачивки (обычные, секретные, уникальные), рамки, модель разблокировок | — |
+| 08-design.md | дизайн-код: токены, базовая тема, шрифты, чего не делать, доступность | — |
 
 Эталонный урок (интерактивное демо, HTML-артефакт, не выгружен): https://claude.ai/artifact/6bo7kdn9bvhSEEe7wGcqqp
 
