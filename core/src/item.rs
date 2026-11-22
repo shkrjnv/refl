@@ -53,6 +53,48 @@ impl ItemType {
             Self::Shadowing => LadderLevel::Pronunciation,
         }
     }
+
+    /// Counts towards the "≥ 3 production items" live condition of a KC.
+    /// Dictation and sentence assembly do not: the learner transcribes or
+    /// orders given words rather than producing the form.
+    pub fn is_production(self) -> bool {
+        matches!(
+            self,
+            Self::GapFill
+                | Self::Transformation
+                | Self::Translation
+                | Self::OwnSentence
+                | Self::Writing
+        )
+    }
+
+    /// Quality rule a live item of this type must satisfy, per slot.
+    /// `None`: no rule is defined yet, so the type cannot be live.
+    pub fn quality_rule(self) -> Option<QualityRule> {
+        match self {
+            Self::Choice | Self::FindError => Some(QualityRule::Choice),
+            Self::GapFill
+            | Self::Transformation
+            | Self::Translation
+            | Self::Dictation
+            | Self::SentenceAssembly => Some(QualityRule::TypedInput),
+            Self::Matching
+            | Self::TrueFalseNotGiven
+            | Self::OwnSentence
+            | Self::Writing
+            | Self::Shadowing => None,
+        }
+    }
+}
+
+/// Per-slot quality rule for live items (`docs/02-layer1-content.md`,
+/// «Задание: общая часть»).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QualityRule {
+    /// ≥ 2 diagnosed distractors; no distractor is accepted; no duplicates.
+    Choice,
+    /// ≥ 2 expected-error patterns.
+    TypedInput,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -131,6 +173,20 @@ pub struct SlotKc {
     pub role: KcRole,
 }
 
+/// How contractions compare (`docs/02-layer1-content.md`, «Язык шаблонов ответов»).
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
+)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename_all = "lowercase"))]
+#[serde(rename_all = "lowercase")]
+pub enum Contractions {
+    /// don't and do not are different answers.
+    #[default]
+    Strict,
+    /// Both sides are expanded by the fixed contraction table.
+    Equivalent,
+}
+
 /// Answer pattern in the template language, e.g. `(I have|I've) been [already]`.
 /// Compiled to an automaton by content-build; stored here as source text.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -159,6 +215,8 @@ pub struct ExpectedWrong {
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct Slot {
     pub kcs: Vec<SlotKc>,
+    /// Reference answer shown to the learner as correct; must be accepted by `accepted`.
+    pub answer: String,
     pub accepted: Vec<AnswerPattern>,
     #[serde(default)]
     pub options: Vec<ChoiceOption>,
@@ -193,6 +251,14 @@ pub struct Item {
     #[cfg_attr(feature = "ts", ts(optional))]
     pub topic: Option<TopicId>,
     pub status: ItemStatus,
+    /// Letter case takes part in comparison (tasks on capital letters).
+    #[serde(default)]
+    pub case_sensitive: bool,
+    #[serde(default)]
+    pub contractions: Contractions,
+    /// Punctuation tokens take part in comparison.
+    #[serde(default)]
+    pub punctuation_sensitive: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "ts", ts(optional))]
     pub source: Option<String>,

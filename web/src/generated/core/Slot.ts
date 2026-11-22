@@ -8,7 +8,11 @@ import type { SlotKc } from "./SlotKc";
 /**
  * A gap: the unit of assessment, with its own KCs, distractors and log event.
  */
-export type Slot = { kcs: Array<SlotKc>, accepted: Array<AnswerPattern>, options: Array<ChoiceOption>, expected_wrong: Array<ExpectedWrong>, 
+export type Slot = { kcs: Array<SlotKc>, 
+/**
+ * Reference answer shown to the learner as correct; must be accepted by `accepted`.
+ */
+answer: string, accepted: Array<AnswerPattern>, options: Array<ChoiceOption>, expected_wrong: Array<ExpectedWrong>, 
 /**
  * Optional hint; its use is logged.
  */

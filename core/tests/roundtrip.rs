@@ -11,8 +11,8 @@ use eng_core::ids::{
     LessonId, MisconceptionId, SessionId, Tag,
 };
 use eng_core::item::{
-    AnswerPattern, AuthorDifficulty, ChoiceOption, ExpectedWrong, Item, ItemStatus, ItemType,
-    KcRole, Slot, SlotKc, Stimulus,
+    AnswerPattern, AuthorDifficulty, ChoiceOption, Contractions, ExpectedWrong, Item, ItemStatus,
+    ItemType, KcRole, Slot, SlotKc, Stimulus,
 };
 use eng_core::value::{Cefr, Localized, Timestamp, UnitInterval};
 use eng_core::{CURRENT_SCHEMA_VERSION, DecodeError, Event, decode_event, encode_event};
@@ -191,15 +191,19 @@ fn slot() -> impl Strategy<Value = Slot> {
         ),
         proptest::option::of(localized()),
         localized(),
+        text(),
     )
-        .prop_map(|(kcs, accepted, options, expected_wrong, hint, why)| Slot {
-            kcs,
-            accepted,
-            options,
-            expected_wrong,
-            hint,
-            why,
-        })
+        .prop_map(
+            |(kcs, accepted, options, expected_wrong, hint, why, answer)| Slot {
+                kcs,
+                answer,
+                accepted,
+                options,
+                expected_wrong,
+                hint,
+                why,
+            },
+        )
 }
 
 fn item() -> impl Strategy<Value = Item> {
@@ -225,6 +229,11 @@ fn item() -> impl Strategy<Value = Item> {
             proptest::option::of(text()),
             any::<bool>(),
         ),
+        (
+            any::<bool>(),
+            prop_oneof![Just(Contractions::Strict), Just(Contractions::Equivalent)],
+            any::<bool>(),
+        ),
     )
         .prop_map(
             |(
@@ -237,6 +246,7 @@ fn item() -> impl Strategy<Value = Item> {
                 topic,
                 status,
                 (source, license, breaks_calibration),
+                (case_sensitive, contractions, punctuation_sensitive),
             )| Item {
                 id,
                 version: ItemVersion(v),
@@ -253,6 +263,9 @@ fn item() -> impl Strategy<Value = Item> {
                 expected_time: t,
                 topic,
                 status,
+                case_sensitive,
+                contractions,
+                punctuation_sensitive,
                 source,
                 license,
                 breaks_calibration,
