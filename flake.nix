@@ -43,6 +43,10 @@
             fileset = lib.fileset.unions [
               (craneLib.fileset.commonCargoSources ./.)
               ./core/clippy.toml
+              ./tools/content-build/clippy.toml
+              # content-build tests build the example content and the negative fixtures.
+              ./content
+              ./tools/content-build/tests/fixtures
               # Committed TS bindings: the ts_bindings test checks they are current.
               ./web/src/generated
             ];
@@ -53,11 +57,25 @@
             version = "0.0.0";
             strictDeps = true;
             cargoExtraArgs = "--locked --workspace --all-features";
+            # content-build runs `nickel export`.
+            nativeBuildInputs = [ pkgs.nickel ];
           };
           cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+          content-build = craneLib.buildPackage (
+            commonArgs
+            // {
+              inherit cargoArtifacts;
+              pname = "content-build";
+              cargoExtraArgs = "--locked -p content-build";
+              doCheck = false;
+            }
+          );
         in
         {
-          fmt = craneLib.cargoFmt { inherit src; inherit (commonArgs) pname version; };
+          fmt = craneLib.cargoFmt {
+            inherit src;
+            inherit (commonArgs) pname version;
+          };
           clippy = craneLib.cargoClippy (
             commonArgs
             // {
@@ -66,6 +84,14 @@
             }
           );
           test = craneLib.cargoTest (commonArgs // { inherit cargoArtifacts; });
+          # The real content must pass every check; the bundle and report are the output.
+          content = pkgs.runCommand "eng-learn-content" { } ''
+            mkdir -p $out
+            ${content-build}/bin/content-build ${./content} \
+              --nickel ${pkgs.nickel}/bin/nickel \
+              --out $out/bundle.json > $out/report.txt \
+              || { cat $out/report.txt; exit 1; }
+          '';
           # The core must build for the browser (no_std + alloc, default features).
           core-wasm32 = craneLib.mkCargoDerivation (
             commonArgs
@@ -102,7 +128,8 @@
       );
 
       # Local CI: `nix flake check` runs fmt, clippy (-D warnings), all tests
-      # (including the TS bindings freshness check) and the wasm32 build of the core.
+      # (including the TS bindings freshness check), the wasm32 build of the core
+      # and content-build on content/.
       checks = forAllSystems (
         system: pkgs:
         cargo system pkgs
