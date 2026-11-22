@@ -1,0 +1,20 @@
+[package]
+name = "eng-server"
+version = "0.0.0"
+description = "refl server. Stage 0: database migrations, event log writes and content import; no HTTP yet."
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+eng-core = { path = "../core", features = ["std"] }
+serde = "1"
+serde_json = "1"
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "postgres", "migrate", "macros", "uuid", "json"] }
+uuid = "1"
+
+[dev-dependencies]
+content-build = { path = "../tools/content-build" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+
+[lints]
+workspace = true
