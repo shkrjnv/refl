@@ -10,7 +10,7 @@ publish.workspace = true
 # randomness are reachable, and std float functions (exp, ln, powf, ...) do not
 # exist, so math must go through libm. `std` is only for tooling and tests.
 default = []
-std = ["serde/std", "serde_json/std", "uuid/std"]
+std = ["serde/std", "serde_json/std", "uuid/std", "unicode-normalization/std"]
 # TypeScript bindings via ts-rs (tooling only; implies std).
 ts = ["std", "dep:ts-rs"]
 
@@ -19,6 +19,7 @@ serde = { version = "1", default-features = false, features = ["derive", "alloc"
 serde_json = { version = "1", default-features = false, features = ["alloc", "float_roundtrip"] }
 uuid = { version = "1", default-features = false, features = ["serde"] }
 libm = "0.2"
+unicode-normalization = { version = "0.1", default-features = false }
 ts-rs = { version = "12", optional = true, default-features = false, features = ["serde-compat", "no-serde-warnings", "uuid-impl"] }
 
 [dev-dependencies]
