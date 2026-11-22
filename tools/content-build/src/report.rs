@@ -38,6 +38,28 @@ pub enum Code {
 }
 
 impl Code {
+    /// Every check; tests require a negative fixture named after each one.
+    pub const ALL: [Self; 18] = [
+        Self::Nickel,
+        Self::Schema,
+        Self::DuplicateId,
+        Self::UnknownReference,
+        Self::RequiresCycle,
+        Self::TemplateSyntax,
+        Self::TemplateEmpty,
+        Self::NoAccepted,
+        Self::AnswerNotAccepted,
+        Self::AcceptedMatchesError,
+        Self::ErrorPatternsOverlap,
+        Self::NoPrimaryKc,
+        Self::NoQualityRule,
+        Self::TooFewDistractors,
+        Self::DistractorAccepted,
+        Self::DuplicateDistractor,
+        Self::TooFewErrorPatterns,
+        Self::MissingAudio,
+    ];
+
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Nickel => "nickel",
