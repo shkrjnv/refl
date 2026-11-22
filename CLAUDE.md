@@ -46,6 +46,15 @@
 - Если код расходится со спекой, сначала правится спека (с обоснованием в коммите), потом код.
 - Документы в чатах Claude (Claude Docs, артефакты) — архив. Их не читают как актуальные и не правят вместо `docs/`.
 
+## Команды
+
+- Окружение: `nix develop` (или `nix develop -c <команда>`).
+- Локальный CI: `nix flake check` — fmt, clippy `-D warnings`, все тесты, сборка `eng-core` под wasm32.
+- Тесты: `cargo test --workspace --all-features` (без `--all-features` тест TS-биндингов пропускается).
+- Линт: `cargo clippy --workspace --all-targets --all-features -- -D warnings`.
+- TS-типы из Rust: `UPDATE_TS_BINDINGS=1 cargo test -p eng-core --all-features --test ts_bindings`; результат в `web/src/generated/core/` коммитится, тест падает, если он устарел.
+- `eng-core` по умолчанию `no_std` + `alloc`: в нём нет файлов, сети, часов, потоков, `HashMap` и float-функций std. Фича `std` — только для тестов и инструментов, `ts` — для генерации TS.
+
 ## Правила работы
 
 - Язык общения с автором — русский, коротко, без воды; код, идентификаторы и коммиты — английский. Критику и собственные идеи высказывать прямо.

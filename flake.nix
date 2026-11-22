@@ -7,10 +7,16 @@
       url = "github:nix-community/fenix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    crane.url = "github:ipetkov/crane";
   };
 
   outputs =
-    { self, nixpkgs, fenix }:
+    {
+      self,
+      nixpkgs,
+      fenix,
+      crane,
+    }:
     let
       systems = [
         "x86_64-linux"
@@ -25,6 +31,52 @@
         fenix.packages.${system}.fromToolchainFile {
           file = ./rust-toolchain.toml;
           sha256 = "sha256-MFHoWVcPZKjFrLnQnodCXbUsfZcofGfo9tV9fTTvklg=";
+        };
+
+      cargo =
+        system: pkgs:
+        let
+          inherit (pkgs) lib;
+          craneLib = (crane.mkLib pkgs).overrideToolchain (_: rustToolchain system);
+          src = lib.fileset.toSource {
+            root = ./.;
+            fileset = lib.fileset.unions [
+              (craneLib.fileset.commonCargoSources ./.)
+              ./core/clippy.toml
+              # Committed TS bindings: the ts_bindings test checks they are current.
+              ./web/src/generated
+            ];
+          };
+          commonArgs = {
+            inherit src;
+            pname = "eng-learn";
+            version = "0.0.0";
+            strictDeps = true;
+            cargoExtraArgs = "--locked --workspace --all-features";
+          };
+          cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+        in
+        {
+          fmt = craneLib.cargoFmt { inherit src; inherit (commonArgs) pname version; };
+          clippy = craneLib.cargoClippy (
+            commonArgs
+            // {
+              inherit cargoArtifacts;
+              cargoClippyExtraArgs = "--all-targets -- -D warnings";
+            }
+          );
+          test = craneLib.cargoTest (commonArgs // { inherit cargoArtifacts; });
+          # The core must build for the browser (no_std + alloc, default features).
+          core-wasm32 = craneLib.mkCargoDerivation (
+            commonArgs
+            // {
+              pnameSuffix = "-core-wasm32";
+              cargoArtifacts = null;
+              buildPhaseCargoCommand = "cargo build --locked --release -p eng-core --target wasm32-unknown-unknown";
+              installPhaseCommand = "mkdir -p $out";
+              doInstallCargoArtifacts = false;
+            }
+          );
         };
     in
     {
@@ -49,10 +101,12 @@
         }
       );
 
-      # Local CI. Cargo checks (fmt, clippy, tests, wasm32 build) are added
-      # together with the Cargo workspace in stage 0.
+      # Local CI: `nix flake check` runs fmt, clippy (-D warnings), all tests
+      # (including the TS bindings freshness check) and the wasm32 build of the core.
       checks = forAllSystems (
-        system: pkgs: {
+        system: pkgs:
+        cargo system pkgs
+        // {
           devShell = self.devShells.${system}.default;
         }
       );
