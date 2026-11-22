@@ -31,7 +31,6 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
       l1 = { uz = true, ru = true },
       prior = { uz = 0.5, ru = 0.5 },
       remedy = "k.a",
-      feedback = "e.m.one",
     },
     {
       id = "m.two",
@@ -41,10 +40,29 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
       l1 = { uz = false, ru = false },
       prior = { uz = 0.5, ru = 0.5 },
       remedy = "k.a",
-      feedback = "e.m.two",
     },
   ],
+  instructions = [
+    { id = "i.gap", text = { ru = "заполните", en = "fill in" } },
+    { id = "i.choice", text = { ru = "выберите", en = "choose" } },
+  ],
   explanations = [
+    {
+      id = "e.m.one.ru",
+      target = { kind = "misconception", id = "m.one" },
+      depth = "short",
+      lang = "ru",
+      body = "один",
+      review = { status = "draft" },
+    },
+    {
+      id = "e.m.two.ru",
+      target = { kind = "misconception", id = "m.two" },
+      depth = "short",
+      lang = "ru",
+      body = "два",
+      review = { status = "draft" },
+    },
     {
       id = "e.m.one",
       target = { kind = "misconception", id = "m.one" },

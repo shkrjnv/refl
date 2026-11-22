@@ -12,13 +12,13 @@ use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 
 use crate::answer::dfa::{Dfa, TokenTable};
-use crate::content::{Edge, Explanation, Kc, Misconception};
+use crate::content::{Edge, Explanation, Instruction, Kc, Misconception};
 use crate::ids::{ContentVersion, ItemRef, KcId, MisconceptionId};
 use crate::item::Item;
 use crate::lesson::Lesson;
 
 /// Layout version of [`Bundle`].
-pub const BUNDLE_FORMAT_VERSION: u32 = 1;
+pub const BUNDLE_FORMAT_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Bundle {
@@ -43,6 +43,8 @@ pub struct BundleContent {
     pub misconceptions: Vec<Misconception>,
     /// Sorted by id.
     pub explanations: Vec<Explanation>,
+    /// Sorted by id.
+    pub instructions: Vec<Instruction>,
     /// Sorted by id.
     pub lessons: Vec<Lesson>,
     /// Sorted by id.

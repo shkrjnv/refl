@@ -299,10 +299,9 @@ fn misconception() -> impl Strategy<Value = Misconception> {
         proptest::collection::vec(slug(KcId::new), 1..3),
         (any::<bool>(), any::<bool>(), unit(), unit()),
         slug(KcId::new),
-        slug(ExplanationId::new),
     )
         .prop_map(
-            |(id, title, affects, (uz, ru, puz, pru), remedy, feedback)| Misconception {
+            |(id, title, affects, (uz, ru, puz, pru), remedy)| Misconception {
                 id,
                 title,
                 affects,
@@ -310,7 +309,6 @@ fn misconception() -> impl Strategy<Value = Misconception> {
                 l1: L1Set { uz, ru },
                 prior: L1Prior { uz: puz, ru: pru },
                 remedy,
-                feedback,
             },
         )
 }

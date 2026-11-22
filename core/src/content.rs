@@ -6,7 +6,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 
-use crate::ids::{ExplanationId, KcId, MisconceptionId, Tag};
+use crate::ids::{ExplanationId, InstructionId, KcId, MisconceptionId, Tag};
 use crate::value::{Cefr, Lang, Localized, UnitInterval};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -87,7 +87,9 @@ pub struct L1Prior {
     pub ru: UnitInterval,
 }
 
-/// A stable wrong idea that produces predictable errors.
+/// A stable wrong idea that produces predictable errors. Its micro-explanation
+/// is found by key: target = this misconception, depth = short, language by
+/// the chain interface -> ru -> en.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct Misconception {
@@ -99,8 +101,6 @@ pub struct Misconception {
     pub prior: L1Prior,
     /// Topic that treats the cause; usually a prerequisite.
     pub remedy: KcId,
-    /// Micro-explanation shown right after the error.
-    pub feedback: ExplanationId,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -171,4 +171,13 @@ pub struct Explanation {
     #[serde(default)]
     pub examples: Vec<Example>,
     pub review: Review,
+}
+
+/// Item instruction, translated once instead of in every item
+/// (`docs/02-layer1-content.md`, «Задание: общая часть»).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct Instruction {
+    pub id: InstructionId,
+    pub text: Localized,
 }

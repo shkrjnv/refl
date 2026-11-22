@@ -9,7 +9,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use eng_core::Event;
-use eng_core::content::{Edge, Explanation, Kc, Misconception};
+use eng_core::content::{Edge, Explanation, Instruction, Kc, Misconception};
 use eng_core::item::Item;
 use eng_core::lesson::Lesson;
 use ts_rs::{Config, TS};
@@ -26,6 +26,7 @@ fn export_all(dir: &Path) {
     Edge::export_all(&cfg).unwrap();
     Misconception::export_all(&cfg).unwrap();
     Explanation::export_all(&cfg).unwrap();
+    Instruction::export_all(&cfg).unwrap();
     Lesson::export_all(&cfg).unwrap();
 }
 

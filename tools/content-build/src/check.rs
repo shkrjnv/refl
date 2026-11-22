@@ -5,10 +5,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use eng_core::content::ExplanationTarget;
-use eng_core::ids::{ExplanationId, KcId, MisconceptionId};
+use eng_core::content::{ExplanationDepth, ExplanationTarget};
+use eng_core::ids::{InstructionId, KcId, MisconceptionId};
 use eng_core::item::{ItemStatus, KcRole, QualityRule};
 use eng_core::lesson::LessonStep;
+use eng_core::value::{Lang, Localized};
 
 use crate::load::{Content, Sourced};
 use crate::report::{Code, Diagnostic, Severity};
@@ -31,12 +32,12 @@ fn diag(code: Code, file: &Path, subject: String, message: String) -> Diagnostic
     }
 }
 
-/// Ids of every KC, misconception and explanation, first occurrence wins.
+/// Ids of every referenced kind of entity.
 #[derive(Debug, Default)]
 pub struct Ids {
     pub kcs: BTreeSet<KcId>,
     pub misconceptions: BTreeSet<MisconceptionId>,
-    pub explanations: BTreeSet<ExplanationId>,
+    pub instructions: BTreeSet<InstructionId>,
 }
 
 fn unique<'a, T, K: Ord + Clone + std::fmt::Display + 'a>(
@@ -67,14 +68,15 @@ pub fn duplicates(c: &Content, diags: &mut Vec<Diagnostic>) -> Ids {
     let ids = Ids {
         kcs: unique("KC", &c.kcs, |k| &k.id, diags),
         misconceptions: unique("misconception", &c.misconceptions, |m| &m.id, diags),
-        explanations: unique("explanation", &c.explanations, |e| &e.id, diags),
+        instructions: unique("instruction", &c.instructions, |i| &i.id, diags),
     };
+    unique("explanation", &c.explanations, |e| &e.id, diags);
     unique("item", &c.items, |i| &i.id, diags);
     unique("lesson", &c.lessons, |l| &l.id, diags);
     ids
 }
 
-/// Every reference to a KC, misconception or explanation resolves.
+/// Every reference to a KC, misconception or instruction resolves.
 pub fn references(c: &Content, ids: &Ids, diags: &mut Vec<Diagnostic>) {
     let mut unknown = |file: &Path, subject: &str, what: &str, id: &dyn std::fmt::Display| {
         diags.push(diag(
@@ -105,9 +107,6 @@ pub fn references(c: &Content, ids: &Ids, diags: &mut Vec<Diagnostic>) {
                 unknown(&m.file, &subject, "KC", kc);
             }
         }
-        if !ids.explanations.contains(&m.value.feedback) {
-            unknown(&m.file, &subject, "explanation", &m.value.feedback);
-        }
     }
     for e in &c.explanations {
         let subject = format!("explanation `{}`", e.value.id);
@@ -123,6 +122,9 @@ pub fn references(c: &Content, ids: &Ids, diags: &mut Vec<Diagnostic>) {
     }
     for it in &c.items {
         let subject = format!("item `{}`", it.value.id);
+        if !ids.instructions.contains(&it.value.instruction) {
+            unknown(&it.file, &subject, "instruction", &it.value.instruction);
+        }
         for slot in &it.value.slots {
             for sk in &slot.kcs {
                 if !ids.kcs.contains(&sk.kc) {
@@ -247,6 +249,93 @@ pub fn audio(c: &Content, audio_root: &Path, diags: &mut Vec<Diagnostic>) {
             if let Some(a) = &ex.audio {
                 check(&e.file, format!("explanation `{}`", e.value.id), &a.0);
             }
+        }
+    }
+}
+
+fn missing_ru_en(text: &Localized) -> Vec<&'static str> {
+    let mut missing = Vec::new();
+    if text.ru.is_none() {
+        missing.push("ru");
+    }
+    if text.en.is_none() {
+        missing.push("en");
+    }
+    missing
+}
+
+/// A misconception a live item can diagnose is live; its micro-explanation is
+/// found by key (target, depth short) and must exist in ru and en.
+pub fn misconception_feedback(c: &Content, diags: &mut Vec<Diagnostic>) {
+    let mut diagnosed_by: BTreeMap<&MisconceptionId, &str> = BTreeMap::new();
+    for it in c
+        .items
+        .iter()
+        .filter(|i| i.value.status == ItemStatus::Live)
+    {
+        for slot in &it.value.slots {
+            let mis = slot
+                .options
+                .iter()
+                .filter_map(|o| o.misconception.as_ref())
+                .chain(slot.expected_wrong.iter().map(|w| &w.misconception));
+            for m in mis {
+                diagnosed_by.entry(m).or_insert(it.value.id.as_str());
+            }
+        }
+    }
+    for m in &c.misconceptions {
+        let Some(item) = diagnosed_by.get(&m.value.id) else {
+            continue;
+        };
+        for (lang, name) in [(Lang::Ru, "ru"), (Lang::En, "en")] {
+            let found = c.explanations.iter().any(|e| {
+                let e = &e.value;
+                e.target == ExplanationTarget::Misconception(m.value.id.clone())
+                    && e.depth == ExplanationDepth::Short
+                    && e.lang == lang
+            });
+            if !found {
+                diags.push(diag(
+                    Code::MissingFeedback,
+                    &m.file,
+                    format!("misconception `{}`", m.value.id),
+                    format!(
+                        "diagnosed by live item `{item}` but has no short explanation in {name}"
+                    ),
+                ));
+            }
+        }
+    }
+}
+
+/// Instructions used by live items have text in ru and en.
+pub fn instruction_text(c: &Content, diags: &mut Vec<Diagnostic>) {
+    let mut used_by: BTreeMap<&InstructionId, &str> = BTreeMap::new();
+    for it in c
+        .items
+        .iter()
+        .filter(|i| i.value.status == ItemStatus::Live)
+    {
+        used_by
+            .entry(&it.value.instruction)
+            .or_insert(it.value.id.as_str());
+    }
+    for ins in &c.instructions {
+        let Some(item) = used_by.get(&ins.value.id) else {
+            continue;
+        };
+        let missing = missing_ru_en(&ins.value.text);
+        if !missing.is_empty() {
+            diags.push(diag(
+                Code::InstructionText,
+                &ins.file,
+                format!("instruction `{}`", ins.value.id),
+                format!(
+                    "used by live item `{item}` but has no text in {}",
+                    missing.join(", ")
+                ),
+            ));
         }
     }
 }

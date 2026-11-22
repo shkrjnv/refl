@@ -6,7 +6,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use eng_core::content::{Edge, Explanation, Kc, Misconception};
+use eng_core::content::{Edge, Explanation, Instruction, Kc, Misconception};
 use eng_core::item::Item;
 use eng_core::lesson::Lesson;
 use serde::de::DeserializeOwned;
@@ -28,15 +28,17 @@ pub struct Content {
     pub edges: Vec<Sourced<Edge>>,
     pub misconceptions: Vec<Sourced<Misconception>>,
     pub explanations: Vec<Sourced<Explanation>>,
+    pub instructions: Vec<Sourced<Instruction>>,
     pub items: Vec<Sourced<Item>>,
     pub lessons: Vec<Sourced<Lesson>>,
 }
 
-const SECTIONS: [&str; 6] = [
+const SECTIONS: [&str; 7] = [
     "kcs",
     "edges",
     "misconceptions",
     "explanations",
+    "instructions",
     "items",
     "lessons",
 ];
@@ -175,6 +177,7 @@ pub fn load(root: &Path, nickel: &Path) -> std::io::Result<(Content, Vec<Diagnos
                     parse_section(&rel, &key, value, &mut content.misconceptions, d);
                 }
                 "explanations" => parse_section(&rel, &key, value, &mut content.explanations, d),
+                "instructions" => parse_section(&rel, &key, value, &mut content.instructions, d),
                 "items" => parse_section(&rel, &key, value, &mut content.items, d),
                 "lessons" => parse_section(&rel, &key, value, &mut content.lessons, d),
                 _ => d.push(error(

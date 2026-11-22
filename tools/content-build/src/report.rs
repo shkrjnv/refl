@@ -20,6 +20,10 @@ pub enum Code {
     Schema,
     DuplicateId,
     UnknownReference,
+    /// A live misconception lacks a short explanation in ru or en.
+    MissingFeedback,
+    /// An instruction of a live item lacks ru or en text.
+    InstructionText,
     RequiresCycle,
     TemplateSyntax,
     /// A pattern, alternative or option can be empty after normalization.
@@ -39,11 +43,13 @@ pub enum Code {
 
 impl Code {
     /// Every check; tests require a negative fixture named after each one.
-    pub const ALL: [Self; 18] = [
+    pub const ALL: [Self; 20] = [
         Self::Nickel,
         Self::Schema,
         Self::DuplicateId,
         Self::UnknownReference,
+        Self::MissingFeedback,
+        Self::InstructionText,
         Self::RequiresCycle,
         Self::TemplateSyntax,
         Self::TemplateEmpty,
@@ -66,6 +72,8 @@ impl Code {
             Self::Schema => "schema",
             Self::DuplicateId => "duplicate-id",
             Self::UnknownReference => "unknown-reference",
+            Self::MissingFeedback => "missing-feedback",
+            Self::InstructionText => "instruction-text",
             Self::RequiresCycle => "requires-cycle",
             Self::TemplateSyntax => "template-syntax",
             Self::TemplateEmpty => "template-empty",

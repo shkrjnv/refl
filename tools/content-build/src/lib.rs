@@ -65,6 +65,8 @@ pub fn build(opts: &Options) -> std::io::Result<Output> {
     let (content, mut diags) = load::load(&opts.content, &opts.nickel)?;
     let ids = check::duplicates(&content, &mut diags);
     check::references(&content, &ids, &mut diags);
+    check::misconception_feedback(&content, &mut diags);
+    check::instruction_text(&content, &mut diags);
     let requires = graph::Requires::new(&content, &ids);
     requires.check_acyclic(&mut diags);
     let compiled = templates::compile(&content.items, &mut diags);
@@ -140,6 +142,7 @@ pub fn build(opts: &Options) -> std::io::Result<Output> {
         requires_closure: requires.closure(&ids),
         misconceptions: sorted(&content.misconceptions, |m| &m.id),
         explanations: sorted(&content.explanations, |e| &e.id),
+        instructions: sorted(&content.instructions, |i| &i.id),
         lessons: sorted(&content.lessons, |l| &l.id),
         items,
         items_by_kc,

@@ -14,7 +14,6 @@ let s = import "../lib/schema.ncl" in
       l1 = { uz = true, ru = true },
       prior = { uz = 0.8, ru = 0.75 },
       remedy = "gram.noun.countability",
-      feedback = "expl.mis.article.omission-l1.ru",
     },
     {
       id = "mis.article.the-for-new",
@@ -28,7 +27,6 @@ let s = import "../lib/schema.ncl" in
       l1 = { uz = false, ru = false },
       prior = { uz = 0.4, ru = 0.45 },
       remedy = "gram.article.first-mention",
-      feedback = "expl.mis.article.the-for-new.ru",
     },
   ],
 } | s.File

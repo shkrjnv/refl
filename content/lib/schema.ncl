@@ -29,8 +29,8 @@ let Lang = OneOf ["uz", "ru", "en"] in
     l1 | { uz | Bool, ru | Bool },
     prior | { uz | Unit, ru | Unit },
     remedy | String,
-    feedback | String,
   },
+  Instruction = { id | String, text | Localized },
   Example = { text | String, audio | String | optional },
   Explanation = {
     id | String,
@@ -76,6 +76,7 @@ let Lang = OneOf ["uz", "ru", "en"] in
     edges | Array Edge | optional,
     misconceptions | Array Misconception | optional,
     explanations | Array Explanation | optional,
+    instructions | Array Instruction | optional,
     items | Array Item | optional,
     lessons | Array Dyn | optional,
   },
