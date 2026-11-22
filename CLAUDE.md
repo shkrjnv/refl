@@ -9,7 +9,8 @@
 - **Клиент** `web/` — TypeScript + SolidJS + Vite, PWA, IndexedDB. Вся логика обучения вызывается из WASM-ядра, в TS её нет. Типы API генерируются из Rust (ts-rs или specta).
 - **Контент** `content/` — Nickel → JSON → CLI `content-build` (Rust; Haskell допустим только для content-build) → Postgres.
 - **Инструменты** `tools/` — `content-build`, симулятор учеников, аудио-конвейер (Piper/Kokoro → Opus).
-- Прочее: fsrs-rs, Hunspell, локальный LanguageTool, Fluent (i18n), tracing + Prometheus + Grafana, pgBackRest.
+- FSRS-6 — своя реализация в core на `libm`; fsrs-rs только офлайн для подбора весов.
+- Прочее: Hunspell, локальный LanguageTool, Fluent (i18n), tracing + Prometheus + Grafana, pgBackRest.
 - **Сборка и деплой:** Nix flake (`flake.nix`), NixOS-модуль, systemd. Монорепо.
 
 ## Принципы (не нарушать)
