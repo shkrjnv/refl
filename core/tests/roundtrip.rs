@@ -7,13 +7,14 @@ use eng_core::event::{
     AnswerContext, AnswerEvent, Confidence, EventPayload, ReclassifiedEvent, Response, Verdict,
 };
 use eng_core::ids::{
-    ContentVersion, EventId, ExplanationId, ItemId, ItemRef, ItemVersion, KcId, LearnerId,
-    LessonId, MisconceptionId, SessionId, Tag,
+    AchievementId, ContentVersion, EventId, ExplanationId, ItemId, ItemRef, ItemVersion, KcId,
+    LearnerId, LessonId, MisconceptionId, PackageKey, SessionId, Tag, UserId,
 };
 use eng_core::item::{
     AnswerPattern, AuthorDifficulty, ChoiceOption, Contractions, ExpectedWrong, Item, ItemStatus,
     ItemType, KcRole, Slot, SlotKc, Stimulus,
 };
+use eng_core::unlock::{Milestone, UnlockKind, UnlockSource};
 use eng_core::value::{Cefr, Localized, Timestamp, UnitInterval};
 use eng_core::{CURRENT_SCHEMA_VERSION, DecodeError, Event, decode_event, encode_event};
 use proptest::prelude::*;
@@ -136,6 +137,61 @@ fn payload() -> impl Strategy<Value = EventPayload> {
                 seconds,
             }
         }),
+        reward_payload(),
+    ]
+}
+
+fn milestone() -> impl Strategy<Value = Milestone> {
+    prop_oneof![
+        prop_oneof![
+            Just(Cefr::PreA1),
+            Just(Cefr::A1),
+            Just(Cefr::B2),
+            Just(Cefr::C2)
+        ]
+        .prop_map(Milestone::Level),
+        slug(KcId::new).prop_map(Milestone::Topic),
+    ]
+}
+
+fn unlock_kind() -> impl Strategy<Value = UnlockKind> {
+    prop_oneof![
+        Just(UnlockKind::Theme),
+        Just(UnlockKind::Frame),
+        Just(UnlockKind::Companion)
+    ]
+}
+
+/// Milestones, achievements, unlocks and selections (docs/07).
+fn reward_payload() -> impl Strategy<Value = EventPayload> {
+    let source = prop_oneof![
+        milestone().prop_map(|milestone| UnlockSource::Milestone { milestone }),
+        slug(AchievementId::new).prop_map(|achievement| UnlockSource::Achievement { achievement }),
+        any::<u128>().prop_map(|u| UnlockSource::Admin {
+            by: UserId(Uuid::from_u128(u))
+        }),
+    ];
+    prop_oneof![
+        milestone().prop_map(|milestone| EventPayload::MilestoneReached { milestone }),
+        slug(AchievementId::new)
+            .prop_map(|achievement| EventPayload::AchievementEarned { achievement }),
+        (slug(AchievementId::new), any::<bool>()).prop_map(|(achievement, visible)| {
+            EventPayload::AchievementVisibilitySet {
+                achievement,
+                visible,
+            }
+        }),
+        (unlock_kind(), slug(PackageKey::new), source)
+            .prop_map(|(kind, key, source)| EventPayload::UnlockGranted { kind, key, source }),
+        (unlock_kind(), slug(PackageKey::new), any::<u128>()).prop_map(|(kind, key, u)| {
+            EventPayload::UnlockRevoked {
+                kind,
+                key,
+                by: UserId(Uuid::from_u128(u)),
+            }
+        }),
+        slug(PackageKey::new).prop_map(|theme| EventPayload::ThemeSelected { theme }),
+        slug(PackageKey::new).prop_map(|companion| EventPayload::CompanionSelected { companion }),
     ]
 }
 
@@ -346,6 +402,12 @@ proptest! {
 
     #[test]
     fn misconception_roundtrip(m in misconception()) { assert_roundtrip(&m); }
+
+    #[test]
+    fn event_type_matches_the_serialized_tag(p in payload()) {
+        let v = serde_json::to_value(&p).unwrap();
+        prop_assert_eq!(v["type"].as_str(), Some(p.event_type()));
+    }
 }
 
 #[test]
@@ -413,4 +475,59 @@ fn cefr_scale() {
     assert_eq!(Cefr::PreA1.level(), 0);
     assert_eq!(Cefr::C2.level(), 6);
     assert_eq!(serde_json::to_string(&Cefr::PreA1).unwrap(), r#""pre-A1""#);
+}
+
+#[test]
+fn derived_keys_cover_only_server_derived_events() {
+    let key = |p: EventPayload| p.derived_key().map(|k| (k.kind, k.key));
+    let b1 = Milestone::Level(Cefr::B1);
+    let pkg = || PackageKey::new("blocks").unwrap();
+    let ach = || AchievementId::new("first-step").unwrap();
+    assert_eq!(
+        key(EventPayload::MilestoneReached {
+            milestone: b1.clone()
+        }),
+        Some(("level", "B1".to_owned()))
+    );
+    assert_eq!(
+        key(EventPayload::MilestoneReached {
+            milestone: Milestone::Topic(KcId::new("topic.articles").unwrap())
+        }),
+        Some(("topic", "topic.articles".to_owned()))
+    );
+    assert_eq!(
+        key(EventPayload::AchievementEarned { achievement: ach() }),
+        Some(("achievement", "first-step".to_owned()))
+    );
+    for source in [
+        UnlockSource::Milestone { milestone: b1 },
+        UnlockSource::Achievement { achievement: ach() },
+    ] {
+        assert_eq!(
+            key(EventPayload::UnlockGranted {
+                kind: UnlockKind::Theme,
+                key: pkg(),
+                source
+            }),
+            Some(("theme", "blocks".to_owned()))
+        );
+    }
+    let admin = UserId(Uuid::from_u128(1));
+    assert_eq!(
+        key(EventPayload::UnlockGranted {
+            kind: UnlockKind::Theme,
+            key: pkg(),
+            source: UnlockSource::Admin { by: admin }
+        }),
+        None
+    );
+    assert_eq!(
+        key(EventPayload::UnlockRevoked {
+            kind: UnlockKind::Theme,
+            key: pkg(),
+            by: admin
+        }),
+        None
+    );
+    assert_eq!(key(EventPayload::ThemeSelected { theme: pkg() }), None);
 }

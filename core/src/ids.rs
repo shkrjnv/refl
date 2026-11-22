@@ -98,6 +98,14 @@ slug_id!(
     /// Free-form tag, e.g. `ielts-relevant`, `l1-hard-uz`.
     Tag
 );
+slug_id!(
+    /// Achievement (`docs/07-themes-achievements-frames.md`).
+    AchievementId
+);
+slug_id!(
+    /// Package of a theme, frame or companion (`docs/07-themes-achievements-frames.md`).
+    PackageKey
+);
 
 /// Item version; an event always references `(item_id, version)`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -166,6 +174,10 @@ uuid_id!(
 uuid_id!(
     /// Learning session.
     SessionId
+);
+uuid_id!(
+    /// User account. A learner's [`LearnerId`] is the same UUID as their user id.
+    UserId
 );
 
 #[cfg(test)]

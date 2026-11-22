@@ -20,6 +20,7 @@ pub mod event;
 pub mod ids;
 pub mod item;
 pub mod lesson;
+pub mod unlock;
 pub mod value;
 
 pub use event::{CURRENT_SCHEMA_VERSION, DecodeError, Event, decode_event, encode_event};

@@ -85,6 +85,19 @@ impl Cefr {
     pub fn level(self) -> u8 {
         self as u8
     }
+
+    /// The name used in content and events, e.g. `pre-A1`, `B2`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::PreA1 => "pre-A1",
+            Self::A1 => "A1",
+            Self::A2 => "A2",
+            Self::B1 => "B1",
+            Self::B2 => "B2",
+            Self::C1 => "C1",
+            Self::C2 => "C2",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

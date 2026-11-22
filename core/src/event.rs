@@ -12,9 +12,10 @@ use serde_json::Value;
 
 use crate::content::ExplanationDepth;
 use crate::ids::{
-    ContentVersion, EventId, ExplanationId, ItemRef, LearnerId, LessonId, MisconceptionId,
-    SessionId,
+    AchievementId, ContentVersion, EventId, ExplanationId, ItemRef, LearnerId, LessonId,
+    MisconceptionId, PackageKey, SessionId, UserId,
 };
+use crate::unlock::{Milestone, UnlockKind, UnlockSource};
 use crate::value::Timestamp;
 
 /// Schema version written into every new event.
@@ -61,6 +62,95 @@ pub enum EventPayload {
         depth: ExplanationDepth,
         seconds: u32,
     },
+    /// Derived by the server; unique per (learner, milestone).
+    MilestoneReached {
+        milestone: Milestone,
+    },
+    /// Derived by the server; unique per (learner, achievement).
+    AchievementEarned {
+        achievement: AchievementId,
+    },
+    /// Whether an earned achievement is shown in the public profile.
+    AchievementVisibilitySet {
+        achievement: AchievementId,
+        visible: bool,
+    },
+    /// Unique per (learner, kind, key) unless the source is an admin.
+    UnlockGranted {
+        kind: UnlockKind,
+        key: PackageKey,
+        source: UnlockSource,
+    },
+    /// Only admin unlocks can be revoked.
+    UnlockRevoked {
+        kind: UnlockKind,
+        key: PackageKey,
+        by: UserId,
+    },
+    ThemeSelected {
+        theme: PackageKey,
+    },
+    CompanionSelected {
+        companion: PackageKey,
+    },
+}
+
+/// Uniqueness key of an event the server derives from the log: the database
+/// holds at most one event per (learner, event type, kind, key), so
+/// recomputing derived events is idempotent
+/// (`docs/07-themes-achievements-frames.md`, «Модель разблокировок»).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DerivedKey {
+    pub kind: &'static str,
+    pub key: String,
+}
+
+impl EventPayload {
+    /// The `type` tag of the serialized payload.
+    pub fn event_type(&self) -> &'static str {
+        match self {
+            Self::Answer(_) => "answer",
+            Self::Reclassified(_) => "reclassified",
+            Self::LessonStarted { .. } => "lesson_started",
+            Self::LessonFinished { .. } => "lesson_finished",
+            Self::ExplanationViewed { .. } => "explanation_viewed",
+            Self::MilestoneReached { .. } => "milestone_reached",
+            Self::AchievementEarned { .. } => "achievement_earned",
+            Self::AchievementVisibilitySet { .. } => "achievement_visibility_set",
+            Self::UnlockGranted { .. } => "unlock_granted",
+            Self::UnlockRevoked { .. } => "unlock_revoked",
+            Self::ThemeSelected { .. } => "theme_selected",
+            Self::CompanionSelected { .. } => "companion_selected",
+        }
+    }
+
+    /// `Some` for derived events: milestones, achievements, and unlocks whose
+    /// source is a milestone or an achievement. Admin unlocks and revokes are
+    /// not unique, so an admin can grant again after a revoke.
+    pub fn derived_key(&self) -> Option<DerivedKey> {
+        match self {
+            Self::MilestoneReached { milestone } => {
+                let (kind, key) = milestone.kind_key();
+                Some(DerivedKey {
+                    kind,
+                    key: key.into(),
+                })
+            }
+            Self::AchievementEarned { achievement } => Some(DerivedKey {
+                kind: "achievement",
+                key: achievement.as_str().into(),
+            }),
+            Self::UnlockGranted {
+                kind,
+                key,
+                source: UnlockSource::Milestone { .. } | UnlockSource::Achievement { .. },
+            } => Some(DerivedKey {
+                kind: kind.as_str(),
+                key: key.as_str().into(),
+            }),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
