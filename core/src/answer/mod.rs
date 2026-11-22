@@ -4,3 +4,4 @@
 //! normalizes answers and executes compiled automata.
 
 pub mod normalize;
+pub mod template;
