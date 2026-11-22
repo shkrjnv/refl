@@ -1,0 +1,252 @@
+//! Structural checks: unique ids, references, per-item rules for live items
+//! and referenced audio files (`docs/02-layer1-content.md`, «Проверки при
+//! сборке контента», «Задание: общая часть»).
+
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
+
+use eng_core::content::ExplanationTarget;
+use eng_core::ids::{ExplanationId, KcId, MisconceptionId};
+use eng_core::item::{ItemStatus, KcRole, QualityRule};
+use eng_core::lesson::LessonStep;
+
+use crate::load::{Content, Sourced};
+use crate::report::{Code, Diagnostic, Severity};
+
+/// The name an enum value has in content files, e.g. `gap_fill`.
+fn wire_name(v: impl serde::Serialize) -> String {
+    match serde_json::to_value(v) {
+        Ok(serde_json::Value::String(s)) => s,
+        other => format!("{other:?}"),
+    }
+}
+
+fn diag(code: Code, file: &Path, subject: String, message: String) -> Diagnostic {
+    Diagnostic {
+        severity: Severity::Error,
+        code,
+        file: file.to_path_buf(),
+        subject: Some(subject),
+        message,
+    }
+}
+
+/// Ids of every KC, misconception and explanation, first occurrence wins.
+#[derive(Debug, Default)]
+pub struct Ids {
+    pub kcs: BTreeSet<KcId>,
+    pub misconceptions: BTreeSet<MisconceptionId>,
+    pub explanations: BTreeSet<ExplanationId>,
+}
+
+fn unique<'a, T, K: Ord + Clone + std::fmt::Display + 'a>(
+    kind: &str,
+    entries: &'a [Sourced<T>],
+    key: impl Fn(&'a T) -> &'a K,
+    diags: &mut Vec<Diagnostic>,
+) -> BTreeSet<K> {
+    let mut seen: BTreeMap<&K, &Path> = BTreeMap::new();
+    for e in entries {
+        let id = key(&e.value);
+        if let Some(first) = seen.get(id) {
+            diags.push(diag(
+                Code::DuplicateId,
+                &e.file,
+                format!("{kind} `{id}`"),
+                format!("id already defined in {}", first.display()),
+            ));
+        } else {
+            seen.insert(id, &e.file);
+        }
+    }
+    seen.into_keys().cloned().collect()
+}
+
+/// Every id must be unique within its kind.
+pub fn duplicates(c: &Content, diags: &mut Vec<Diagnostic>) -> Ids {
+    let ids = Ids {
+        kcs: unique("KC", &c.kcs, |k| &k.id, diags),
+        misconceptions: unique("misconception", &c.misconceptions, |m| &m.id, diags),
+        explanations: unique("explanation", &c.explanations, |e| &e.id, diags),
+    };
+    unique("item", &c.items, |i| &i.id, diags);
+    unique("lesson", &c.lessons, |l| &l.id, diags);
+    ids
+}
+
+/// Every reference to a KC, misconception or explanation resolves.
+pub fn references(c: &Content, ids: &Ids, diags: &mut Vec<Diagnostic>) {
+    let mut unknown = |file: &Path, subject: &str, what: &str, id: &dyn std::fmt::Display| {
+        diags.push(diag(
+            Code::UnknownReference,
+            file,
+            subject.to_owned(),
+            format!("unknown {what} `{id}`"),
+        ));
+    };
+    for e in &c.edges {
+        let edge = &e.value;
+        let subject = format!(
+            "edge `{}` {} `{}`",
+            edge.from,
+            wire_name(edge.kind),
+            edge.to
+        );
+        for kc in [&edge.from, &edge.to] {
+            if !ids.kcs.contains(kc) {
+                unknown(&e.file, &subject, "KC", kc);
+            }
+        }
+    }
+    for m in &c.misconceptions {
+        let subject = format!("misconception `{}`", m.value.id);
+        for kc in m.value.affects.iter().chain([&m.value.remedy]) {
+            if !ids.kcs.contains(kc) {
+                unknown(&m.file, &subject, "KC", kc);
+            }
+        }
+        if !ids.explanations.contains(&m.value.feedback) {
+            unknown(&m.file, &subject, "explanation", &m.value.feedback);
+        }
+    }
+    for e in &c.explanations {
+        let subject = format!("explanation `{}`", e.value.id);
+        match &e.value.target {
+            ExplanationTarget::Kc(kc) if !ids.kcs.contains(kc) => {
+                unknown(&e.file, &subject, "KC", kc);
+            }
+            ExplanationTarget::Misconception(m) if !ids.misconceptions.contains(m) => {
+                unknown(&e.file, &subject, "misconception", m);
+            }
+            _ => {}
+        }
+    }
+    for it in &c.items {
+        let subject = format!("item `{}`", it.value.id);
+        for slot in &it.value.slots {
+            for sk in &slot.kcs {
+                if !ids.kcs.contains(&sk.kc) {
+                    unknown(&it.file, &subject, "KC", &sk.kc);
+                }
+            }
+            let mis = slot
+                .options
+                .iter()
+                .filter_map(|o| o.misconception.as_ref())
+                .chain(slot.expected_wrong.iter().map(|w| &w.misconception));
+            for m in mis {
+                if !ids.misconceptions.contains(m) {
+                    unknown(&it.file, &subject, "misconception", m);
+                }
+            }
+        }
+    }
+    for l in &c.lessons {
+        let subject = format!("lesson `{}`", l.value.id);
+        let mut kcs: Vec<&KcId> = l.value.kcs.iter().collect();
+        for step in &l.value.steps {
+            match step {
+                LessonStep::Pretest { query }
+                | LessonStep::Practice { query }
+                | LessonStep::Production { query }
+                | LessonStep::Posttest { query } => kcs.extend(&query.kcs),
+                LessonStep::Explanation { kc, .. } => kcs.push(kc),
+                LessonStep::WorkedExamples { .. } | LessonStep::Summary => {}
+            }
+        }
+        for kc in kcs {
+            if !ids.kcs.contains(kc) {
+                unknown(&l.file, &subject, "KC", kc);
+            }
+        }
+    }
+}
+
+/// Live items: KC links and the quality rule counts. The checks on
+/// distractor text run in normalized space, with the templates.
+pub fn live_items(c: &Content, diags: &mut Vec<Diagnostic>) {
+    for it in &c.items {
+        let item = &it.value;
+        if item.status != ItemStatus::Live {
+            continue;
+        }
+        let subject = format!("item `{}`", item.id);
+        let mut push = |code, message: String| {
+            diags.push(diag(code, &it.file, subject.clone(), message));
+        };
+        if item.slots.is_empty() {
+            push(Code::NoPrimaryKc, "live item has no slots".to_owned());
+        }
+        let rule = item.item_type.quality_rule();
+        if rule.is_none() {
+            push(
+                Code::NoQualityRule,
+                format!(
+                    "type `{}` has no quality rule yet and cannot be live",
+                    wire_name(item.item_type)
+                ),
+            );
+        }
+        for (j, slot) in item.slots.iter().enumerate() {
+            if !slot.kcs.iter().any(|k| k.role == KcRole::Primary) {
+                push(Code::NoPrimaryKc, format!("slots[{j}] has no primary KC"));
+            }
+            match rule {
+                Some(QualityRule::Choice) => {
+                    let n = slot
+                        .options
+                        .iter()
+                        .filter(|o| o.misconception.is_some())
+                        .count();
+                    if n < 2 {
+                        push(
+                            Code::TooFewDistractors,
+                            format!(
+                                "slots[{j}] has {n} distractor(s) with a misconception, needs 2"
+                            ),
+                        );
+                    }
+                }
+                Some(QualityRule::TypedInput) => {
+                    let n = slot.expected_wrong.len();
+                    if n < 2 {
+                        push(
+                            Code::TooFewErrorPatterns,
+                            format!("slots[{j}] has {n} expected_wrong pattern(s), needs 2"),
+                        );
+                    }
+                }
+                None => {}
+            }
+        }
+    }
+}
+
+/// Referenced audio files exist under `audio_root`.
+pub fn audio(c: &Content, audio_root: &Path, diags: &mut Vec<Diagnostic>) {
+    let mut check = |file: &Path, subject: String, path: &str| {
+        if !audio_root.join(path).is_file() {
+            diags.push(diag(
+                Code::MissingAudio,
+                file,
+                subject,
+                format!(
+                    "audio file `{path}` not found under {}",
+                    audio_root.display()
+                ),
+            ));
+        }
+    };
+    for it in &c.items {
+        if let Some(a) = &it.value.stimulus.audio {
+            check(&it.file, format!("item `{}`", it.value.id), &a.0);
+        }
+    }
+    for e in &c.explanations {
+        for ex in &e.value.examples {
+            if let Some(a) = &ex.audio {
+                check(&e.file, format!("explanation `{}`", e.value.id), &a.0);
+            }
+        }
+    }
+}
