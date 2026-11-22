@@ -47,6 +47,8 @@
               # content-build tests build the example content and the negative fixtures.
               ./content
               ./tools/content-build/tests/fixtures
+              # sqlx::migrate! embeds the migrations at compile time.
+              ./server/migrations
               # Committed TS bindings: the ts_bindings test checks they are current.
               ./web/src/generated
             ];
@@ -57,8 +59,12 @@
             version = "0.0.0";
             strictDeps = true;
             cargoExtraArgs = "--locked --workspace --all-features";
-            # content-build runs `nickel export`.
-            nativeBuildInputs = [ pkgs.nickel ];
+            # content-build runs `nickel export`; the server tests start a throwaway
+            # PostgreSQL cluster (initdb in $TMPDIR), not a system service.
+            nativeBuildInputs = [
+              pkgs.nickel
+              pkgs.postgresql
+            ];
           };
           cargoArtifacts = craneLib.buildDepsOnly commonArgs;
           content-build = craneLib.buildPackage (
@@ -129,7 +135,8 @@
 
       # Local CI: `nix flake check` runs fmt, clippy (-D warnings), all tests
       # (including the TS bindings freshness check), the wasm32 build of the core
-      # and content-build on content/.
+      # and content-build on content/. Database tests run against a throwaway
+      # PostgreSQL started inside the test check.
       checks = forAllSystems (
         system: pkgs:
         cargo system pkgs
