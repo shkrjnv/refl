@@ -35,6 +35,7 @@ refl — платформа изучения английского (general Eng
 | Слои 3–4: placement, планировщик сессий, «почему это задание» | `docs/04-placement-planner.md` |
 | Аудио-конвейер, плеер, speaking | `docs/05-audio-player-speaking.md` |
 | Компаньоны: пакеты, состояния, главы по вехам, реплики i+1 | `docs/06-companions.md` |
+| Темы, ачивки, рамки, модель разблокировок | `docs/07-themes-achievements-frames.md` |
 | Эталонный урок (демо), ссылки на исходники | `docs/README.md` |
 
 ## Этапы
