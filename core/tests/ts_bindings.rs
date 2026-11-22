@@ -1,0 +1,81 @@
+//! TypeScript bindings for the web client are generated from the Rust types
+//! and committed under `web/src/generated/core/`. This test fails when they
+//! are stale. Regenerate with:
+//!
+//!     UPDATE_TS_BINDINGS=1 cargo test -p eng-core --all-features --test ts_bindings
+
+use std::collections::BTreeMap;
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use eng_core::Event;
+use eng_core::content::{Edge, Explanation, Kc, Misconception};
+use eng_core::item::Item;
+use eng_core::lesson::Lesson;
+use ts_rs::{Config, TS};
+
+fn committed_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../web/src/generated/core")
+}
+
+fn export_all(dir: &Path) {
+    let cfg = Config::new().with_out_dir(dir);
+    Event::export_all(&cfg).unwrap();
+    Item::export_all(&cfg).unwrap();
+    Kc::export_all(&cfg).unwrap();
+    Edge::export_all(&cfg).unwrap();
+    Misconception::export_all(&cfg).unwrap();
+    Explanation::export_all(&cfg).unwrap();
+    Lesson::export_all(&cfg).unwrap();
+}
+
+fn read_tree(dir: &Path) -> BTreeMap<PathBuf, String> {
+    fn walk(root: &Path, dir: &Path, out: &mut BTreeMap<PathBuf, String>) {
+        let Ok(entries) = fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                walk(root, &path, out);
+            } else {
+                let rel = path.strip_prefix(root).unwrap().to_path_buf();
+                out.insert(rel, fs::read_to_string(&path).unwrap());
+            }
+        }
+    }
+    let mut out = BTreeMap::new();
+    walk(dir, dir, &mut out);
+    out
+}
+
+#[test]
+fn ts_bindings_are_up_to_date() {
+    let fresh = Path::new(env!("CARGO_TARGET_TMPDIR")).join("ts-bindings");
+    let _ = fs::remove_dir_all(&fresh);
+    export_all(&fresh);
+    let generated = read_tree(&fresh);
+    assert!(!generated.is_empty(), "no bindings were generated");
+
+    let committed = committed_dir();
+    if std::env::var_os("UPDATE_TS_BINDINGS").is_some() {
+        let _ = fs::remove_dir_all(&committed);
+        for (rel, text) in &generated {
+            let path = committed.join(rel);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, text).unwrap();
+        }
+        return;
+    }
+    let on_disk = read_tree(&committed);
+    let stale: Vec<_> = generated
+        .keys()
+        .chain(on_disk.keys())
+        .filter(|k| generated.get(*k) != on_disk.get(*k))
+        .collect();
+    assert!(
+        stale.is_empty(),
+        "web/src/generated/core is stale ({stale:?}); run \
+         UPDATE_TS_BINDINGS=1 cargo test -p eng-core --all-features --test ts_bindings"
+    );
+}

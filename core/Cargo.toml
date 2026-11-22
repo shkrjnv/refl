@@ -24,6 +24,9 @@ ts-rs = { version = "12", optional = true, default-features = false, features = 
 [dev-dependencies]
 proptest = "1"
 
+[[test]]
+name = "ts_bindings"
+required-features = ["ts"]
 
 [lints]
 workspace = true
