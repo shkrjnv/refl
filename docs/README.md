@@ -9,6 +9,7 @@
 | 03-layer2-learner-model.md | слой 2: модель ученика (знание, FSRS, автоматизм, заблуждения) | https://claude.ai/artifact/Csr1PjWxgzMQ5ek5jSfVvK |
 | 04-placement-planner.md | слои 3–4: placement и планировщик сессий | https://claude.ai/artifact/3ywA1fow5Bb84ypCEkWa6d |
 | 05-audio-player-speaking.md | аудио, плеер, speaking | https://claude.ai/artifact/9JyYVNfL2x49NaGTMqrHcX |
+| 06-companions.md | компаньоны: система, Ильда, Пух, принципы | — |
 
 Эталонный урок (интерактивное демо, HTML-артефакт, не выгружен): https://claude.ai/artifact/6bo7kdn9bvhSEEe7wGcqqp
 
