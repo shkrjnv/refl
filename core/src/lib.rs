@@ -14,8 +14,10 @@
 extern crate alloc;
 
 pub mod content;
+pub mod event;
 pub mod ids;
 pub mod item;
 pub mod lesson;
 pub mod value;
 
+pub use event::{CURRENT_SCHEMA_VERSION, DecodeError, Event, decode_event, encode_event};
