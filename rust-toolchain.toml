@@ -1,0 +1,6 @@
+# Single source of the Rust version: read by fenix in flake.nix and by rustup/IDEs.
+[toolchain]
+channel = "1.100.0"
+profile = "minimal"
+components = ["clippy", "rustfmt", "rust-src", "rust-analyzer"]
+targets = ["wasm32-unknown-unknown"]
