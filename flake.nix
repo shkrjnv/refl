@@ -123,6 +123,7 @@
               pkgs.nickel
               pkgs.nodejs
               pkgs.pnpm
+              pkgs.just
             ];
             # Stages 3-5 bring back: piper-tts (audio), languagetool and
             # hunspell + dictionaries (writing checks), ffmpeg/opus-tools (audio

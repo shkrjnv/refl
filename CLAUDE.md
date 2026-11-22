@@ -53,6 +53,7 @@ refl — платформа изучения английского (general Eng
 
 - Окружение: `nix develop` (или `nix develop -c <команда>`).
 - Локальный CI: `nix flake check` — fmt, clippy `-D warnings`, все тесты, сборка `eng-core` под wasm32.
+- Одной командой: `just` (в `nix develop`) — fmt-check, clippy, тесты, сборка wasm32, content-build; рецепты по отдельности — `just --list`, полный герметичный CI — `just ci`.
 - Тесты: `cargo test --workspace --all-features` (без `--all-features` тест TS-биндингов пропускается).
 - Линт: `cargo clippy --workspace --all-targets --all-features -- -D warnings`.
 - TS-типы из Rust: `UPDATE_TS_BINDINGS=1 cargo test -p eng-core --all-features --test ts_bindings`; результат в `web/src/generated/core/` коммитится, тест падает, если он устарел.
