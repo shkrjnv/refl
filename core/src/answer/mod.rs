@@ -3,5 +3,6 @@
 //! it compiles to. content-build parses and compiles; the runtime only
 //! normalizes answers and executes compiled automata.
 
+pub mod dfa;
 pub mod normalize;
 pub mod template;
