@@ -7,7 +7,7 @@
 - **Ядро** `core/` — Rust, crate без ввода-вывода: проверка ответов, модель ученика, placement, планировщик. Собирается нативно (сервер) и в WASM (PWA).
 - **Сервер** `server/` — axum + tokio + sqlx, PostgreSQL. WebSocket для чата и уведомлений.
 - **Клиент** `web/` — TypeScript + SolidJS + Vite, PWA, IndexedDB. Вся логика обучения вызывается из WASM-ядра, в TS её нет. Типы API генерируются из Rust (ts-rs или specta).
-- **Контент** `content/` — Nickel → JSON → CLI `content-build` (Rust; Haskell допустим только для content-build) → Postgres.
+- **Контент** `content/` — Nickel → JSON → CLI `content-build` (Rust, на eng-core) → Postgres.
 - **Инструменты** `tools/` — `content-build`, симулятор учеников, аудио-конвейер (Piper/Kokoro → Opus).
 - FSRS-6 — своя реализация в core на `libm`; fsrs-rs только офлайн для подбора весов.
 - Прочее: Hunspell, локальный LanguageTool, Fluent (i18n), tracing + Prometheus + Grafana, pgBackRest.

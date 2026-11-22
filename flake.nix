@@ -94,7 +94,7 @@
             ];
             # Stages 3-5 bring back: piper-tts (audio), languagetool and
             # hunspell + dictionaries (writing checks), ffmpeg/opus-tools (audio
-            # pipeline), optional Haskell for content-build (docs/01-architecture.md).
+            # pipeline).
 
             DATABASE_URL = "postgres://eng_learn@localhost/eng_learn";
           };
