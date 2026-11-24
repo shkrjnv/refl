@@ -1,8 +1,5 @@
 # Defect: an explanation is reviewed with the hash of another text, as if
-# its body was edited after the review (docs/02, «Вычитка и показ»). This
-# fixture checks hashes (see `.check-hashes`), so the hand-written reviews
-# of the shared base have none and are reported too: all of them are
-# `reviewed-text-changed`.
+# its body was edited after the review (docs/02, «Вычитка и показ»).
 let b = import "../lib/base.ncl" in
 {
   subjects = b.subjects,

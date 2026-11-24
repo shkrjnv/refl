@@ -5,6 +5,7 @@
 
 pub mod check;
 pub mod graph;
+pub mod ledger;
 pub mod lexicon;
 pub mod load;
 pub mod lock;
@@ -44,10 +45,9 @@ pub struct Options {
     /// The lock must not change: a build that would append an entry fails
     /// (`lock-outdated`). For CI, where nothing may write the file.
     pub locked: bool,
-    /// Check that every `reviewed` record carries the hash of its text
-    /// (`reviewed-text-changed`). On everywhere; only the tests that need
-    /// hand-written reviewed fixtures without computing hashes turn it off.
-    pub check_text_hashes: bool,
+    /// The review ledger; a missing file is an empty ledger. `mark-reviewed`
+    /// writes it.
+    pub reviews: PathBuf,
 }
 
 impl Options {
@@ -60,7 +60,7 @@ impl Options {
             audio_root: content.join("audio"),
             lock: content.join(lock::FILE),
             locked: false,
-            check_text_hashes: true,
+            reviews: content.join(ledger::FILE),
             content,
             nickel: PathBuf::from("nickel"),
             scowl: std::env::var_os("REFL_SCOWL_DICT").map_or_else(PathBuf::new, PathBuf::from),
@@ -102,12 +102,21 @@ pub fn build(opts: &Options) -> std::io::Result<Output> {
 /// # Panics
 /// Never: bundle types always serialize.
 pub fn build_with_content(opts: &Options) -> std::io::Result<(Output, load::Content)> {
-    let (content, mut diags) = load::load(&opts.content, &opts.nickel).map_err(|e| {
+    let (mut content, mut diags) = load::load(&opts.content, &opts.nickel).map_err(|e| {
         std::io::Error::new(
             e.kind(),
             format!("cannot read {}: {e}", opts.content.display()),
         )
     })?;
+    match ledger::read(&opts.reviews)? {
+        Ok(entries) => ledger::apply(&mut content, &entries),
+        Err(why) => diags.push(check::diag(
+            report::Code::Schema,
+            std::path::Path::new(ledger::FILE),
+            format!("review ledger `{}`", opts.reviews.display()),
+            why,
+        )),
+    }
     let lexicon = lexicon::load_scowl(&opts.scowl)?;
     let ids = check::duplicates(&content, &mut diags);
     check::references(&content, &ids, &mut diags);
@@ -117,9 +126,7 @@ pub fn build_with_content(opts: &Options) -> std::io::Result<(Output, load::Cont
     check::misconception_feedback(&content, &mut diags);
     check::instruction_text(&content, &mut diags);
     check::reviewers(&content, &mut diags);
-    if opts.check_text_hashes {
-        check::reviewed_texts(&content, &mut diags);
-    }
+    check::reviewed_texts(&content, &mut diags);
     let requires = graph::Requires::new(&content, &ids);
     requires.check_acyclic(&mut diags);
     let compiled = templates::compile(&content.items, &mut diags);

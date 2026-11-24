@@ -1,10 +1,9 @@
 # Valid base content for the negative fixtures. Each fixture directory has
 # one content.ncl that reuses these parts and introduces exactly one defect.
 let why_text = { ru = "почему", en = "why" } in
-# Reviewed by a named person: draft texts keep a KC from going live (docs/02,
-# «Вычитка и показ»), so the base content is reviewed.
-let checked = { status = "reviewed", by = "test" } in
-let both_checked = { ru = checked, en = checked } in
+# Nothing here is reviewed: draft texts keep a KC from going live (docs/02,
+# «Вычитка и показ»). Tests that need live KCs mark the records reviewed with
+# the same function as `content-build mark-reviewed` (see `marked` in build.rs).
 let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
 {
   subjects = [
@@ -25,9 +24,7 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
       id = "en.k.spelling",
       subject = "en",
       domain = "grammar",
-      title = { ru = "Орфография", en = "Spelling" },
-      review = both_checked,
-      level = "A1",
+      title = { ru = "Орфография", en = "Spelling" },      level = "A1",
       importance = 0.5,
       rule = "spelling",
     },
@@ -35,9 +32,7 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
       id = "en.k.a",
       subject = "en",
       domain = "grammar",
-      title = { ru = "А", en = "A" },
-      review = both_checked,
-      level = "A1",
+      title = { ru = "А", en = "A" },      level = "A1",
       importance = 0.5,
       rule = "a",
     },
@@ -45,9 +40,7 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
       id = "en.k.b",
       subject = "en",
       domain = "grammar",
-      title = { ru = "Б", en = "B" },
-      review = both_checked,
-      level = "A1",
+      title = { ru = "Б", en = "B" },      level = "A1",
       importance = 0.5,
       rule = "b",
     },
@@ -74,8 +67,8 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
     },
   ],
   instructions = [
-    { id = "i.gap", text = { ru = "заполните", en = "fill in" }, review = both_checked },
-    { id = "i.choice", text = { ru = "выберите", en = "choose" }, review = both_checked },
+    { id = "i.gap", text = { ru = "заполните", en = "fill in" } },
+    { id = "i.choice", text = { ru = "выберите", en = "choose" } },
   ],
   explanations = [
     {
@@ -84,7 +77,7 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
       depth = "short",
       lang = "ru",
       body = "один",
-      review = checked,
+      review = { status = "draft" },
     },
     {
       id = "e.m.two.ru",
@@ -92,7 +85,7 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
       depth = "short",
       lang = "ru",
       body = "два",
-      review = checked,
+      review = { status = "draft" },
     },
     {
       id = "e.m.one",
@@ -100,7 +93,7 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
       depth = "short",
       lang = "en",
       body = "one",
-      review = checked,
+      review = { status = "draft" },
     },
     {
       id = "e.m.two",
@@ -108,7 +101,7 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
       depth = "short",
       lang = "en",
       body = "two",
-      review = checked,
+      review = { status = "draft" },
     },
   ],
 
@@ -121,9 +114,7 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
         family | default = "en.f.gap",
         difficulty | default = 1,
         type | default = "gap_fill",
-        status | default = "live",
-        review | default = both_checked,
-        slot_kcs | default = primary_kc "en.k.a",
+        status | default = "live",        slot_kcs | default = primary_kc "en.k.a",
         answer | default = "a cat",
         accepted | default = ["(a|one) cat"],
         wrong | default = [
@@ -153,9 +144,7 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
       ],
       difficulty = a.difficulty,
       expected_time = 20,
-      status = a.status,
-      review = a.review,
-    },
+      status = a.status,    },
 
   # What makes `kc` live: short explanations in ru and en and ten live
   # gap-fill items (production) in three families with difficulties 1 and 2.
@@ -167,7 +156,7 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
         depth = "short",
         lang = l,
         body = "rule",
-        review = checked,
+        review = { status = "draft" },
       }
     in
     {
@@ -209,7 +198,5 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
       slots = [{ kcs = primary_kc "en.k.a", answer = "a", accepted = ["a"], options = a.options, why = why_text }],
       difficulty = 1,
       expected_time = 10,
-      status = "live",
-      review = both_checked,
-    },
+      status = "live",    },
 }

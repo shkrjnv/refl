@@ -381,7 +381,8 @@ pub fn reviewed_texts(c: &Content, diags: &mut Vec<Diagnostic>) {
         let wrong = cov
             .reviews
             .iter()
-            .filter(|r| r.status == ReviewStatus::Reviewed)
+            // A review without a name is already an error of its own.
+            .filter(|r| r.status == ReviewStatus::Reviewed && r.by.is_some())
             .find(|r| r.hash.as_deref() != Some(cov.hash.as_str()));
         let Some(r) = wrong else { continue };
         let lang = format!("{:?}", cov.lang).to_lowercase();

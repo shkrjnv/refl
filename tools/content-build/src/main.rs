@@ -19,7 +19,7 @@ use std::process::ExitCode;
 
 use content_build::{Options, build, build_with_content, to_bytes};
 
-const USAGE: &str = "usage: content-build <content-dir> [--out <bundle.json>] [--locked] [--audio-root <dir>] [--nickel <path>] [--scowl <dir>]\n       content-build report [--missing] [--review] [--out <dir>] <content-dir>";
+const USAGE: &str = "usage: content-build <content-dir> [--out <bundle.json>] [--locked] [--audio-root <dir>] [--nickel <path>] [--scowl <dir>]\n       content-build report [--missing] [--review] [--out <dir>] <content-dir>\n       content-build mark-reviewed --by <name> --lang <ru|en|uz> [--content <dir>] (--all | <record>...)";
 
 fn parse_args() -> Result<(Options, Option<PathBuf>), String> {
     let mut args = std::env::args_os().skip(1);
@@ -163,6 +163,86 @@ fn missing_report(
     out
 }
 
+/// `content-build mark-reviewed --by <name> --lang <ru|en|uz> [--content <dir>]
+/// (--all | <record> …)`: the only writer of `reviews.lock`. Computes the hash
+/// of each selected record's current text and records that `<name>` read it.
+fn mark_reviewed_command(args: impl Iterator<Item = std::ffi::OsString>) -> ExitCode {
+    use content_build::ledger::{Selection, mark_reviewed};
+    use refl_core::value::Lang;
+
+    let (mut by, mut lang, mut all) = (None, None, false);
+    let mut content = PathBuf::from("content");
+    let mut records = Vec::new();
+    let mut args = args;
+    while let Some(arg) = args.next() {
+        let Some(arg) = arg.to_str().map(str::to_owned) else {
+            return usage_error("arguments must be UTF-8");
+        };
+        match arg.as_str() {
+            "--all" => all = true,
+            "--by" | "--lang" | "--content" => {
+                let Some(value) = args.next().and_then(|v| v.into_string().ok()) else {
+                    return usage_error(&format!("{arg} needs a value"));
+                };
+                match arg.as_str() {
+                    "--by" => by = Some(value),
+                    "--content" => content = PathBuf::from(value),
+                    _ => {
+                        lang = match value.as_str() {
+                            "uz" => Some(Lang::Uz),
+                            "ru" => Some(Lang::Ru),
+                            "en" => Some(Lang::En),
+                            _ => return usage_error("--lang is uz, ru or en"),
+                        };
+                    }
+                }
+            }
+            s if s.starts_with('-') => return usage_error(&format!("unknown option {s}")),
+            _ => records.push(arg),
+        }
+    }
+    let (Some(by), Some(lang)) = (by, lang) else {
+        return usage_error("mark-reviewed needs --by and --lang");
+    };
+    if all != records.is_empty() {
+        return usage_error("name the records to mark, or --all");
+    }
+    let opts = Options::new(&content);
+    let (loaded, diags) = match content_build::load::load(&opts.content, &opts.nickel) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("content-build: cannot read {}: {e}", content.display());
+            return ExitCode::from(2);
+        }
+    };
+    if let Some(d) = diags.first() {
+        eprintln!("content-build: the content does not load, so no text can be hashed:\n{d}");
+        return ExitCode::from(1);
+    }
+    let selection = if all {
+        Selection::All
+    } else {
+        Selection::Records(records)
+    };
+    match mark_reviewed(&loaded, &opts.reviews, &by, lang, &selection) {
+        Ok(keys) => {
+            for k in &keys {
+                println!("reviewed by {by} ({lang:?}): {k}");
+            }
+            println!(
+                "{} record(s) written to {}: commit the file",
+                keys.len(),
+                opts.reviews.display()
+            );
+            ExitCode::SUCCESS
+        }
+        Err(why) => {
+            eprintln!("content-build: {why}");
+            ExitCode::from(1)
+        }
+    }
+}
+
 fn usage_error(msg: &str) -> ExitCode {
     eprintln!("content-build: {msg}");
     eprintln!("{USAGE}");
@@ -174,6 +254,10 @@ fn main() -> ExitCode {
     if argv.peek().is_some_and(|a| a == "report") {
         argv.next();
         return report_command(argv);
+    }
+    if argv.peek().is_some_and(|a| a == "mark-reviewed") {
+        argv.next();
+        return mark_reviewed_command(argv);
     }
     let (opts, out) = match parse_args() {
         Ok(v) => v,

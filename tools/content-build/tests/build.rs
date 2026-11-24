@@ -11,26 +11,80 @@ use content_build::{Options, Output, build, to_bytes};
 use refl_core::bundle::KcStatus;
 use refl_core::ids::{ItemId, ItemRef, ItemVersion};
 use refl_core::item::ItemStatus;
+use refl_core::value::Lang;
 
 fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-/// Options for a fixture. The fixtures' reviewed records are written by hand
-/// without the hash of their text, so the hash check is off unless the
-/// fixture opts in with a `.check-hashes` file.
-fn options(dir: &Path) -> Options {
-    let mut opts = Options::new(dir);
-    opts.check_text_hashes = dir.join(".check-hashes").exists();
-    opts
-}
-
 fn run(dir: &Path) -> Output {
-    build(&options(dir)).unwrap_or_else(|e| panic!("{}: {e}", dir.display()))
+    build(&Options::new(dir)).unwrap_or_else(|e| panic!("{}: {e}", dir.display()))
 }
 
 fn fixtures() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
+}
+
+fn copy_dir(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for entry in std::fs::read_dir(from).unwrap() {
+        let entry = entry.unwrap();
+        let target = to.join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            copy_dir(&entry.path(), &target);
+        } else {
+            std::fs::copy(entry.path(), target).unwrap();
+        }
+    }
+}
+
+/// A copy of a fixture whose records are marked reviewed in ru and en by
+/// "test": through the same function as `content-build mark-reviewed`, so the
+/// hashes are real and every build check runs on the result. `skip` leaves
+/// out (record key, language) pairs, which stay draft.
+struct Marked(PathBuf);
+
+impl Marked {
+    fn new(name: &str, skip: &[(&str, Lang)]) -> Self {
+        static COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let n = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let root = std::env::temp_dir().join(format!("refl-marked-{}-{n}", std::process::id()));
+        // The fixture imports `../lib/base.ncl`: keep the layout.
+        copy_dir(&fixtures().join("lib"), &root.join("lib"));
+        let dir = root.join(name);
+        copy_dir(&fixtures().join(name), &dir);
+        let opts = Options::new(&dir);
+        let (content, diags) = content_build::load::load(&opts.content, &opts.nickel).unwrap();
+        assert!(diags.is_empty(), "{name}: {diags:?}");
+        for lang in [Lang::Ru, Lang::En] {
+            let keys: Vec<String> = content_build::review::covered(&content)
+                .into_iter()
+                .filter(|c| c.lang == lang && !skip.contains(&(c.key.as_str(), lang)))
+                .map(|c| c.key)
+                .collect();
+            content_build::ledger::mark_reviewed(
+                &content,
+                &opts.reviews,
+                "test",
+                lang,
+                &content_build::ledger::Selection::Records(keys),
+            )
+            .unwrap();
+        }
+        Self(dir)
+    }
+
+    fn path(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Drop for Marked {
+    fn drop(&mut self) {
+        if let Some(root) = self.0.parent() {
+            let _ = std::fs::remove_dir_all(root);
+        }
+    }
 }
 
 #[test]
@@ -47,7 +101,7 @@ fn each_check_catches_its_own_defect() {
         let dir = fixtures().join(code.as_str());
         // Only `lock-outdated` is about `--locked`; the other fixtures have
         // no lock or a matching one.
-        let mut opts = options(&dir);
+        let mut opts = Options::new(&dir);
         opts.locked = code == Code::LockOutdated;
         let out = build(&opts).unwrap_or_else(|e| panic!("{}: {e}", dir.display()));
         let codes: Vec<Code> = out.report.diagnostics.iter().map(|d| d.code).collect();
@@ -107,7 +161,8 @@ fn witnesses_are_shortest_examples() {
 
 #[test]
 fn contrast_crossed_by_a_confusion_passes() {
-    let out = run(&fixtures().join("contrast-with-confusion"));
+    let fx = Marked::new("contrast-with-confusion", &[]);
+    let out = run(fx.path());
     assert!(out.report.diagnostics.is_empty(), "{}", out.report);
     let bundle = out.bundle.expect("bundle");
     let status = |id: &str| {
@@ -127,7 +182,15 @@ fn contrast_crossed_by_a_confusion_passes() {
 /// names each missing review (docs/02, «Вычитка и показ»).
 #[test]
 fn unreviewed_texts_keep_a_kc_draft() {
-    let out = run(&fixtures().join("unreviewed"));
+    let fx = Marked::new(
+        "unreviewed",
+        &[
+            ("explanation:e.en.k.a.ru", Lang::Ru),
+            ("instruction:i.gap", Lang::En),
+            ("explanation:e.m.one", Lang::En),
+        ],
+    );
+    let out = run(fx.path());
     assert!(out.report.diagnostics.is_empty(), "{}", out.report);
     assert_eq!(out.report.live, Vec::<String>::new());
     let missing = &out
@@ -155,7 +218,15 @@ fn unreviewed_texts_keep_a_kc_draft() {
 
 #[test]
 fn draft_unreviewed_items_and_items_on_draft_kcs_are_not_eligible() {
-    let out = run(&fixtures().join("eligibility"));
+    let fx = Marked::new(
+        "eligibility",
+        &[
+            ("item:it.unreviewed", Lang::Ru),
+            ("item:it.unreviewed", Lang::En),
+            ("item:it.half-reviewed", Lang::En),
+        ],
+    );
+    let out = run(fx.path());
     assert!(out.report.diagnostics.is_empty(), "{}", out.report);
     let bundle = out.bundle.expect("bundle");
     for entry in &bundle.content.items {
@@ -172,7 +243,8 @@ fn draft_unreviewed_items_and_items_on_draft_kcs_are_not_eligible() {
 /// else they have; the build still passes.
 #[test]
 fn an_uncrossed_contrast_blocks_both_kcs() {
-    let out = run(&fixtures().join("contrast-blocker"));
+    let fx = Marked::new("contrast-blocker", &[]);
+    let out = run(fx.path());
     assert!(out.report.diagnostics.is_empty(), "{}", out.report);
     assert_eq!(out.report.live, Vec::<String>::new());
     for (kc, other) in [("en.k.a", "en.k.b"), ("en.k.b", "en.k.a")] {
@@ -196,7 +268,14 @@ fn an_uncrossed_contrast_blocks_both_kcs() {
 /// which one is unreviewed are nine.
 #[test]
 fn live_counts_only_reviewed_tasks() {
-    let out = run(&fixtures().join("unreviewed-task"));
+    let fx = Marked::new(
+        "unreviewed-task",
+        &[
+            ("item:it.en.k.a.0", Lang::Ru),
+            ("item:it.en.k.a.0", Lang::En),
+        ],
+    );
+    let out = run(fx.path());
     assert!(out.report.diagnostics.is_empty(), "{}", out.report);
     let missing = &out
         .report
@@ -210,13 +289,15 @@ fn live_counts_only_reviewed_tasks() {
         &["9 reviewed live task(s) of 10 live, needs 10".to_owned()]
     );
     // The same ten, all reviewed, make the KC live (the clean fixture does).
-    let clean = run(&fixtures().join("contrast-with-confusion"));
+    let fx = Marked::new("contrast-with-confusion", &[]);
+    let clean = run(fx.path());
     assert!(clean.report.live.contains(&"en.k.a".to_owned()));
 }
 
 #[test]
 fn an_unreviewed_title_keeps_a_kc_draft() {
-    let out = run(&fixtures().join("title-unreviewed"));
+    let fx = Marked::new("title-unreviewed", &[("kc:en.k.a", Lang::En)]);
+    let out = run(fx.path());
     assert!(out.report.diagnostics.is_empty(), "{}", out.report);
     let missing = &out
         .report
@@ -232,8 +313,16 @@ fn an_unreviewed_title_keeps_a_kc_draft() {
 /// and every task as a learner sees it.
 #[test]
 fn the_review_queue_lists_drafts_by_language_with_a_line() {
-    let root = fixtures().join("eligibility");
-    let (out, content) = content_build::build_with_content(&options(&root)).unwrap();
+    let fx = Marked::new(
+        "eligibility",
+        &[
+            ("item:it.unreviewed", Lang::Ru),
+            ("item:it.unreviewed", Lang::En),
+            ("item:it.half-reviewed", Lang::En),
+        ],
+    );
+    let root = fx.path().to_path_buf();
+    let (out, content) = content_build::build_with_content(&Options::new(&root)).unwrap();
     assert!(out.bundle.is_some());
     let files = content_build::review::review_files(&root, &content);
     let sections: Vec<&str> = files
@@ -282,7 +371,7 @@ fn the_review_queue_lists_drafts_by_language_with_a_line() {
 #[test]
 fn the_queue_finds_the_nearest_line_of_templated_text() {
     let root = repo().join("content");
-    let (_, content) = content_build::build_with_content(&options(&root)).unwrap();
+    let (_, content) = content_build::build_with_content(&Options::new(&root)).unwrap();
     let files = content_build::review::review_files(&root, &content);
     // The Articles tasks are one shared review: one hash per language.
     for lang in ["uz", "ru", "en"] {
@@ -329,9 +418,9 @@ fn example_content_builds_with_computed_status() {
             .find(|k| k.kc.id.as_str() == id)
             .map(|k| k.status)
     };
-    // The Articles unit of the prototype (docs/15, «Состав темы») is complete
-    // but draft until a person has reviewed its texts (docs/02, «Вычитка и
-    // показ»): the only thing that keeps a KC from live is review.
+    // The Articles unit of the prototype (docs/15, «Состав темы») is live:
+    // its texts are reviewed in ru and en by Hara (content/reviews.lock;
+    // docs/02, «Вычитка и показ»), and every task is eligible for sessions.
     for kc in [
         "en.gram.noun.countability",
         "en.gram.article.a-an-sound",
@@ -339,31 +428,16 @@ fn example_content_builds_with_computed_status() {
         "en.gram.article.second-mention",
         "en.gram.article.zero-general",
     ] {
-        assert_eq!(status(kc), Some(KcStatus::Draft), "{kc}");
-        let missing = &out
-            .report
-            .draft
-            .iter()
-            .find(|d| d.kc == kc)
-            .unwrap()
-            .missing;
-        // Everything missing is about review. The bank counts only reviewed
-        // live tasks, so with none reviewed it is reported as such.
-        assert!(
-            missing.iter().all(|m| m.contains("reviewed")),
-            "{kc}: {missing:?}"
-        );
-        assert!(
-            missing
-                .iter()
-                .any(|m| m.starts_with("0 reviewed live task(s) of ") && m.ends_with(", needs 10")),
-            "{kc}: {missing:?}"
-        );
+        assert_eq!(status(kc), Some(KcStatus::Live), "{kc}");
     }
-    // Items on draft KCs are not given in sessions.
     for entry in &bundle.content.items {
-        assert!(!entry.session_eligible, "{}", entry.item.id);
+        assert!(entry.session_eligible, "{}", entry.item.id);
+        // uz is not reviewed yet, so it is never shown.
+        assert!(entry.item.review.is_shown(Lang::Ru) && entry.item.review.is_shown(Lang::En));
+        assert!(!entry.item.review.is_shown(Lang::Uz), "{}", entry.item.id);
     }
+    // The shared spelling KC has no explanations or tasks yet.
+    assert_eq!(status("en.orth.spelling"), Some(KcStatus::Draft));
     assert_eq!(
         bundle.content.requires_closure
             [&refl_core::ids::KcId::new("en.gram.article.second-mention").unwrap()]
@@ -469,7 +543,7 @@ fn lock_is_append_only_and_tamper_evident() {
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("lock-append-only");
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("item-versions.lock");
-    let mut opts = options(&fixtures().join("clean"));
+    let mut opts = Options::new(fixtures().join("clean"));
     opts.lock = path.clone();
     std::fs::write(&path, &text).unwrap();
     let again = build(&opts).expect("build");
@@ -567,7 +641,8 @@ mod review_hash {
     use std::path::PathBuf;
 
     use content_build::report::Code;
-    use content_build::{Options, build, build_with_content};
+    use content_build::{Options, build};
+    use refl_core::value::Lang;
 
     use super::fixtures;
 
@@ -586,13 +661,12 @@ mod review_hash {
             let base = fixtures().join("lib/base.ncl");
             let content = format!(
                 r#"let b = import "{}" in
-let undone = fun r => std.record.update "review" {{}} r in
 {{
   subjects = b.subjects,
-  kcs = std.array.map undone b.kcs,
+  kcs = b.kcs,
   edges = b.edges,
   misconceptions = b.misconceptions,
-  instructions = std.array.map undone b.instructions,
+  instructions = b.instructions,
   explanations = [
     {{
       id = "e.k.a.en",
@@ -619,16 +693,20 @@ let undone = fun r => std.record.update "review" {{}} r in
                 .collect()
         }
 
-        /// What the explanation's hash is now (the check is off to read it).
-        fn hash(&self) -> String {
-            let mut opts = Options::new(&self.0);
-            opts.check_text_hashes = false;
-            let (_, content) = build_with_content(&opts).unwrap();
-            content_build::review::covered(&content)
-                .into_iter()
-                .find(|c| c.key == "explanation:e.k.a.en")
-                .unwrap()
-                .hash
+        /// Marks the explanation reviewed by "Hara", as the command does:
+        /// the hash of its text as it stands now goes to the ledger.
+        fn mark(&self) {
+            let opts = Options::new(&self.0);
+            let (content, diags) = content_build::load::load(&opts.content, &opts.nickel).unwrap();
+            assert!(diags.is_empty(), "{diags:?}");
+            content_build::ledger::mark_reviewed(
+                &content,
+                &opts.reviews,
+                "Hara",
+                Lang::En,
+                &content_build::ledger::Selection::Records(vec!["e.k.a.en".to_owned()]),
+            )
+            .unwrap();
         }
     }
 
@@ -638,38 +716,69 @@ let undone = fun r => std.record.update "review" {{}} r in
         }
     }
 
-    fn reviewed(hash: &str) -> String {
-        format!(r#"{{ status = "reviewed", by = "Hara", hash = "{hash}" }}"#)
-    }
+    const DRAFT: &str = r#"{ status = "draft" }"#;
 
     #[test]
     fn editing_a_reviewed_text_is_an_error_and_marking_again_passes() {
         let root = Root::new("hash");
-        // Reviewed by a person but with no hash: the text is not pinned.
+        root.write("A cat.", DRAFT);
+        assert_eq!(root.codes(), []);
+
+        // Marked by a person: passes, with the hash of the text as it stands.
+        root.mark();
+        assert_eq!(root.codes(), []);
+        let ledger = std::fs::read_to_string(root.0.join("reviews.lock")).unwrap();
+        assert!(
+            ledger.contains(r#""record":"explanation:e.k.a.en""#),
+            "{ledger}"
+        );
+        assert!(ledger.contains(r#""by":"Hara""#), "{ledger}");
+
+        // Edited after the review: an error naming the record and language.
+        root.write("A cat!", DRAFT);
+        let codes = root.codes();
+        assert_eq!(codes.len(), 1, "{codes:?}");
+        assert_eq!(codes[0].0, Code::ReviewedTextChanged);
+        assert!(codes[0].1.contains("language en"), "{}", codes[0].1);
+
+        // Re-read and marked again: the new hash replaces the old, and it passes.
+        root.mark();
+        assert_eq!(root.codes(), []);
+        assert_ne!(
+            ledger,
+            std::fs::read_to_string(root.0.join("reviews.lock")).unwrap()
+        );
+    }
+
+    /// A `reviewed` record written by hand without a hash is not pinned to
+    /// any text, so it is an error too.
+    #[test]
+    fn reviewed_by_hand_without_a_hash_is_an_error() {
+        let root = Root::new("nohash");
         root.write("A cat.", r#"{ status = "reviewed", by = "Hara" }"#);
         let codes = root.codes();
         assert_eq!(codes.len(), 1, "{codes:?}");
         assert_eq!(codes[0].0, Code::ReviewedTextChanged);
         assert!(codes[0].1.contains("without a `hash`"), "{}", codes[0].1);
+    }
 
-        // Marked: the hash of the text as it stands.
-        let marked = root.hash();
-        root.write("A cat.", &reviewed(&marked));
-        assert_eq!(root.codes(), []);
-
-        // Edited after the review: an error naming the record and language.
-        root.write("A cat!", &reviewed(&marked));
-        let codes = root.codes();
-        assert_eq!(codes.len(), 1, "{codes:?}");
-        assert_eq!(codes[0].0, Code::ReviewedTextChanged);
-        assert!(codes[0].1.contains("language en"), "{}", codes[0].1);
-        assert!(codes[0].1.contains(&marked), "{}", codes[0].1);
-
-        // Re-read and marked again with the new hash: passes.
-        let again = root.hash();
-        assert_ne!(again, marked);
-        root.write("A cat!", &reviewed(&again));
-        assert_eq!(root.codes(), []);
+    #[test]
+    fn marking_names_the_record_it_cannot_find() {
+        let root = Root::new("missing");
+        root.write("A cat.", DRAFT);
+        let opts = Options::new(&root.0);
+        let (content, _) = content_build::load::load(&opts.content, &opts.nickel).unwrap();
+        let err = content_build::ledger::mark_reviewed(
+            &content,
+            &opts.reviews,
+            "Hara",
+            Lang::Ru,
+            &content_build::ledger::Selection::Records(vec!["e.k.a.en".to_owned()]),
+        )
+        .unwrap_err();
+        // The explanation has text in en only.
+        assert!(err.contains("e.k.a.en"), "{err}");
+        assert!(!root.0.join("reviews.lock").exists());
     }
 
     #[test]

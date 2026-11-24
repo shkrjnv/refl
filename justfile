@@ -43,6 +43,10 @@ fold-speed:
 review:
     cargo run --locked --quiet -p content-build -- report --review --out target/review content
 
+# Mark records reviewed: just mark-reviewed --by Hara --lang ru --all  (or record ids, a review_group)
+mark-reviewed *args:
+    cargo run --locked --quiet -p content-build -- mark-reviewed {{args}}
+
 # What keeps each draft KC from live, most valuable first
 missing:
     cargo run --locked --quiet -p content-build -- report --missing content
