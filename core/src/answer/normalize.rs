@@ -10,12 +10,12 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use unicode_normalization::UnicodeNormalization;
 
-use crate::item::{Contractions, Item};
+use crate::item::{Contractions, EnglishCheck, ItemBody};
 
 /// Version of the normalization rules and tables, recorded in the content bundle.
 pub const NORMALIZATION_VERSION: u32 = 1;
 
-/// Per-item comparison flags.
+/// Comparison settings of one item.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct NormalizeOptions {
     pub case_sensitive: bool,
@@ -24,11 +24,20 @@ pub struct NormalizeOptions {
 }
 
 impl NormalizeOptions {
-    pub fn of(item: &Item) -> Self {
+    /// The settings of a typed-input kind; the defaults for every other kind.
+    pub fn of(body: &ItemBody) -> Self {
+        body.english_check()
+            .copied()
+            .map_or_else(Self::default, Self::from)
+    }
+}
+
+impl From<EnglishCheck> for NormalizeOptions {
+    fn from(c: EnglishCheck) -> Self {
         Self {
-            case_sensitive: item.case_sensitive,
-            contractions: item.contractions,
-            punctuation_sensitive: item.punctuation_sensitive,
+            case_sensitive: c.case_sensitive,
+            contractions: c.contractions,
+            punctuation_sensitive: c.punctuation_sensitive,
         }
     }
 }

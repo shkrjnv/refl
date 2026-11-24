@@ -6,14 +6,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::content::{Example, ExplanationDepth};
 use crate::ids::{KcId, LessonId};
-use crate::item::{AuthorDifficulty, ItemType};
+use crate::item::{AuthorDifficulty, ItemKindTag};
 
 /// Query to the item bank.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct BankQuery {
     pub kcs: Vec<KcId>,
-    pub types: Vec<ItemType>,
+    /// Kinds to draw from, by their `type` tag.
+    pub types: Vec<ItemKindTag>,
     pub min_difficulty: AuthorDifficulty,
     pub max_difficulty: AuthorDifficulty,
     pub count: u16,

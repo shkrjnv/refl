@@ -19,6 +19,7 @@ pub mod content;
 pub mod event;
 pub mod ids;
 pub mod item;
+pub mod kind;
 pub mod lesson;
 pub mod subject;
 pub mod unlock;

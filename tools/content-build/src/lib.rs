@@ -73,7 +73,7 @@ pub fn build(opts: &Options) -> std::io::Result<Output> {
     let requires = graph::Requires::new(&content, &ids);
     requires.check_acyclic(&mut diags);
     let compiled = templates::compile(&content.items, &mut diags);
-    check::live_items(&content, &mut diags);
+    check::live_items(&content, &compiled, &mut diags);
     check::audio(&content, &opts.audio_root, &mut diags);
 
     let mut report = Report {
@@ -96,7 +96,8 @@ pub fn build(opts: &Options) -> std::io::Result<Output> {
     for (i, it) in content.items.iter().enumerate() {
         let item = &it.value;
         let primary_live = item
-            .slots
+            .body
+            .slots()
             .iter()
             .flat_map(|s| &s.kcs)
             .filter(|k| k.role == KcRole::Primary)
@@ -108,7 +109,7 @@ pub fn build(opts: &Options) -> std::io::Result<Output> {
                 version: item.version,
                 seed: None,
             };
-            for sk in item.slots.iter().flat_map(|s| &s.kcs) {
+            for sk in item.body.slots().iter().flat_map(|s| &s.kcs) {
                 let entry = items_by_kc.entry(sk.kc.clone()).or_default();
                 match sk.role {
                     KcRole::Primary => entry.primary.push(r.clone()),

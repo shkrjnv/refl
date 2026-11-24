@@ -11,11 +11,13 @@ use crate::ids::{
 };
 use crate::value::{Localized, ValueError};
 
-/// Item types along the ladder recognition → guided production → free production.
+/// The `type` tag of an [`ItemBody`] variant, for filtering (lesson bank
+/// queries). It carries no behaviour: that lives in each kind's
+/// [`ItemKind`](crate::kind::ItemKind) implementation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename_all = "snake_case"))]
 #[serde(rename_all = "snake_case")]
-pub enum ItemType {
+pub enum ItemKindTag {
     Choice,
     FindError,
     Matching,
@@ -30,6 +32,7 @@ pub enum ItemType {
     Shadowing,
 }
 
+/// Step of the ladder recognition → guided production → free production.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename_all = "snake_case"))]
 #[serde(rename_all = "snake_case")]
@@ -38,65 +41,6 @@ pub enum LadderLevel {
     Guided,
     Free,
     Pronunciation,
-}
-
-impl ItemType {
-    pub fn ladder_level(self) -> LadderLevel {
-        match self {
-            Self::Choice | Self::FindError | Self::Matching | Self::TrueFalseNotGiven => {
-                LadderLevel::Recognition
-            }
-            Self::GapFill
-            | Self::Transformation
-            | Self::SentenceAssembly
-            | Self::Translation
-            | Self::Dictation => LadderLevel::Guided,
-            Self::OwnSentence | Self::Writing => LadderLevel::Free,
-            Self::Shadowing => LadderLevel::Pronunciation,
-        }
-    }
-
-    /// Counts towards the "≥ 3 production items" live condition of a KC.
-    /// Dictation and sentence assembly do not: the learner transcribes or
-    /// orders given words rather than producing the form.
-    pub fn is_production(self) -> bool {
-        matches!(
-            self,
-            Self::GapFill
-                | Self::Transformation
-                | Self::Translation
-                | Self::OwnSentence
-                | Self::Writing
-        )
-    }
-
-    /// Quality rule a live item of this type must satisfy, per slot.
-    /// `None`: no rule is defined yet, so the type cannot be live.
-    pub fn quality_rule(self) -> Option<QualityRule> {
-        match self {
-            Self::Choice | Self::FindError => Some(QualityRule::Choice),
-            Self::GapFill
-            | Self::Transformation
-            | Self::Translation
-            | Self::Dictation
-            | Self::SentenceAssembly => Some(QualityRule::TypedInput),
-            Self::Matching
-            | Self::TrueFalseNotGiven
-            | Self::OwnSentence
-            | Self::Writing
-            | Self::Shadowing => None,
-        }
-    }
-}
-
-/// Per-slot quality rule for live items (`docs/02-layer1-content.md`,
-/// «Задание: общая часть»).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum QualityRule {
-    /// ≥ 2 diagnosed distractors; no distractor is accepted; no duplicates.
-    Choice,
-    /// ≥ 2 expected-error patterns.
-    TypedInput,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -242,7 +186,177 @@ pub struct Slot {
     pub why: Localized,
 }
 
-/// An item at one version. Version bumps when stimulus, options, the correct
+/// Settings of the English input checker (`docs/02-layer1-content.md`,
+/// «Язык шаблонов ответов»). Typed-input kinds carry them; choice kinds
+/// compare with the defaults.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct EnglishCheck {
+    /// Letter case takes part in comparison (tasks on capital letters).
+    #[serde(default)]
+    pub case_sensitive: bool,
+    #[serde(default)]
+    pub contractions: Contractions,
+    /// Punctuation tokens take part in comparison.
+    #[serde(default)]
+    pub punctuation_sensitive: bool,
+}
+
+/// One body type per kind, so each kind implements
+/// [`ItemKind`](crate::kind::ItemKind) on its own and the client renders it
+/// from its own generated type.
+macro_rules! item_body {
+    ($(#[$doc:meta])* $name:ident) => {
+        $(#[$doc])*
+        #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+        #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+        pub struct $name {
+            pub stimulus: Stimulus,
+            pub slots: Vec<Slot>,
+        }
+    };
+    ($(#[$doc:meta])* $name:ident, english_input) => {
+        $(#[$doc])*
+        #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+        #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+        pub struct $name {
+            pub stimulus: Stimulus,
+            pub slots: Vec<Slot>,
+            #[serde(flatten)]
+            #[cfg_attr(feature = "ts", ts(flatten))]
+            pub check: EnglishCheck,
+        }
+    };
+}
+
+item_body!(
+    /// Pick the option; options are diagnosed distractors.
+    ChoiceBody
+);
+item_body!(
+    /// Find the error in the sentence among options.
+    FindErrorBody
+);
+item_body!(
+    /// Matching, including IELTS matching headings.
+    MatchingBody
+);
+item_body!(TrueFalseNotGivenBody);
+item_body!(
+    /// Gap fill, with or without the base form.
+    GapFillBody,
+    english_input
+);
+item_body!(
+    /// "Rewrite using since".
+    TransformationBody,
+    english_input
+);
+item_body!(SentenceAssemblyBody, english_input);
+item_body!(
+    /// Short sentences uz/ru → en.
+    TranslationBody,
+    english_input
+);
+item_body!(
+    /// Audio → text.
+    DictationBody,
+    english_input
+);
+item_body!(OwnSentenceBody);
+item_body!(WritingBody);
+item_body!(ShadowingBody);
+
+/// The kind-specific part of an item: stimulus, slots and checker settings.
+/// Serialized flat into [`Item`] under the `type` tag, so content files keep
+/// their shape (`docs/10-subjects.md`, «Вид задания: трейт и данные»).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ItemBody {
+    Choice(ChoiceBody),
+    FindError(FindErrorBody),
+    Matching(MatchingBody),
+    TrueFalseNotGiven(TrueFalseNotGivenBody),
+    GapFill(GapFillBody),
+    Transformation(TransformationBody),
+    SentenceAssembly(SentenceAssemblyBody),
+    Translation(TranslationBody),
+    Dictation(DictationBody),
+    OwnSentence(OwnSentenceBody),
+    Writing(WritingBody),
+    Shadowing(ShadowingBody),
+}
+
+/// Applies `$e` to the body of whichever variant `$self` is.
+macro_rules! each_body {
+    ($self:expr, $b:ident => $e:expr) => {
+        match $self {
+            ItemBody::Choice($b) => $e,
+            ItemBody::FindError($b) => $e,
+            ItemBody::Matching($b) => $e,
+            ItemBody::TrueFalseNotGiven($b) => $e,
+            ItemBody::GapFill($b) => $e,
+            ItemBody::Transformation($b) => $e,
+            ItemBody::SentenceAssembly($b) => $e,
+            ItemBody::Translation($b) => $e,
+            ItemBody::Dictation($b) => $e,
+            ItemBody::OwnSentence($b) => $e,
+            ItemBody::Writing($b) => $e,
+            ItemBody::Shadowing($b) => $e,
+        }
+    };
+}
+pub(crate) use each_body;
+
+impl ItemBody {
+    pub fn tag(&self) -> ItemKindTag {
+        match self {
+            Self::Choice(_) => ItemKindTag::Choice,
+            Self::FindError(_) => ItemKindTag::FindError,
+            Self::Matching(_) => ItemKindTag::Matching,
+            Self::TrueFalseNotGiven(_) => ItemKindTag::TrueFalseNotGiven,
+            Self::GapFill(_) => ItemKindTag::GapFill,
+            Self::Transformation(_) => ItemKindTag::Transformation,
+            Self::SentenceAssembly(_) => ItemKindTag::SentenceAssembly,
+            Self::Translation(_) => ItemKindTag::Translation,
+            Self::Dictation(_) => ItemKindTag::Dictation,
+            Self::OwnSentence(_) => ItemKindTag::OwnSentence,
+            Self::Writing(_) => ItemKindTag::Writing,
+            Self::Shadowing(_) => ItemKindTag::Shadowing,
+        }
+    }
+
+    pub fn stimulus(&self) -> &Stimulus {
+        each_body!(self, b => &b.stimulus)
+    }
+
+    pub fn slots(&self) -> &[Slot] {
+        each_body!(self, b => &b.slots)
+    }
+
+    /// The English checker settings of a typed-input kind; `None` for the
+    /// others, which compare with the defaults.
+    pub fn english_check(&self) -> Option<&EnglishCheck> {
+        match self {
+            Self::GapFill(b) => Some(&b.check),
+            Self::Transformation(b) => Some(&b.check),
+            Self::SentenceAssembly(b) => Some(&b.check),
+            Self::Translation(b) => Some(&b.check),
+            Self::Dictation(b) => Some(&b.check),
+            Self::Choice(_)
+            | Self::FindError(_)
+            | Self::Matching(_)
+            | Self::TrueFalseNotGiven(_)
+            | Self::OwnSentence(_)
+            | Self::Writing(_)
+            | Self::Shadowing(_) => None,
+        }
+    }
+}
+
+/// An item at one version: the header every kind shares, and the
+/// kind-specific body. Version bumps when stimulus, options, the correct
 /// answer or KC links change; not for new accepted answers or error patterns.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
@@ -252,12 +366,7 @@ pub struct Item {
     /// Matches the prefix of `family` (checked by content-build).
     pub subject: SubjectId,
     pub family: FamilyId,
-    #[serde(rename = "type")]
-    #[cfg_attr(feature = "ts", ts(rename = "type"))]
-    pub item_type: ItemType,
     pub instruction: InstructionId,
-    pub stimulus: Stimulus,
-    pub slots: Vec<Slot>,
     pub difficulty: AuthorDifficulty,
     /// Seconds; for automaticity and session planning.
     pub expected_time: u32,
@@ -265,14 +374,6 @@ pub struct Item {
     #[cfg_attr(feature = "ts", ts(optional))]
     pub topic: Option<TopicId>,
     pub status: ItemStatus,
-    /// Letter case takes part in comparison (tasks on capital letters).
-    #[serde(default)]
-    pub case_sensitive: bool,
-    #[serde(default)]
-    pub contractions: Contractions,
-    /// Punctuation tokens take part in comparison.
-    #[serde(default)]
-    pub punctuation_sensitive: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "ts", ts(optional))]
     pub source: Option<String>,
@@ -282,4 +383,7 @@ pub struct Item {
     /// Set when this version changes difficulty: stats of older versions are not carried over.
     #[serde(default)]
     pub breaks_calibration: bool,
+    #[serde(flatten)]
+    #[cfg_attr(feature = "ts", ts(flatten))]
+    pub body: ItemBody,
 }

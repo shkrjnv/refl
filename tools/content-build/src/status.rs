@@ -10,6 +10,7 @@ use refl_core::bundle::KcStatus;
 use refl_core::content::{ExplanationDepth, ExplanationTarget};
 use refl_core::ids::KcId;
 use refl_core::item::{ItemStatus, KcRole};
+use refl_core::kind::ItemKind;
 use refl_core::value::Lang;
 
 use crate::load::Content;
@@ -45,7 +46,7 @@ pub fn compute(c: &Content, report: &mut Report) -> BTreeMap<KcId, KcStatus> {
             .map(|i| &i.value)
             .filter(|i| i.status == ItemStatus::Live)
             .filter(|i| {
-                i.slots.iter().any(|s| {
+                i.body.slots().iter().any(|s| {
                     s.kcs
                         .iter()
                         .any(|k| &k.kc == kc && k.role == KcRole::Primary)
@@ -53,7 +54,7 @@ pub fn compute(c: &Content, report: &mut Report) -> BTreeMap<KcId, KcStatus> {
             })
             .collect();
         let families: BTreeSet<_> = items.iter().map(|i| &i.family).collect();
-        let production = items.iter().filter(|i| i.item_type.is_production()).count();
+        let production = items.iter().filter(|i| i.body.is_production()).count();
         let levels: BTreeSet<u8> = items.iter().map(|i| i.difficulty.get()).collect();
         let adjacent = levels.iter().any(|d| levels.contains(&(d + 1)));
         if items.len() < MIN_ITEMS {

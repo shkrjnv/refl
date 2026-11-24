@@ -1,0 +1,414 @@
+//! Item kinds (`docs/10-subjects.md`, «Вид задания: трейт и данные»): every
+//! `ItemBody` variant keeps the behaviour the old `ItemType` matches had, and
+//! `check` follows docs/02 («Проверка ответов на ввод») and the canonical
+//! option index.
+
+use refl_core::answer::dfa::{Dfa, TokenTable};
+use refl_core::answer::normalize::NormalizeOptions;
+use refl_core::answer::template::{NormPattern, Pattern};
+use refl_core::bundle::{ErrorAutomaton, SlotAutomata};
+use refl_core::event::{Response, Verdict};
+use refl_core::ids::{KcId, MisconceptionId};
+use refl_core::item::{
+    AnswerPattern, ChoiceBody, ChoiceOption, DictationBody, EnglishCheck, ExpectedWrong,
+    FindErrorBody, GapFillBody, ItemBody, ItemKindTag, KcRole, LadderLevel, MatchingBody,
+    OwnSentenceBody, SentenceAssemblyBody, ShadowingBody, Slot, SlotKc, Stimulus,
+    TransformationBody, TranslationBody, TrueFalseNotGivenBody, WritingBody,
+};
+use refl_core::kind::{CheckCtx, CheckOutcome, Compiled, ItemKind, QualityCtx, QualityIssueKind};
+use refl_core::value::Localized;
+
+fn mis(s: &str) -> MisconceptionId {
+    MisconceptionId::new(s).unwrap()
+}
+
+/// A slot answered "a cat", with two diagnosed distractors, one noise option
+/// and two error patterns.
+fn slot() -> Slot {
+    Slot {
+        kcs: vec![SlotKc {
+            kc: KcId::new("en.k.a").unwrap(),
+            role: KcRole::Primary,
+        }],
+        answer: "a cat".into(),
+        accepted: vec![AnswerPattern("(a|one) cat".into())],
+        options: vec![
+            ChoiceOption {
+                text: "the cat".into(),
+                misconception: Some(mis("en.m.the")),
+                confuses_with: None,
+            },
+            ChoiceOption {
+                text: "cat".into(),
+                misconception: Some(mis("en.m.omission")),
+                confuses_with: None,
+            },
+            ChoiceOption {
+                text: "an cat".into(),
+                misconception: None,
+                confuses_with: None,
+            },
+        ],
+        expected_wrong: vec![
+            ExpectedWrong {
+                pattern: AnswerPattern("cat".into()),
+                misconception: mis("en.m.omission"),
+                confuses_with: None,
+            },
+            ExpectedWrong {
+                pattern: AnswerPattern("the cat".into()),
+                misconception: mis("en.m.the"),
+                confuses_with: None,
+            },
+        ],
+        hint: None,
+        why: Localized::default(),
+    }
+}
+
+fn stimulus() -> Stimulus {
+    Stimulus {
+        text: "I have ___.".into(),
+        audio: None,
+        image: None,
+    }
+}
+
+/// One body of every kind, with `slots` and `check`.
+fn every_kind(slots: &[Slot], check: EnglishCheck) -> Vec<ItemBody> {
+    let s = || slots.to_vec();
+    vec![
+        ItemBody::Choice(ChoiceBody {
+            stimulus: stimulus(),
+            slots: s(),
+        }),
+        ItemBody::FindError(FindErrorBody {
+            stimulus: stimulus(),
+            slots: s(),
+        }),
+        ItemBody::Matching(MatchingBody {
+            stimulus: stimulus(),
+            slots: s(),
+        }),
+        ItemBody::TrueFalseNotGiven(TrueFalseNotGivenBody {
+            stimulus: stimulus(),
+            slots: s(),
+        }),
+        ItemBody::GapFill(GapFillBody {
+            stimulus: stimulus(),
+            slots: s(),
+            check,
+        }),
+        ItemBody::Transformation(TransformationBody {
+            stimulus: stimulus(),
+            slots: s(),
+            check,
+        }),
+        ItemBody::SentenceAssembly(SentenceAssemblyBody {
+            stimulus: stimulus(),
+            slots: s(),
+            check,
+        }),
+        ItemBody::Translation(TranslationBody {
+            stimulus: stimulus(),
+            slots: s(),
+            check,
+        }),
+        ItemBody::Dictation(DictationBody {
+            stimulus: stimulus(),
+            slots: s(),
+            check,
+        }),
+        ItemBody::OwnSentence(OwnSentenceBody {
+            stimulus: stimulus(),
+            slots: s(),
+        }),
+        ItemBody::Writing(WritingBody {
+            stimulus: stimulus(),
+            slots: s(),
+        }),
+        ItemBody::Shadowing(ShadowingBody {
+            stimulus: stimulus(),
+            slots: s(),
+        }),
+    ]
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OldRule {
+    Choice,
+    TypedInput,
+    None,
+}
+
+/// `ItemType::ladder_level`, `is_production` and `quality_rule` as they were
+/// before the kinds moved onto `ItemKind`.
+fn old_behaviour(tag: ItemKindTag) -> (LadderLevel, bool, OldRule) {
+    use ItemKindTag as T;
+    use LadderLevel as L;
+    match tag {
+        T::Choice | T::FindError => (L::Recognition, false, OldRule::Choice),
+        T::Matching | T::TrueFalseNotGiven => (L::Recognition, false, OldRule::None),
+        T::GapFill | T::Transformation | T::Translation => (L::Guided, true, OldRule::TypedInput),
+        T::SentenceAssembly | T::Dictation => (L::Guided, false, OldRule::TypedInput),
+        T::OwnSentence | T::Writing => (L::Free, true, OldRule::None),
+        T::Shadowing => (L::Pronunciation, false, OldRule::None),
+    }
+}
+
+/// The rule a kind applies, read from what it reports on a slot that breaks
+/// both counting rules (no options, no error patterns).
+fn observed_rule(body: &ItemBody) -> OldRule {
+    let issues = body
+        .quality(&QualityCtx { compiled: None })
+        .expect_err("an empty slot breaks every rule");
+    let kinds: Vec<_> = issues.iter().map(|i| i.kind).collect();
+    match kinds.as_slice() {
+        [QualityIssueKind::TooFewDistractors] => OldRule::Choice,
+        [QualityIssueKind::TooFewErrorPatterns] => OldRule::TypedInput,
+        [QualityIssueKind::NoRule] => OldRule::None,
+        other => panic!("unexpected issues {other:?}"),
+    }
+}
+
+#[test]
+fn every_kind_keeps_its_old_ladder_production_and_rule() {
+    let bare = Slot {
+        options: vec![],
+        expected_wrong: vec![],
+        ..slot()
+    };
+    let bodies = every_kind(&[bare], EnglishCheck::default());
+    assert_eq!(bodies.len(), 12);
+    for body in &bodies {
+        let (ladder, production, rule) = old_behaviour(body.tag());
+        assert_eq!(body.ladder(), ladder, "{:?}", body.tag());
+        assert_eq!(body.is_production(), production, "{:?}", body.tag());
+        assert_eq!(observed_rule(body), rule, "{:?}", body.tag());
+    }
+}
+
+#[test]
+fn tag_is_the_serialized_type() {
+    for body in every_kind(&[slot()], EnglishCheck::default()) {
+        let json = serde_json::to_value(&body).unwrap();
+        assert_eq!(json["type"], serde_json::to_value(body.tag()).unwrap());
+    }
+}
+
+/// Compiles a slot's templates the way content-build does.
+fn compile(slot: &Slot, opts: NormalizeOptions) -> (Vec<SlotAutomata>, TokenTable) {
+    let norm = |p: &AnswerPattern| -> NormPattern {
+        Pattern::parse(&p.0).unwrap().normalize(opts).unwrap()
+    };
+    let accepted: Vec<NormPattern> = slot.accepted.iter().map(norm).collect();
+    let wrong: Vec<(MisconceptionId, NormPattern)> = slot
+        .expected_wrong
+        .iter()
+        .map(|w| (w.misconception.clone(), norm(&w.pattern)))
+        .collect();
+    let tokens = TokenTable::new(
+        accepted
+            .iter()
+            .chain(wrong.iter().map(|(_, p)| p))
+            .flat_map(NormPattern::tokens),
+    );
+    let automata = SlotAutomata {
+        accepted: Dfa::compile(&accepted, &tokens).unwrap(),
+        expected_wrong: wrong
+            .iter()
+            .map(|(m, p)| ErrorAutomaton {
+                misconception: m.clone(),
+                dfa: Dfa::compile(std::slice::from_ref(p), &tokens).unwrap(),
+            })
+            .collect(),
+    };
+    (vec![automata], tokens)
+}
+
+fn checked(verdict: Verdict, misconception: Option<&str>) -> CheckOutcome {
+    CheckOutcome::Checked {
+        verdict,
+        misconception: misconception.map(mis),
+    }
+}
+
+fn text(s: &str) -> Response {
+    Response::Text(s.into())
+}
+
+#[test]
+fn typed_input_runs_accepted_then_expected_errors_then_unrecognized() {
+    let check = EnglishCheck::default();
+    let (slots, tokens) = compile(&slot(), NormalizeOptions::from(check));
+    let ctx = CheckCtx {
+        compiled: Compiled {
+            slots: &slots,
+            tokens: &tokens,
+        },
+    };
+    for body in every_kind(&[slot()], check) {
+        if body.english_check().is_none() {
+            continue;
+        }
+        let run = |slot: u16, r: &Response| body.check(slot, r, &ctx);
+        assert_eq!(run(0, &text("A  cat")), checked(Verdict::Correct, None));
+        assert_eq!(run(0, &text("one cat.")), checked(Verdict::Correct, None));
+        assert_eq!(
+            run(0, &text("cat")),
+            checked(Verdict::Wrong, Some("en.m.omission"))
+        );
+        assert_eq!(
+            run(0, &text("The cat")),
+            checked(Verdict::Wrong, Some("en.m.the"))
+        );
+        assert_eq!(run(0, &text("a dog")), checked(Verdict::Unrecognized, None));
+        // A choice response or a slot the item does not have is not recognized.
+        assert_eq!(
+            run(0, &Response::Option(0)),
+            checked(Verdict::Unrecognized, None)
+        );
+        assert_eq!(run(1, &text("a cat")), checked(Verdict::Unrecognized, None));
+    }
+}
+
+#[test]
+fn typed_input_honours_its_english_check() {
+    let check = EnglishCheck {
+        case_sensitive: true,
+        ..EnglishCheck::default()
+    };
+    let (slots, tokens) = compile(&slot(), NormalizeOptions::from(check));
+    let ctx = CheckCtx {
+        compiled: Compiled {
+            slots: &slots,
+            tokens: &tokens,
+        },
+    };
+    let body = ItemBody::GapFill(GapFillBody {
+        stimulus: stimulus(),
+        slots: vec![slot()],
+        check,
+    });
+    assert_eq!(
+        body.check(0, &text("a cat"), &ctx),
+        checked(Verdict::Correct, None)
+    );
+    assert_eq!(
+        body.check(0, &text("A cat"), &ctx),
+        checked(Verdict::Unrecognized, None)
+    );
+}
+
+#[test]
+fn choice_compares_the_canonical_option_index() {
+    let (slots, tokens) = compile(&slot(), NormalizeOptions::default());
+    let ctx = CheckCtx {
+        compiled: Compiled {
+            slots: &slots,
+            tokens: &tokens,
+        },
+    };
+    for body in &every_kind(&[slot()], EnglishCheck::default())[..2] {
+        let run = |r: &Response| body.check(0, r, &ctx);
+        // 0 is the answer; 1.. are the options in authored order.
+        assert_eq!(run(&Response::Option(0)), checked(Verdict::Correct, None));
+        assert_eq!(
+            run(&Response::Option(1)),
+            checked(Verdict::Wrong, Some("en.m.the"))
+        );
+        assert_eq!(
+            run(&Response::Option(2)),
+            checked(Verdict::Wrong, Some("en.m.omission"))
+        );
+        assert_eq!(run(&Response::Option(3)), checked(Verdict::Wrong, None));
+        assert_eq!(
+            run(&Response::Option(4)),
+            checked(Verdict::Unrecognized, None)
+        );
+        assert_eq!(run(&text("a cat")), checked(Verdict::Unrecognized, None));
+        assert_eq!(
+            body.check(1, &Response::Option(0), &ctx),
+            checked(Verdict::Unrecognized, None)
+        );
+    }
+}
+
+#[test]
+fn kinds_without_a_check_say_so() {
+    let (slots, tokens) = compile(&slot(), NormalizeOptions::default());
+    let ctx = CheckCtx {
+        compiled: Compiled {
+            slots: &slots,
+            tokens: &tokens,
+        },
+    };
+    for body in every_kind(&[slot()], EnglishCheck::default()) {
+        let not_checked = matches!(
+            body.tag(),
+            ItemKindTag::Matching
+                | ItemKindTag::TrueFalseNotGiven
+                | ItemKindTag::OwnSentence
+                | ItemKindTag::Writing
+                | ItemKindTag::Shadowing
+        );
+        let outcome = body.check(0, &text("a cat"), &ctx);
+        assert_eq!(
+            outcome == CheckOutcome::NotChecked,
+            not_checked,
+            "{:?}",
+            body.tag()
+        );
+    }
+}
+
+#[test]
+fn choice_rule_checks_distractors_in_normalized_space() {
+    let mut s = slot();
+    // Accepted after normalization, and a repeat of options[0].
+    s.options.push(ChoiceOption {
+        text: "One  cat".into(),
+        misconception: None,
+        confuses_with: None,
+    });
+    s.options.push(ChoiceOption {
+        text: "The cat.".into(),
+        misconception: None,
+        confuses_with: None,
+    });
+    let (slots, tokens) = compile(&s, NormalizeOptions::default());
+    let compiled = Some(Compiled {
+        slots: &slots,
+        tokens: &tokens,
+    });
+    let body = ItemBody::Choice(ChoiceBody {
+        stimulus: stimulus(),
+        slots: vec![s],
+    });
+    let kinds: Vec<_> = body
+        .quality(&QualityCtx { compiled })
+        .unwrap_err()
+        .iter()
+        .map(|i| i.kind)
+        .collect();
+    assert_eq!(
+        kinds,
+        [
+            QualityIssueKind::DistractorAccepted,
+            QualityIssueKind::DuplicateDistractor
+        ]
+    );
+    // The well-formed slot passes.
+    let (slots, tokens) = compile(&slot(), NormalizeOptions::default());
+    let ok = ItemBody::Choice(ChoiceBody {
+        stimulus: stimulus(),
+        slots: vec![slot()],
+    });
+    let ctx = QualityCtx {
+        compiled: Some(Compiled {
+            slots: &slots,
+            tokens: &tokens,
+        }),
+    };
+    assert_eq!(ok.quality(&ctx), Ok(()));
+}

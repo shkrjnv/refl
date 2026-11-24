@@ -12,8 +12,10 @@ use refl_core::ids::{
     KcId, LearnerId, LessonId, MisconceptionId, PackageKey, SessionId, SubjectId, Tag, UserId,
 };
 use refl_core::item::{
-    AnswerPattern, AuthorDifficulty, ChoiceOption, Contractions, ExpectedWrong, Item, ItemStatus,
-    ItemType, KcRole, Slot, SlotKc, Stimulus,
+    AnswerPattern, AuthorDifficulty, ChoiceBody, ChoiceOption, Contractions, DictationBody,
+    EnglishCheck, ExpectedWrong, FindErrorBody, GapFillBody, Item, ItemBody, ItemStatus, KcRole,
+    MatchingBody, OwnSentenceBody, SentenceAssemblyBody, ShadowingBody, Slot, SlotKc, Stimulus,
+    TransformationBody, TranslationBody, TrueFalseNotGivenBody, WritingBody,
 };
 use refl_core::subject::{Checker, LevelKey, ScaleDef, ScaleLevel, Subject};
 use refl_core::unlock::{
@@ -445,70 +447,121 @@ fn slot() -> impl Strategy<Value = Slot> {
         )
 }
 
+fn stimulus() -> impl Strategy<Value = Stimulus> {
+    (
+        text(),
+        proptest::option::of(text().prop_map(refl_core::content::AudioRef)),
+        proptest::option::of(text().prop_map(refl_core::item::ImageRef)),
+    )
+        .prop_map(|(text, audio, image)| Stimulus { text, audio, image })
+}
+
+fn english_check() -> impl Strategy<Value = EnglishCheck> {
+    (
+        any::<bool>(),
+        prop_oneof![Just(Contractions::Strict), Just(Contractions::Equivalent)],
+        any::<bool>(),
+    )
+        .prop_map(
+            |(case_sensitive, contractions, punctuation_sensitive)| EnglishCheck {
+                case_sensitive,
+                contractions,
+                punctuation_sensitive,
+            },
+        )
+}
+
+/// Every kind, so each `ItemBody` variant round-trips.
+fn item_body() -> impl Strategy<Value = ItemBody> {
+    (
+        stimulus(),
+        proptest::collection::vec(slot(), 1..4),
+        english_check(),
+        0..12u8,
+    )
+        .prop_map(|(stimulus, slots, check, kind)| match kind {
+            0 => ItemBody::Choice(ChoiceBody { stimulus, slots }),
+            1 => ItemBody::FindError(FindErrorBody { stimulus, slots }),
+            2 => ItemBody::Matching(MatchingBody { stimulus, slots }),
+            3 => ItemBody::TrueFalseNotGiven(TrueFalseNotGivenBody { stimulus, slots }),
+            4 => ItemBody::GapFill(GapFillBody {
+                stimulus,
+                slots,
+                check,
+            }),
+            5 => ItemBody::Transformation(TransformationBody {
+                stimulus,
+                slots,
+                check,
+            }),
+            6 => ItemBody::SentenceAssembly(SentenceAssemblyBody {
+                stimulus,
+                slots,
+                check,
+            }),
+            7 => ItemBody::Translation(TranslationBody {
+                stimulus,
+                slots,
+                check,
+            }),
+            8 => ItemBody::Dictation(DictationBody {
+                stimulus,
+                slots,
+                check,
+            }),
+            9 => ItemBody::OwnSentence(OwnSentenceBody { stimulus, slots }),
+            10 => ItemBody::Writing(WritingBody { stimulus, slots }),
+            _ => ItemBody::Shadowing(ShadowingBody { stimulus, slots }),
+        })
+}
+
 fn item() -> impl Strategy<Value = Item> {
     (
         (
             slug(ItemId::new),
             any::<u32>(),
+            slug(SubjectId::new),
             slug(refl_core::ids::FamilyId::new),
         ),
-        prop_oneof![
-            Just(ItemType::Choice),
-            Just(ItemType::GapFill),
-            Just(ItemType::Transformation)
-        ],
         slug(refl_core::ids::InstructionId::new),
-        text(),
-        proptest::collection::vec(slot(), 1..4),
         (1u8..=5, any::<u32>()),
         proptest::option::of(slug(refl_core::ids::TopicId::new)),
-        prop_oneof![Just(ItemStatus::Draft), Just(ItemStatus::Live)],
+        prop_oneof![
+            Just(ItemStatus::Draft),
+            Just(ItemStatus::Review),
+            Just(ItemStatus::Live),
+            Just(ItemStatus::Retired)
+        ],
         (
             proptest::option::of(text()),
             proptest::option::of(text()),
             any::<bool>(),
         ),
-        (
-            any::<bool>(),
-            prop_oneof![Just(Contractions::Strict), Just(Contractions::Equivalent)],
-            any::<bool>(),
-        ),
+        item_body(),
     )
         .prop_map(
             |(
-                (id, v, family),
-                item_type,
+                (id, v, subject, family),
                 instruction,
-                stim,
-                slots,
                 (d, t),
                 topic,
                 status,
                 (source, license, breaks_calibration),
-                (case_sensitive, contractions, punctuation_sensitive),
+                body,
             )| Item {
                 id,
                 version: ItemVersion(v),
-                subject: SubjectId::new("en").unwrap(),
+                subject,
                 family,
-                item_type,
                 instruction,
-                stimulus: Stimulus {
-                    text: stim,
-                    audio: None,
-                    image: None,
-                },
-                slots,
                 difficulty: AuthorDifficulty::new(d).unwrap(),
                 expected_time: t,
                 topic,
                 status,
-                case_sensitive,
-                contractions,
-                punctuation_sensitive,
                 source,
                 license,
                 breaks_calibration,
+                body,
             },
         )
 }

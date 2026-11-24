@@ -11,7 +11,7 @@ use refl_core::answer::normalize::{NormalizeOptions, normalize};
 use refl_core::answer::template::{NormPattern, Pattern};
 use refl_core::bundle::{ErrorAutomaton, SlotAutomata};
 use refl_core::ids::MisconceptionId;
-use refl_core::item::{AnswerPattern, Item, ItemStatus, QualityRule, Slot};
+use refl_core::item::{AnswerPattern, Item, Slot};
 
 use crate::load::Sourced;
 use crate::report::{Code, Diagnostic, Severity};
@@ -57,12 +57,12 @@ fn parse_one(
 /// Parses and normalizes one item's slots; `None` if any template is invalid.
 fn normalize_item(it: &Sourced<Item>, diags: &mut Vec<Diagnostic>) -> Option<Vec<NormSlot>> {
     let item = &it.value;
-    let opts = NormalizeOptions::of(item);
+    let opts = NormalizeOptions::of(&item.body);
     let mut report =
         |code, message| diags.push(diag(Severity::Error, code, &it.file, item, message));
     let mut ok = true;
     let mut slots = Vec::new();
-    for (j, slot) in item.slots.iter().enumerate() {
+    for (j, slot) in item.body.slots().iter().enumerate() {
         if slot.accepted.is_empty() {
             report(
                 Code::NoAccepted,
@@ -111,13 +111,14 @@ pub fn compile(items: &[Sourced<Item>], diags: &mut Vec<Diagnostic>) -> Compiled
         let mut cx = SlotCheck {
             item: &it.value,
             file: &it.file,
-            opts: NormalizeOptions::of(&it.value),
+            opts: NormalizeOptions::of(&it.value.body),
             tokens: &tokens,
             diags,
         };
         let automata = it
             .value
-            .slots
+            .body
+            .slots()
             .iter()
             .zip(norm)
             .enumerate()
@@ -204,39 +205,9 @@ impl SlotCheck<'_> {
                 }
             }
         }
-        if self.item.status == ItemStatus::Live
-            && self.item.item_type.quality_rule() == Some(QualityRule::Choice)
-        {
-            self.distractors(j, slot, &accepted);
-        }
         SlotAutomata {
             accepted,
             expected_wrong: wrong,
-        }
-    }
-
-    /// Distractors of a live choice slot: none is accepted, none repeats.
-    fn distractors(&mut self, j: usize, slot: &Slot, accepted: &Dfa) {
-        // Keyed by normalized text, not ids: unknown tokens all map to OTHER.
-        let mut seen: BTreeMap<Vec<String>, usize> = BTreeMap::new();
-        for (k, opt) in slot.options.iter().enumerate() {
-            let norm = normalize(&opt.text, self.opts);
-            if accepted.accepts(&self.tokens.ids(&norm)) {
-                let msg = format!(
-                    "slots[{j}].options[{k}] \"{}\" is accepted by `accepted`",
-                    opt.text
-                );
-                self.report(Severity::Error, Code::DistractorAccepted, msg);
-            }
-            if let Some(&first) = seen.get(&norm) {
-                let msg = format!(
-                    "slots[{j}].options[{k}] \"{}\" repeats options[{first}] after normalization",
-                    opt.text
-                );
-                self.report(Severity::Error, Code::DuplicateDistractor, msg);
-            } else {
-                seen.insert(norm, k);
-            }
         }
     }
 }

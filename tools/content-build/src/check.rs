@@ -8,12 +8,14 @@ use std::path::Path;
 use refl_core::bundle::KcStatus;
 use refl_core::content::{EdgeKind, ExplanationDepth, ExplanationTarget};
 use refl_core::ids::{InstructionId, KcId, MisconceptionId};
-use refl_core::item::{ItemStatus, KcRole, QualityRule};
+use refl_core::item::{ItemStatus, KcRole};
+use refl_core::kind::{self, ItemKind, QualityCtx, QualityIssueKind};
 use refl_core::lesson::LessonStep;
 use refl_core::value::{Lang, Localized};
 
 use crate::load::{Content, Sourced};
 use crate::report::{Code, Diagnostic, Severity};
+use crate::templates::Compiled;
 
 /// The name an enum value has in content files, e.g. `gap_fill`.
 fn wire_name(v: impl serde::Serialize) -> String {
@@ -127,7 +129,7 @@ pub fn references(c: &Content, ids: &Ids, diags: &mut Vec<Diagnostic>) {
         if !ids.instructions.contains(&it.value.instruction) {
             unknown(&it.file, &subject, "instruction", &it.value.instruction);
         }
-        for slot in &it.value.slots {
+        for slot in it.value.body.slots() {
             let confused = slot
                 .options
                 .iter()
@@ -187,7 +189,7 @@ pub fn contrasts(c: &Content, status: &BTreeMap<KcId, KcStatus>, diags: &mut Vec
         .iter()
         .map(|i| &i.value)
         .filter(|i| i.status == ItemStatus::Live);
-    for slot in live_items.flat_map(|i| &i.slots) {
+    for slot in live_items.flat_map(|i| i.body.slots()) {
         let confused = slot
             .options
             .iter()
@@ -223,10 +225,11 @@ pub fn contrasts(c: &Content, status: &BTreeMap<KcId, KcStatus>, diags: &mut Vec
     }
 }
 
-/// Live items: KC links and the quality rule counts. The checks on
-/// distractor text run in normalized space, with the templates.
-pub fn live_items(c: &Content, diags: &mut Vec<Diagnostic>) {
-    for it in &c.items {
+/// Live items: every slot has a primary KC, and the item keeps its kind's
+/// quality rule ([`ItemKind::quality`]); the rule's checks in normalized
+/// space use the compiled templates.
+pub fn live_items(c: &Content, compiled: &Compiled, diags: &mut Vec<Diagnostic>) {
+    for (i, it) in c.items.iter().enumerate() {
         let item = &it.value;
         if item.status != ItemStatus::Live {
             continue;
@@ -235,50 +238,30 @@ pub fn live_items(c: &Content, diags: &mut Vec<Diagnostic>) {
         let mut push = |code, message: String| {
             diags.push(diag(code, &it.file, subject.clone(), message));
         };
-        if item.slots.is_empty() {
+        let slots = item.body.slots();
+        if slots.is_empty() {
             push(Code::NoPrimaryKc, "live item has no slots".to_owned());
         }
-        let rule = item.item_type.quality_rule();
-        if rule.is_none() {
-            push(
-                Code::NoQualityRule,
-                format!(
-                    "type `{}` has no quality rule yet and cannot be live",
-                    wire_name(item.item_type)
-                ),
-            );
-        }
-        for (j, slot) in item.slots.iter().enumerate() {
+        for (j, slot) in slots.iter().enumerate() {
             if !slot.kcs.iter().any(|k| k.role == KcRole::Primary) {
                 push(Code::NoPrimaryKc, format!("slots[{j}] has no primary KC"));
             }
-            match rule {
-                Some(QualityRule::Choice) => {
-                    let n = slot
-                        .options
-                        .iter()
-                        .filter(|o| o.misconception.is_some())
-                        .count();
-                    if n < 2 {
-                        push(
-                            Code::TooFewDistractors,
-                            format!(
-                                "slots[{j}] has {n} distractor(s) with a misconception, needs 2"
-                            ),
-                        );
-                    }
-                }
-                Some(QualityRule::TypedInput) => {
-                    let n = slot.expected_wrong.len();
-                    if n < 2 {
-                        push(
-                            Code::TooFewErrorPatterns,
-                            format!("slots[{j}] has {n} expected_wrong pattern(s), needs 2"),
-                        );
-                    }
-                }
-                None => {}
-            }
+        }
+        let ctx = QualityCtx {
+            compiled: compiled.items.get(&i).map(|slots| kind::Compiled {
+                slots,
+                tokens: &compiled.tokens,
+            }),
+        };
+        for issue in item.body.quality(&ctx).err().unwrap_or_default() {
+            let code = match issue.kind {
+                QualityIssueKind::NoRule => Code::NoQualityRule,
+                QualityIssueKind::TooFewDistractors => Code::TooFewDistractors,
+                QualityIssueKind::DistractorAccepted => Code::DistractorAccepted,
+                QualityIssueKind::DuplicateDistractor => Code::DuplicateDistractor,
+                QualityIssueKind::TooFewErrorPatterns => Code::TooFewErrorPatterns,
+            };
+            push(code, issue.message);
         }
     }
 }
@@ -299,7 +282,7 @@ pub fn audio(c: &Content, audio_root: &Path, diags: &mut Vec<Diagnostic>) {
         }
     };
     for it in &c.items {
-        if let Some(a) = &it.value.stimulus.audio {
+        if let Some(a) = &it.value.body.stimulus().audio {
             check(&it.file, format!("item `{}`", it.value.id), &a.0);
         }
     }
@@ -332,7 +315,7 @@ pub fn misconception_feedback(c: &Content, diags: &mut Vec<Diagnostic>) {
         .iter()
         .filter(|i| i.value.status == ItemStatus::Live)
     {
-        for slot in &it.value.slots {
+        for slot in it.value.body.slots() {
             let mis = slot
                 .options
                 .iter()
