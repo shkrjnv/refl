@@ -329,17 +329,28 @@ pub struct PlanIssuedEvent {
     pub propensity: UnitInterval,
     /// Seed of the core PRNG that made the choice.
     pub seed: Seed,
+    /// Codes of plan validator violations (`docs/11-quality.md`, «К3»); empty
+    /// when the plan is valid.
+    pub violations: Vec<String>,
 }
 
 /// What a mentor changed.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum OverrideKind {
     /// Changed the plan, e.g. "no new topic today".
-    PlanChange,
+    PlanChange {
+        /// The `plan_issued` event overridden.
+        plan: EventId,
+    },
     /// Marked a topic as known: a low-weight observation that later answers check.
-    MarkKnown { kc: KcId },
+    MarkKnown {
+        kc: KcId,
+        /// The model's mastery probability `M_k` at that moment
+        /// (`docs/04-placement-planner.md`).
+        model_mastery: UnitInterval,
+    },
     /// Disputed the verdict of this answer event.
     DisputeVerdict { event: EventId },
 }
@@ -357,7 +368,7 @@ pub enum OverrideReason {
 
 /// The share and reasons of overrides show where the system is wrong; an
 /// override is not ground truth either.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct MentorOverrideEvent {
     pub mentor: UserId,

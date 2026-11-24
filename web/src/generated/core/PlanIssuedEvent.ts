@@ -24,4 +24,9 @@ propensity: UnitInterval,
 /**
  * Seed of the core PRNG that made the choice.
  */
-seed: Seed, };
+seed: Seed, 
+/**
+ * Codes of plan validator violations (`docs/11-quality.md`, «К3»); empty
+ * when the plan is valid.
+ */
+violations: Array<string>, };

@@ -199,11 +199,20 @@ fn quality_payload() -> impl Strategy<Value = EventPayload> {
     let plan = (
         (text(), text()),
         prop_oneof![Just(PlanScope::Session), Just(PlanScope::NextItem)],
-        proptest::collection::vec(candidate, 0..4),
+        proptest::collection::vec(candidate, 1..5),
         (any::<u16>(), unit(), seed()),
+        proptest::collection::vec(text(), 0..3),
     )
         .prop_map(
-            |((planner_version, model_version), scope, candidates, (chosen, propensity, seed))| {
+            |(
+                (planner_version, model_version),
+                scope,
+                candidates,
+                (chosen, propensity, seed),
+                violations,
+            )| {
+                // A valid plan chooses one of its candidates.
+                let chosen = chosen % u16::try_from(candidates.len()).unwrap();
                 EventPayload::PlanIssued(PlanIssuedEvent {
                     planner_version,
                     model_version,
@@ -212,14 +221,16 @@ fn quality_payload() -> impl Strategy<Value = EventPayload> {
                     chosen,
                     propensity,
                     seed,
+                    violations,
                 })
             },
         );
     let mentor = (
         user(),
         prop_oneof![
-            Just(OverrideKind::PlanChange),
-            slug(KcId::new).prop_map(|kc| OverrideKind::MarkKnown { kc }),
+            uuid_v7().prop_map(|plan| OverrideKind::PlanChange { plan }),
+            (slug(KcId::new), unit())
+                .prop_map(|(kc, model_mastery)| OverrideKind::MarkKnown { kc, model_mastery }),
             uuid_v7().prop_map(|event| OverrideKind::DisputeVerdict { event }),
         ],
         prop_oneof![
@@ -906,15 +917,26 @@ fn quality_events_wire_shape() {
         "chosen": 0,
         "propensity": 0.75,
         "seed": 42,
+        "violations": ["too-many-new-kcs"],
     });
-    let mentor = serde_json::json!({
-        "type": "mentor_override",
-        "mentor": "00000000-0000-0000-0000-000000000002",
-        "kind": { "kind": "dispute_verdict", "event": V7 },
-        "reason": "wrong_verdict",
-        "note": null,
-    });
-    for payload in [plan, mentor, writing_scored(13)] {
+    let mentor = |kind: serde_json::Value| {
+        serde_json::json!({
+            "type": "mentor_override",
+            "mentor": "00000000-0000-0000-0000-000000000002",
+            "kind": kind,
+            "reason": "other",
+            "note": "knows it from school",
+        })
+    };
+    for payload in [
+        plan,
+        mentor(serde_json::json!({ "kind": "plan_change", "plan": V7 })),
+        mentor(serde_json::json!({
+            "kind": "mark_known", "kc": "gram.article.first-mention", "model_mastery": 0.25,
+        })),
+        mentor(serde_json::json!({ "kind": "dispute_verdict", "event": V7 })),
+        writing_scored(13),
+    ] {
         let json = sample_with_payload(1, &payload);
         let e = known(&json);
         assert_eq!(serde_json::to_value(&e.payload).unwrap(), payload);
@@ -923,7 +945,8 @@ fn quality_events_wire_shape() {
     }
     let mut out_of_range = serde_json::json!({
         "type": "plan_issued", "planner_version": "p1", "model_version": "m1",
-        "scope": "session", "candidates": [], "chosen": 0, "propensity": 1.5, "seed": 1,
+        "scope": "session", "chosen": 0, "propensity": 1.5, "seed": 1, "violations": [],
+        "candidates": [{ "action": { "kind": "review", "kc": "a" }, "value_per_minute": 1.0, "factors": [] }],
     });
     assert!(decode_event(&sample_with_payload(1, &out_of_range)).is_err());
     out_of_range["propensity"] = 1.0.into();
