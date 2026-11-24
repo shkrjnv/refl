@@ -193,6 +193,8 @@ Alternatives `( | )`, optional `[ ]`, nesting up to 4, no repetition: the langua
 **What content-build checks:**
 
 - schema and references (KCs, misconceptions, explanations, audio);
+- every task has only the fields of its kind, so a checker setting on a choice task is an error;
+- subjects: ids carry the subject prefix, levels and domains exist in the subject, the scale has a positive step, a task's KCs and the spelling KC belong to its subject, and `requires` never crosses subjects;
 - no prerequisite cycles in the graph;
 - every task has a primary KC and enough distractors and error patterns, each tied to a misconception;
 - the correct answer is accepted, distractors are not;
@@ -328,6 +330,7 @@ All learning logic lives in one Rust core. The server calls it natively, the PWA
 | Server | axum + tokio, sqlx, PostgreSQL |
 | Client | TypeScript + SolidJS + Vite, PWA, IndexedDB; types from Rust (ts-rs) |
 | Content | Nickel → `content-build` in Rust |
+| Answer checking | in the core; typos are told apart from real words with the SCOWL word list (en\_US + en\_GB, size 60, from nixpkgs), shipped as a separate versioned file |
 | Memory | FSRS-6 in the core; fsrs-rs only offline, for fitting weights |
 | Audio | original scripts → Piper / Kokoro → Opus; Montreal Forced Aligner for word timings; served by nginx |
 | Writing | Hunspell, local LanguageTool |
@@ -434,4 +437,4 @@ The code (everything except `content/`) is licensed under the [GNU Affero Genera
 
 The learning content in `content/` (topics, tasks, patterns, misconceptions, explanations, media) is © the refl author, all rights reserved; see [content/LICENSE](content/LICENSE). The schema in `content/lib/` is part of the software and is under the AGPL.
 
-Third-party data and models are listed with their licenses in `THIRD_PARTY.md` as they are added.
+Third-party data and models are listed with their licenses in [THIRD\_PARTY.md](THIRD_PARTY.md) before they are used; so far, the SCOWL word list.
