@@ -13,7 +13,9 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Inserted {
-    New,
+    /// Stored with this receipt number (`docs/13-sync-versions.md`): strictly
+    /// increasing, not contiguous.
+    New { server_seq: i64 },
     /// The same `event_id` is already in the log: sync is idempotent.
     Duplicate,
 }
@@ -74,11 +76,11 @@ pub async fn insert_event(
         .and_then(|v| i16::try_from(v).ok())
         .ok_or(InsertError::Invalid(DecodeError::MissingSchemaVersion))?;
     let derived = event.payload.derived_key();
-    let result = sqlx::query(
+    let result = sqlx::query_scalar::<_, i64>(
         "INSERT INTO events (event_id, learner_id, session_id, schema_version, client_ts, \
          server_ts, event_type, payload, derived_kind, derived_key) \
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) \
-         ON CONFLICT (event_id) DO NOTHING",
+         ON CONFLICT (event_id) DO NOTHING RETURNING server_seq",
     )
     .bind(*event.event_id.as_uuid())
     .bind(event.learner_id.0)
@@ -90,11 +92,11 @@ pub async fn insert_event(
     .bind(&raw["payload"])
     .bind(derived.as_ref().map(|d| d.kind))
     .bind(derived.as_ref().map(|d| d.key.as_str()))
-    .execute(db)
+    .fetch_optional(db)
     .await;
     match result {
-        Ok(r) if r.rows_affected() == 1 => Ok(Inserted::New),
-        Ok(_) => Ok(Inserted::Duplicate),
+        Ok(Some(server_seq)) => Ok(Inserted::New { server_seq }),
+        Ok(None) => Ok(Inserted::Duplicate),
         Err(sqlx::Error::Database(e)) if e.constraint() == Some("events_derived_unique") => {
             Err(InsertError::DerivedDuplicate)
         }

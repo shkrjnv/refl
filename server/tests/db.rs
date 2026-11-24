@@ -238,7 +238,10 @@ async fn log_is_append_only(c: &Cluster) {
 async fn duplicate_event_id_is_ignored(c: &Cluster) {
     let db = migrated(c, "idempotent").await;
     let e = event(event_id(1), &lesson_started());
-    assert_eq!(insert_event(&db, &e, NOW).await.unwrap(), Inserted::New);
+    assert!(matches!(
+        insert_event(&db, &e, NOW).await.unwrap(),
+        Inserted::New { .. }
+    ));
     assert_eq!(
         insert_event(&db, &e, NOW).await.unwrap(),
         Inserted::Duplicate
@@ -246,6 +249,96 @@ async fn duplicate_event_id_is_ignored(c: &Cluster) {
     let events = known_events(&db).await;
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].server_ts, Some(NOW));
+    db.close().await;
+}
+
+async fn new_seq(db: impl sqlx::PgExecutor<'_>, n: u128) -> i64 {
+    match insert_event(db, &event(event_id(n), &lesson_started()), NOW)
+        .await
+        .unwrap()
+    {
+        Inserted::New { server_seq } => server_seq,
+        Inserted::Duplicate => panic!("event {n} is a duplicate"),
+    }
+}
+
+/// Receipt order is strictly increasing per insert, also for the
+/// application role. A duplicate may consume a number, so only the order is
+/// asserted, never contiguity.
+async fn server_seq_increases(c: &Cluster) {
+    let db = migrated(c, "server_seq").await;
+    // Inserted out of event_id order: server_seq follows receipt, not event_id.
+    let first = new_seq(&db, 5).await;
+    let dup = event(event_id(5), &lesson_started());
+    assert_eq!(
+        insert_event(&db, &dup, NOW).await.unwrap(),
+        Inserted::Duplicate
+    );
+    let second = new_seq(&db, 2).await;
+    let mut conn = db.acquire().await.unwrap();
+    conn.execute("SET ROLE refl_app").await.unwrap();
+    let third = new_seq(&mut *conn, 9).await;
+    conn.execute("RESET ROLE").await.unwrap();
+    drop(conn);
+    assert!(first < second && second < third, "{first} {second} {third}");
+    let stored: Vec<(Uuid, i64)> = sqlx::query_as(
+        "SELECT event_id, server_seq FROM events WHERE learner_id = $1 ORDER BY server_seq",
+    )
+    .bind(LEARNER)
+    .fetch_all(&db)
+    .await
+    .unwrap();
+    assert_eq!(
+        stored,
+        [
+            (event_id(5), first),
+            (event_id(2), second),
+            (event_id(9), third)
+        ]
+    );
+    db.close().await;
+}
+
+/// Adding `server_seq` to a log that already has events numbers them, and
+/// neither direction of the migration weakens the append-only rules.
+async fn server_seq_migration_keeps_log_rules(c: &Cluster) {
+    let db = migrated(c, "server_seq_migration").await;
+    // Back to 0008, the last migration without server_seq.
+    MIGRATOR.undo(&db, 8).await.unwrap();
+    sqlx::query(
+        "INSERT INTO events (event_id, learner_id, schema_version, client_ts, server_ts, \
+         event_type, payload) VALUES ($1, $2, 1, 0, 0, 'lesson_started', \
+         '{\"type\": \"lesson_started\", \"lesson\": \"a\"}')",
+    )
+    .bind(event_id(1))
+    .bind(LEARNER)
+    .execute(&db)
+    .await
+    .unwrap();
+    MIGRATOR.run(&db).await.unwrap();
+    let seq: Option<i64> = sqlx::query_scalar("SELECT server_seq FROM events")
+        .fetch_one(&db)
+        .await
+        .unwrap();
+    assert!(seq.is_some());
+    assert!(new_seq(&db, 2).await > seq.unwrap());
+    for stmt in [
+        "UPDATE events SET client_ts = 1",
+        "UPDATE events SET server_seq = DEFAULT",
+        "DELETE FROM events",
+    ] {
+        let err = db.execute(stmt).await.unwrap_err();
+        assert!(err.to_string().contains("append-only"), "{stmt}: {err}");
+    }
+    let mut conn = db.acquire().await.unwrap();
+    conn.execute("SET ROLE refl_app").await.unwrap();
+    let err = conn
+        .execute("UPDATE events SET client_ts = 1")
+        .await
+        .unwrap_err();
+    assert!(err.to_string().contains("permission denied"), "{err}");
+    conn.execute("RESET ROLE").await.unwrap();
+    drop(conn);
     db.close().await;
 }
 
@@ -346,12 +439,12 @@ async fn duplicate_derived_event_is_rejected(c: &Cluster) {
         "type": "unlock_revoked", "kind": "frame", "key": "gold", "by": ADMIN,
     });
     for (n, p) in [(5, &admin_grant), (6, &revoke), (7, &admin_grant)] {
-        assert_eq!(
+        assert!(matches!(
             insert_event(&db, &event(event_id(n), p), NOW)
                 .await
                 .unwrap(),
-            Inserted::New
-        );
+            Inserted::New { .. }
+        ));
     }
     // Each achievement tier is its own derived event; a repeated tier is not.
     let tier = |t: u8| serde_json::json!({ "type": "achievement_earned", "achievement": "streak", "tier": t });
@@ -518,6 +611,8 @@ fn database() {
         invalid_events_are_rejected(&cluster).await;
         unknown_events_are_rejected(&cluster).await;
         server_ts_must_be_empty(&cluster).await;
+        server_seq_increases(&cluster).await;
+        server_seq_migration_keeps_log_rules(&cluster).await;
         duplicate_derived_event_is_rejected(&cluster).await;
         erasure_removes_one_learner(&cluster).await;
         privacy_defaults_depend_on_minor(&cluster).await;
