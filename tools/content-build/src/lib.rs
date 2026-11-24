@@ -78,6 +78,7 @@ pub fn build(opts: &Options) -> std::io::Result<Output> {
         ..Report::default()
     };
     let status = status::compute(&content, &mut report);
+    check::contrasts(&content, &status, &mut report.diagnostics);
     if report.has_errors() {
         return Ok(Output {
             report,

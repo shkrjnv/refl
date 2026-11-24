@@ -86,6 +86,8 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
     let a =
       {
         id | default = "it.gap",
+        family | default = "f.gap",
+        difficulty | default = 1,
         type | default = "gap_fill",
         status | default = "live",
         slot_kcs | default = primary_kc "k.a",
@@ -102,7 +104,7 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
     {
       id = a.id,
       version = 1,
-      family = "f.gap",
+      family = a.family,
       type = a.type,
       instruction = "i.gap",
       stimulus = if a.audio == null then { text = "I have ___ (cat)." } else { text = "Listen.", audio = a.audio },
@@ -115,9 +117,37 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
           why = why_text,
         }
       ],
-      difficulty = 1,
+      difficulty = a.difficulty,
       expected_time = 20,
       status = a.status,
+    },
+
+  # What makes `kc` live: short explanations in ru and en and ten live
+  # gap-fill items (production) in three families with difficulties 1 and 2.
+  live_kc = fun kc =>
+    let explanation = fun l =>
+      {
+        id = "e.%{kc}.%{l}",
+        target = { kind = "kc", id = kc },
+        depth = "short",
+        lang = l,
+        body = "rule",
+        review = { status = "draft" },
+      }
+    in
+    {
+      explanations = [explanation "ru", explanation "en"],
+      items =
+        std.array.generate
+          (fun i =>
+            gap {
+              id = "it.%{kc}.%{std.to_string i}",
+              family = "f.%{kc}.%{std.to_string (i % 3)}",
+              difficulty = 1 + i % 2,
+              slot_kcs = primary_kc kc,
+            }
+          )
+          10,
     },
 
   # A live choice item.

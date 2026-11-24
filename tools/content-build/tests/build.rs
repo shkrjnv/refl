@@ -89,6 +89,24 @@ fn witnesses_are_shortest_examples() {
 }
 
 #[test]
+fn contrast_crossed_by_a_confusion_passes() {
+    let out = run(&fixtures().join("contrast-with-confusion"));
+    assert!(out.report.diagnostics.is_empty(), "{}", out.report);
+    let bundle = out.bundle.expect("bundle");
+    let status = |id: &str| {
+        bundle
+            .content
+            .kcs
+            .iter()
+            .find(|k| k.kc.id.as_str() == id)
+            .map(|k| k.status)
+    };
+    assert_eq!(status("k.a"), Some(KcStatus::Live));
+    assert_eq!(status("k.b"), Some(KcStatus::Live));
+    assert_eq!(status("k.c"), Some(KcStatus::Draft));
+}
+
+#[test]
 fn example_content_builds_with_computed_status() {
     let out = run(&repo().join("content"));
     assert!(!out.report.has_errors(), "{}", out.report);

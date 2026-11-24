@@ -5,7 +5,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use refl_core::content::{ExplanationDepth, ExplanationTarget};
+use refl_core::bundle::KcStatus;
+use refl_core::content::{EdgeKind, ExplanationDepth, ExplanationTarget};
 use refl_core::ids::{InstructionId, KcId, MisconceptionId};
 use refl_core::item::{ItemStatus, KcRole, QualityRule};
 use refl_core::lesson::LessonStep;
@@ -169,6 +170,54 @@ pub fn references(c: &Content, ids: &Ids, diags: &mut Vec<Diagnostic>) {
             if !ids.kcs.contains(kc) {
                 unknown(&l.file, &subject, "KC", kc);
             }
+        }
+    }
+}
+
+/// Every `contrasts` edge between live KCs has a live item where one end is
+/// a primary KC of a slot and an option or error pattern is marked
+/// `confuses_with` the other end, so that confusing the pair is measured
+/// (`docs/03-layer2-learner-model.md`, «Расширенная диагностика»). Edges are
+/// symmetric in meaning, so either direction counts.
+pub fn contrasts(c: &Content, status: &BTreeMap<KcId, KcStatus>, diags: &mut Vec<Diagnostic>) {
+    let mut crossed: BTreeSet<(&KcId, &KcId)> = BTreeSet::new();
+    let live_items = c
+        .items
+        .iter()
+        .map(|i| &i.value)
+        .filter(|i| i.status == ItemStatus::Live);
+    for slot in live_items.flat_map(|i| &i.slots) {
+        let confused = slot
+            .options
+            .iter()
+            .filter_map(|o| o.confuses_with.as_ref())
+            .chain(
+                slot.expected_wrong
+                    .iter()
+                    .filter_map(|w| w.confuses_with.as_ref()),
+            );
+        for other in confused {
+            for k in slot.kcs.iter().filter(|k| k.role == KcRole::Primary) {
+                crossed.insert((&k.kc, other));
+            }
+        }
+    }
+    let live = |kc: &KcId| status.get(kc) == Some(&KcStatus::Live);
+    for e in &c.edges {
+        let edge = &e.value;
+        if edge.kind != EdgeKind::Contrasts || !live(&edge.from) || !live(&edge.to) {
+            continue;
+        }
+        if !crossed.contains(&(&edge.from, &edge.to)) && !crossed.contains(&(&edge.to, &edge.from))
+        {
+            diags.push(diag(
+                Code::ContrastWithoutConfusion,
+                &e.file,
+                format!("edge `{}` contrasts `{}`", edge.from, edge.to),
+                "no live item tests one end with a distractor or error pattern marked \
+                 `confuses_with` the other"
+                    .to_owned(),
+            ));
         }
     }
 }

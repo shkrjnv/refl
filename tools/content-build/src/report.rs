@@ -39,11 +39,14 @@ pub enum Code {
     DuplicateDistractor,
     TooFewErrorPatterns,
     MissingAudio,
+    /// A `contrasts` edge between live KCs has no live item marked
+    /// `confuses_with` across it.
+    ContrastWithoutConfusion,
 }
 
 impl Code {
     /// Every check; tests require a negative fixture named after each one.
-    pub const ALL: [Self; 20] = [
+    pub const ALL: [Self; 21] = [
         Self::Nickel,
         Self::Schema,
         Self::DuplicateId,
@@ -64,6 +67,7 @@ impl Code {
         Self::DuplicateDistractor,
         Self::TooFewErrorPatterns,
         Self::MissingAudio,
+        Self::ContrastWithoutConfusion,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -88,6 +92,7 @@ impl Code {
             Self::DuplicateDistractor => "duplicate-distractor",
             Self::TooFewErrorPatterns => "too-few-error-patterns",
             Self::MissingAudio => "missing-audio",
+            Self::ContrastWithoutConfusion => "contrast-without-confusion",
         }
     }
 }
