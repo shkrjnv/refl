@@ -205,7 +205,7 @@ Nov 24, 2026 · @Hara
 | `cosmetic_selected` | слот (avatar, frame, background, title, effect), ключ |
 | `showcase_set` | вид (cards), список ключей |
 
-Уже в схеме с этапа 0.3: `milestone_reached`, `achievement_earned` (без ступени), `achievement_visibility_set`, `unlock_granted`, `unlock_revoked` (kind: theme, frame, companion), `theme_selected`, `companion_selected`. Новое: ступень в `achievement_earned`, новые kind, `cosmetic_selected`, `showcase_set`, таблица подарков. Вносятся в ядро вместе с правилом о неизвестных типах событий у старых клиентов. Сами ачивки, косметика, карточки и подарки — этап 3.
+Уже в схеме с этапа 0.3: `milestone_reached`, `achievement_earned` (без ступени), `achievement_visibility_set`, `unlock_granted`, `unlock_revoked` (kind: theme, frame, companion), `theme_selected`, `companion_selected`. Вместе с правилом о неизвестных событиях (docs/13) в схему 1 добавлены: ступень в `achievement_earned` и в источнике «ачивка», новые kind, `cosmetic_selected`, `showcase_set`. Сами ачивки, косметика, карточки и подарки (с их таблицей) — этап 3.
 
 **Открытые вопросы:**
 

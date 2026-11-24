@@ -6,7 +6,7 @@ English is the first subject. From day one the core is built with a boundary bet
 
 refl does not hand out points for activity. It builds a model of what the learner knows, what they are forgetting, what they do slowly and where they make systematic mistakes, and it assembles every session from that model. Every decision the system makes can be explained: "why this task" is not marketing, it is a formula.
 
-> **Status: stage 0, foundation.** The core (domain types, answer checking), content build and validation, database schema and event log are done. There is no learner-facing interface yet. Everything described below as a feature is the specification development follows; what is already built is listed under [Stages](#stages).
+> **Status: stage 0, foundation.** The core (domain types, answer checking, the full schema-1 event set, decoding of events from newer clients), content build and validation, database schema and event log are done. There is no learner-facing interface yet. Everything described below as a feature is the specification development follows; what is already built is listed under [Stages](#stages).
 >
 > The specifications in [`docs/`](docs/README.md) are written in Russian and are the single source of truth. This README is their English overview.
 
@@ -297,7 +297,7 @@ All learning logic lives in one Rust core. The server calls it natively, the PWA
 
 | What | How |
 | --- | --- |
-| event log | append-only, updates and deletes rejected by triggers; the application role can only append |
+| event log | append-only, updates and deletes rejected by triggers; the application role can only append; each row gets a `server_seq` receipt number for the sync cursor; events from a newer client are rejected, not stored |
 | model snapshots | fold speed-up, tied to model and weights version |
 | users, login, roles | learner, mentor, author, admin; child flag; login methods in a separate table |
 | social graph and privacy | teams, friends, blocks, reports, public codes, `profile_visibility` |
@@ -385,7 +385,7 @@ Every stage has a measurable exit criterion. Value starts after stage 1, not at 
 
 | Stage | Scope | Status |
 | --- | --- | --- |
-| 0. Foundation | monorepo, Nix flake, CI; domain types; content-build with checks; DB schema and event log | in progress: 0.1–0.3 done |
+| 0. Foundation | monorepo, Nix flake, CI; domain types; content-build with checks; DB schema and event log | in progress: 0.1–0.3 done, unknown events and schema-1 additions done |
 | 1. Learning core | item kinds, checking pipeline, learner model v1 + FSRS, lessons, offline PWA, sync, Telegram bot; grammar A1–A2 (~60 KCs) | — |
 | 2. Placement and planner | adaptive placement, planner, knowledge map, "why this task", mentor, teams and friends, error notebook; up to B1 (~120 KCs) | — |
 | 3. Vocabulary, reading, library | vocabulary model, FSRS for words, texts, personal dictionary, notes graph, achievements, cosmetics, cards | — |
