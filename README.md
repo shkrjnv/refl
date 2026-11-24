@@ -205,7 +205,7 @@ The result is a deterministic bundle; the content version is the SHA-256 of its 
 
 ## Interface
 
-The design code is in [docs/08](docs/08-design.md) and is being revised. Its fixed parts: the serious structure of a work tool (side panel, ⌘K search, dense data) with the living feel of a learning platform (illustrated scenes, motion where it means something). Mobile first: one column, large touch targets.
+The design code is in [docs/08](docs/08-design.md) and is being revised; until then the prototype follows the artboards in [`design/reference/`](design/reference/README.md). Its fixed parts: the serious structure of a work tool (side panel, ⌘K search, dense data) with the living feel of a learning platform (illustrated scenes, motion where it means something). Mobile first: one column, large touch targets.
 
 | Screen | What is on it |
 | --- | --- |
@@ -279,7 +279,7 @@ flowchart LR
 
 All learning logic lives in one Rust core. The server calls it natively, the PWA through WASM, so answer checking and the learner model work without internet and compute the same results.
 
-**Principles** (in full in [CLAUDE.md](CLAUDE.md) and [docs/01](docs/01-architecture.md)):
+**Principles** (in full in [docs/01](docs/01-architecture.md)):
 
 1. **The event log is the single source of truth.** Append-only; every event carries `schema_version`, old formats are read through upcasters. Mistakes are corrected with new events (`reclassified`), never by editing old ones. Model snapshots are only a speed-up and can be deleted and recomputed.
 2. **The core is pure and deterministic.** No I/O, clocks or randomness (time comes as an argument; random choice only through the core's PRNG with a seed recorded in the event); float maths only via `libm`, only ordered structures in state. Native and WASM builds produce bit-for-bit identical state; a test compares hashes.
@@ -315,6 +315,8 @@ All learning logic lives in one Rust core. The server calls it natively, the PWA
 | `content/` | Nickel content: schema (`lib/`) and a sample "Articles" topic (`articles/`) |
 | `web/` | the client; for now, TS types generated from Rust in `web/src/generated/core/` |
 | `docs/` | specifications (in Russian), the single source of truth for decisions |
+| `design/reference/` | artboards from the design canvas: the visual reference for the prototype |
+| `.claude/skills/` | project skills for the coding agent, e.g. `refl-writing` for all texts |
 | `flake.nix`, `justfile` | environment, build and CI |
 
 ## Stack
@@ -364,7 +366,7 @@ Server tests start a throwaway PostgreSQL cluster themselves (`initdb` in a temp
 - **an achievement**: content on an existing core predicate; a new achievement is awarded retroactively to everyone who earned it;
 - **a visual theme**: a data package following the slot schema (docs/08), no code.
 
-**Rules** (in detail in [CLAUDE.md](CLAUDE.md)):
+**Rules:**
 
 - the spec changes before the code, with a rationale in the commit; decisions not in the spec are never made silently;
 - this README is updated together with the spec, in English: everything built or planned is reflected here in the same change;
@@ -372,11 +374,14 @@ Server tests start a throwaway PostgreSQL cluster themselves (`initdb` in a temp
 - no temporary workarounds or hacks: if something doesn't fit the architecture, the architecture is fixed;
 - any learner model change goes through simulator regression and a log-loss comparison;
 - no secrets in commits;
-- personal data: a new field is added to docs/14 before the code.
+- personal data: a new field is added to docs/14 before the code;
+- every learner-facing text and this README follow the `refl-writing` skill ([`.claude/skills/refl-writing`](.claude/skills/refl-writing/SKILL.md)): example before rule, one idea per text, no AI-sounding filler, native uz / ru / en.
 
 ## Stages
 
 Every stage has a measurable exit criterion. Value starts after stage 1, not at the end.
+
+**Next milestone: the end-to-end prototype** ([docs/15](docs/15-prototype.md)). One topic, "Articles", all the way through: content → bundle → server → offline PWA → answer check in WASM → event → sync → fold → a number in the statistics, with the first run guided by Iella. Narrow, but finished: no placeholders, every state designed, uz / ru / en, phone and desktop. Its UI follows the artboards in `design/reference/`. The specs for stages 0–1 are frozen until it is accepted.
 
 | Stage | Scope | Status |
 | --- | --- | --- |
@@ -420,6 +425,7 @@ In Russian; the index is in [docs/README.md](docs/README.md).
 | [12-method](docs/12-method.md) | method: the reflection-to-reflex cycle |
 | [13-sync-versions](docs/13-sync-versions.md) | sync protocol, versions, on-device storage, multiple devices, backups and deployment |
 | [14-privacy-license](docs/14-privacy-license.md) | personal data, children and consent, licenses |
+| [15-prototype](docs/15-prototype.md) | the end-to-end "Articles" prototype: scope, visual reference, "looks finished" bar, acceptance criteria |
 
 ## License
 
