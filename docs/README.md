@@ -10,8 +10,9 @@
 | 04-placement-planner.md | слои 3–4: placement и планировщик сессий | https://claude.ai/artifact/3ywA1fow5Bb84ypCEkWa6d |
 | 05-audio-player-speaking.md | аудио, плеер, speaking | https://claude.ai/artifact/9JyYVNfL2x49NaGTMqrHcX |
 | 06-companions.md | компаньоны: система, вехи и эпизоды, Iella, Sendo, приватность | — |
-| 07-themes-achievements-frames.md | темы, ачивки (обычные, секретные, уникальные), рамки, модель разблокировок | — |
-| 08-design.md | дизайн-код: токены, базовая тема, шрифты, чего не делать, доступность | — |
+| 07-themes-achievements-frames.md | темы, ачивки со ступенями, косметика профиля, рамки, карточки, подарки, профиль, модель разблокировок | — |
+| 08-design.md | дизайн-код: токены, «Живая Студия», экраны, как добавлять темы, шрифты, чего не делать, первый вход | — |
+| 09-stats.md | статистика: итог, «Расширенно», откуда каждое число | — |
 
 Эталонный урок (интерактивное демо, HTML-артефакт, не выгружен): https://claude.ai/artifact/6bo7kdn9bvhSEEe7wGcqqp
 
