@@ -20,6 +20,7 @@ use super::{
 use crate::answer::normalize::{NormalizeOptions, normalize};
 use crate::bundle::{Bundle, KcEntry};
 use crate::content::{Explanation, ExplanationTarget, Misconception};
+use crate::event::OverrideKind;
 use crate::event::{
     AnswerContext, AnswerEvent, Confidence, Decoded, Event, EventPayload, Response, Verdict,
 };
@@ -362,6 +363,28 @@ impl KnowledgeModel {
                 k.observations += 1;
             }
         }
+    }
+
+    /// A mentor's mark «тема известна»: one correct observation of the KC at
+    /// medium difficulty (b = 0, g = 0) with the secondary weight. Only μ and
+    /// σ change: no memory, automaticity, production, propagation or
+    /// misconception update, so a mark alone never masters a KC
+    /// (`docs/03-layer2-learner-model.md`, «Уточнения версии 1»).
+    fn mark_known(&self, s: &mut State, bundle: &Bundle, kc: &KcId, t: Timestamp) {
+        let p = &self.params;
+        self.observe(
+            s,
+            bundle,
+            &Observation {
+                kcs: &[(kc.clone(), p.w_secondary)],
+                b: 0.0,
+                g: 0.0,
+                slip: p.slip,
+                correct: true,
+                direct: true,
+            },
+            t,
+        );
     }
 
     /// The criterion of «Когда тема считается освоенной»: confident
@@ -737,12 +760,17 @@ impl LearnerModel for KnowledgeModel {
                 }
                 Applied::Skipped
             }
+            EventPayload::MentorOverride(m) => {
+                if let OverrideKind::MarkKnown { kc, .. } = &m.kind {
+                    self.mark_known(s, ctx.bundle, kc, e.client_ts);
+                }
+                // Plan changes and disputed verdicts are not the model's.
+                Applied::Skipped
+            }
             // Applied through the corrections, in the place of the answer.
             EventPayload::Reclassified(_)
             // A planner decision (docs/11, «Лог решений»).
             | EventPayload::PlanIssued(_)
-            // mark_known has no weight yet (docs/03, open question 8).
-            | EventPayload::MentorOverride(_)
             | EventPayload::LessonStarted { .. }
             | EventPayload::LessonFinished { .. }
             | EventPayload::MilestoneReached { .. }

@@ -29,7 +29,7 @@ pub use state::{KcState, MisconceptionState, RapidStats, State};
 pub use v1::{Belief, KnowledgeModel, Params};
 
 /// What the model needs to know about the learner that is not in the log yet
-/// (`docs/03-layer2-learner-model.md`, open question 9).
+/// (`docs/03-layer2-learner-model.md`, open question 8).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Profile {
     /// Starting level L per subject as a rank of its scale; absent: 0

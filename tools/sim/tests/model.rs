@@ -519,3 +519,92 @@ fn old_log_folds_to_the_same_state_after_a_version_bump() {
     assert!(broken.unresolved > 0);
     assert_ne!(before.hash(), broken.hash());
 }
+
+fn mark(t: Timestamp, tail: u64, kc: &KcId) -> Decoded {
+    use refl_core::event::{MentorOverrideEvent, OverrideKind, OverrideReason};
+    event(
+        t,
+        tail,
+        EventPayload::MentorOverride(MentorOverrideEvent {
+            mentor: refl_core::ids::UserId(uuid::Uuid::nil()),
+            kind: OverrideKind::MarkKnown {
+                kc: kc.clone(),
+                model_mastery: refl_core::value::UnitInterval::new(0.1).unwrap(),
+            },
+            reason: OverrideReason::KnowsElsewhere,
+            note: None,
+        }),
+    )
+}
+
+/// docs/03, «Уточнения версии 1»: one observation, y = 1, b = 0, g = 0,
+/// weight 0.3, and nothing but μ and σ.
+#[test]
+fn a_mentor_mark_is_one_weak_observation_of_mu_and_sigma() {
+    let b = bundle();
+    let s = fold(&b, &[mark(at(0, 0), 1, &kc_id(0))]);
+    let k = &s.kcs[&kc_id(0)];
+    // Hand-computed: μ₀ = −1.2, σ² = 2.25, slope 0.7286, P* = 0.2943,
+    // p = 0.2796, score = 0.5141, I = 0.1026, w = 0.3.
+    assert!((k.mu - -0.8754).abs() < 2e-3, "{}", k.mu);
+    assert!((k.var - 2.1043).abs() < 2e-3, "{}", k.var);
+    assert!(k.mu > prior_mu(1.0) && k.var < 2.25);
+    assert_eq!(k.observations, 1);
+    // No memory, no automaticity, no production credit.
+    assert!(k.card.is_none());
+    assert_eq!((k.tau, k.timed), (0.0, 0));
+    assert!(k.production.is_empty() && !k.ever_mastered);
+    // No misconceptions, no spelling, no counters of answers.
+    assert!(s.misconceptions.is_empty());
+    assert_eq!(s.kcs.len(), 1);
+    assert_eq!((s.rapid.total, s.unresolved), (0, 0));
+}
+
+#[test]
+fn a_mentor_mark_does_not_reach_prerequisites() {
+    let b = bundle();
+    let s = fold(&b, &[mark(at(0, 0), 1, &kc_id(2))]);
+    assert_eq!(s.kcs.keys().collect::<Vec<_>>(), [&kc_id(2)]);
+}
+
+#[test]
+fn two_marks_are_two_observations() {
+    let b = bundle();
+    let one = fold(&b, &[mark(at(0, 0), 1, &kc_id(0))]);
+    let two = fold(
+        &b,
+        &[
+            mark(at(0, 0), 1, &kc_id(0)),
+            mark(at(0, 1_000), 2, &kc_id(0)),
+        ],
+    );
+    let (a, c) = (&one.kcs[&kc_id(0)], &two.kcs[&kc_id(0)]);
+    assert_eq!(c.observations, 2);
+    assert!(c.mu > a.mu && c.var < a.var);
+}
+
+#[test]
+fn marks_alone_never_master_a_kc() {
+    let b = bundle();
+    let marks: Vec<Decoded> = (0..200)
+        .map(|n| mark(at(0, n), u64::try_from(n).unwrap(), &kc_id(0)))
+        .collect();
+    let s = fold(&b, &marks);
+    let model = KnowledgeModel::default();
+    let k = &s.kcs[&kc_id(0)];
+    // Belief is far above the threshold, yet production and automaticity are missing.
+    assert!(k.mu > 1.5);
+    assert!(!k.ever_mastered && !model.is_mastered(k, at(0, 1_000)));
+    assert_eq!(
+        model.progress(&s, &kc_id(0), at(0, 1_000)),
+        KcProgress::Learning
+    );
+}
+
+#[test]
+fn a_mark_on_an_unknown_kc_changes_nothing() {
+    let b = bundle();
+    let ghost = KcId::new("en.gram.ghost").unwrap();
+    let s = fold(&b, &[mark(at(0, 0), 1, &ghost)]);
+    assert!(s.kcs.is_empty());
+}
