@@ -1,407 +1,430 @@
 # refl
 
-refl — платформа изучения английского от нуля до C1: общий английский и формат IELTS. Сайт — [refl.uz](https://refl.uz). Родной язык ученика — узбекский или русский, интерфейс и объяснения на uz / ru / en.
+refl is a platform for learning English from zero to C1: general English and the IELTS format. Website: [refl.uz](https://refl.uz). Learners' native language is Uzbek or Russian; the interface and explanations are in Uzbek, Russian and English.
 
-Английский — первый предмет. Ядро с самого начала строится с границей между общим движком (граф знаний, модель ученика, планировщик, лог) и предметом, поэтому следующими придут **математика** (школьная программа, затем вуз) и **японский** — отдельными треками после этапа 2 ([docs/10](docs/10-subjects.md)).
+English is the first subject. From day one the core is built with a boundary between a shared engine (knowledge graph, learner model, planner, event log) and the subject, so **mathematics** (school curriculum, then university) and **Japanese** come next as separate tracks after stage 2 ([docs/10](docs/10-subjects.md)).
 
-refl не раздаёт очки за активность. Он строит модель того, что ученик знает, что забывает, что делает медленно и в чём ошибается системно, и по этой модели собирает каждое занятие. Каждое решение системы можно объяснить: «почему это задание» — не маркетинг, а формула.
+refl does not hand out points for activity. It builds a model of what the learner knows, what they are forgetting, what they do slowly and where they make systematic mistakes, and it assembles every session from that model. Every decision the system makes can be explained: "why this task" is not marketing, it is a formula.
 
-> **Статус: этап 0 — фундамент.** Готовы ядро (типы домена, проверка ответов), сборка и проверка контента, схема базы данных и лог событий. Интерфейса для учеников пока нет. Всё, что ниже описано как возможности, — спецификация, по которой идёт разработка; что уже сделано, видно в разделе [«Этапы»](#этапы).
+> **Status: stage 0, foundation.** The core (domain types, answer checking), content build and validation, database schema and event log are done. There is no learner-facing interface yet. Everything described below as a feature is the specification development follows; what is already built is listed under [Stages](#stages).
+>
+> The specifications in [`docs/`](docs/README.md) are written in Russian and are the single source of truth. This README is their English overview.
 
-## Содержание
+## Contents
 
-- [Что в refl своё](#что-в-refl-своё)
-- [Для кого](#для-кого)
-- [Как refl учит](#как-refl-учит)
-- [Методика](#методика)
-- [Модель ученика](#модель-ученика)
-- [Контроль качества](#контроль-качества)
-- [Другие предметы](#другие-предметы)
-- [Контент](#контент)
-- [Интерфейс](#интерфейс)
-- [Мотивация без давления](#мотивация-без-давления)
-- [Социальные функции и безопасность](#социальные-функции-и-безопасность)
-- [Архитектура](#архитектура)
-- [Структура репозитория](#структура-репозитория)
-- [Стек](#стек)
-- [Разработка](#разработка)
-- [Этапы](#этапы)
-- [Спецификации](#спецификации)
+- [What is our own](#what-is-our-own)
+- [Who it is for](#who-it-is-for)
+- [How refl teaches](#how-refl-teaches)
+- [Method](#method)
+- [Learner model](#learner-model)
+- [Quality control](#quality-control)
+- [Other subjects](#other-subjects)
+- [Content](#content)
+- [Interface](#interface)
+- [Motivation without pressure](#motivation-without-pressure)
+- [Social features and safety](#social-features-and-safety)
+- [Privacy](#privacy)
+- [Architecture](#architecture)
+- [Repository layout](#repository-layout)
+- [Stack](#stack)
+- [Development](#development)
+- [Stages](#stages)
+- [Specifications](#specifications)
+- [License](#license)
 
-## Что в refl своё
+## What is our own
 
-| Часть | Что это | Где |
+| Part | What it is | Where |
 | --- | --- | --- |
-| Детерминированное образовательное ядро | проверка ответов, модель ученика, placement и планировщик — одна реализация на Rust, бит-в-бит одинаковая на сервере и офлайн в браузере; без ИИ в рантайме | [docs/01](docs/01-architecture.md) |
-| Модель состояния ученика | собрана из проверенных частей (байесовская оценка навыка в духе IRT, FSRS-6, логнормальная модель времени, бета-оценка заблуждений, распространение по графу из теории пространств знаний); своё — как они соединены: восемь состояний темы и черты ученика, каждое со своим лечением | [docs/03](docs/03-layer2-learner-model.md) |
-| Контроль качества системы | проверяется не только контент, но и прогнозы, диагнозы, планы и реальный результат через проверочные задания | [docs/11](docs/11-quality.md) |
-| Компилятор контента с формальными проверками | шаблоны ответов компилируются в автоматы; то, что верные и ошибочные ответы не пересекаются, доказывается произведением автоматов, а не проверяется на примерах | [docs/02](docs/02-layer1-content.md) |
-| Своя методика | цикл «от рефлексии к рефлексу» из приёмов с самой сильной доказательной базой | [docs/12](docs/12-method.md) |
-| Ядро под несколько предметов | английский, затем математика и японский на той же модели и том же планировщике | [docs/10](docs/10-subjects.md) |
-| Воспроизводимый лог | offline-first лог событий; любое состояние модели и любое решение планировщика можно воспроизвести и проверить задним числом | [docs/02](docs/02-layer1-content.md), [docs/11](docs/11-quality.md) |
+| Deterministic learning core | answer checking, learner model, placement and planner: one Rust implementation, bit-for-bit identical on the server and offline in the browser; no AI at runtime | [docs/01](docs/01-architecture.md) |
+| Learner state model | assembled from proven parts (IRT-style Bayesian skill estimates, FSRS-6, a lognormal response-time model, beta estimates of misconceptions, graph propagation from knowledge space theory); what is ours is how they are combined: eight topic states and learner traits, each with its own remedy | [docs/03](docs/03-layer2-learner-model.md) |
+| System quality control | not only content is checked, but also predictions, diagnoses, plans and real outcomes, via audit items | [docs/11](docs/11-quality.md) |
+| Content compiler with formal checks | answer patterns compile to automata; that accepted and error patterns never overlap is proven with an automaton product, not tested on examples | [docs/02](docs/02-layer1-content.md) |
+| Our own method | the "from reflection to reflex" cycle built from the techniques with the strongest evidence | [docs/12](docs/12-method.md) |
+| Multi-subject core | English, then mathematics and Japanese on the same model and planner | [docs/10](docs/10-subjects.md) |
+| Reproducible log | offline-first event log; any model state and any planner decision can be replayed and checked after the fact | [docs/02](docs/02-layer1-content.md), [docs/11](docs/11-quality.md) |
 
-## Для кого
+## Who it is for
 
-- **Ученики 8–20+ лет**, от абсолютного нуля до C1. Дети учатся под присмотром взрослого: у их аккаунтов отдельные правила приватности.
-- **Те, кто готовится к IELTS.** Сначала сильный общий английский, потом формат экзамена: моки с таймингом и прогноз band с интервалом.
-- **Менторы** — родитель, учитель, старший брат или сестра. Видят карту знаний и слабые места своих учеников, проверяют письмо, получают сводки.
+- **Learners aged 8–20+**, from absolute zero to C1. Children learn under an adult's supervision; their accounts follow separate privacy rules.
+- **IELTS candidates.** Strong general English first, then the exam format: timed mocks and a band forecast with an interval.
+- **Mentors**: a parent, teacher, older brother or sister. They see their learners' knowledge map and weak spots, review writing, and get summaries.
 
-refl — не «10 минут в день». Это полноценные занятия: глубокие объяснения, задания на производство (ученик сам пишет ответ, а не только выбирает), письмо и слух.
+refl is not "10 minutes a day". These are full sessions: deep explanations, production tasks (the learner writes the answer rather than only choosing), writing and listening.
 
-## Как refl учит
+## How refl teaches
 
 ```mermaid
 flowchart LR
-  PL[Placement<br/>~25 минут] --> MAP[Карта знаний]
-  MAP --> PLAN[Планировщик<br/>сессия на сегодня]
-  PLAN --> S[Сессия:<br/>повторения, новое,<br/>лечение ошибок]
-  S --> CHK[Проверка ответа<br/>в ядре]
-  CHK --> M[Модель ученика]
+  PL[Placement<br/>~25 minutes] --> MAP[Knowledge map]
+  MAP --> PLAN[Planner<br/>today's session]
+  PLAN --> S[Session:<br/>reviews, new material,<br/>fixing errors]
+  S --> CHK[Answer check<br/>in the core]
+  CHK --> M[Learner model]
   M --> PLAN
   M --> MAP
 ```
 
-**1. Placement.** Вместо одной буквы CEFR — стартовое состояние модели: оценка по каждой теме, словарный запас и уровень по навыкам. Четыре этапа от грубого к точному: общий уровень (якорные задания), словарный запас, диагностика тем в окне уровня, reading и listening. Около 25 минут, не больше 40 заданий; начинающий с нуля выходит через 3–4 задания без непосильных вопросов. Уровни тем и слов опираются на English Grammar Profile и English Vocabulary Profile (Cambridge).
+**1. Placement.** Instead of a single CEFR letter, the starting state of the model: an estimate for every topic, vocabulary size and level per skill. Four steps from coarse to fine: overall level (anchor items), vocabulary, topic diagnosis within the level window, reading and listening. About 25 minutes and at most 40 items; a complete beginner exits after 3–4 items without impossible questions. Topic and word levels rely on the English Grammar Profile and English Vocabulary Profile (Cambridge).
 
-**Уровень — не буква.** Границы CEFR условны, и между B1 и B2 длинный путь. refl показывает непрерывную позицию с интервалом и профилем по навыкам: «B1 · 40% пути к B2 (вероятно 25–55%)», рядом — грамматика, лексика, reading, listening по отдельности, описания «могу …», которые ученик уже закрыл, и что больше всего продвинет дальше. Позиция — сумма взвешенных покрытий уровней, поэтому она не прыгает на границах, а дыры на нижних уровнях честно её снижают ([docs/04](docs/04-placement-planner.md)).
+**Level is not a letter.** CEFR borders are conventional, and the road from B1 to B2 is long. refl shows a continuous position with an interval and a per-skill profile: "B1 · 40% of the way to B2 (likely 25–55%)", with grammar, vocabulary, reading and listening shown separately, the "I can …" descriptors already covered, and what would move the learner forward most. The position is the sum of importance-weighted level coverages, so it does not jump at borders, and gaps at lower levels honestly pull it down ([docs/04](docs/04-placement-planner.md)).
 
-**Перерыв снижает уровень.** Уровень считается по тому, что ученик знает сейчас, с учётом забывания по каждой теме, поэтому после перерыва он опускается, а интервал расширяется. Срок не календарный: прочно выученное держится долго, недавно выученное — дни (по исследованиям, сохранность зависит прежде всего от того, насколько хорошо выучено, а производство забывается быстрее узнавания). Когда модель видит, что забыто заметно (или прошло от 14 дней), первая сессия начинается с короткой проверки возвращения на производство: вспомненное укрепляется сильнее обычного, забытое идёт в повторения раньше нового. После 90 дней проверка шире, после года предлагается placement заново ([docs/03](docs/03-layer2-learner-model.md), [docs/04](docs/04-placement-planner.md)).
+**A break lowers the level.** Level is computed from what the learner knows now, with per-topic forgetting, so after a break it drops and its interval widens. There is no calendar threshold: well-learned material lasts long, recently learned material lasts days (research shows retention depends mostly on how well something was learned, and production fades faster than recognition). When the model sees noticeable forgetting (or after 14 days), the first session starts with a short production-first return check: what is recalled gets stronger than usual, what is forgotten goes into reviews before anything new. After 90 days the check is broader; after a year a new placement is offered ([docs/03](docs/03-layer2-learner-model.md), [docs/04](docs/04-placement-planner.md)).
 
-**2. Планировщик.** Сравнивает все возможные действия по одной шкале — ценность на минуту:
+**2. Planner.** Compares every possible action on one scale, value per minute:
 
-- **учить** — дыра или новая тема; учитывает важность, готовность пререквизитов (Present Perfect не дают тому, кто не владеет Past Simple), активные заблуждения и то, сколько тем ждёт эту как фундамент;
-- **повторить** — память опустилась ниже 90% или скоро опустится.
+- **learn**: a gap or a new topic; accounts for importance, prerequisite readiness (no Present Perfect for someone who doesn't have Past Simple), active misconceptions and how many topics wait on this one;
+- **review**: memory has dropped below 90% or is about to.
 
-Сессия собирается как задача о рюкзаке в бюджет времени с педагогическими ограничениями: повторения 15–35%, новое, лечение заблуждений, смешивание тем. Выбор следующего задания идёт на устройстве, поэтому работает офлайн. Блок 25 минут = одна сессия (помодоро встроен).
+A session is built as a knapsack problem within a time budget under pedagogical constraints: 15–35% reviews, new material, fixing misconceptions, mixing topics. The next item is chosen on the device, so it works offline. A 25-minute block is one session (pomodoro built in).
 
-**3. Задания** идут по лестнице: узнавание → управляемое производство → свободное производство. Тема не считается освоенной по одним выборам вариантов: узнавание систематически переоценивает знание.
+**3. Tasks** follow a ladder: recognition → guided production → free production. A topic is never considered mastered from multiple choice alone: recognition systematically overestimates knowledge.
 
-| Тип | Уровень |
+| Type | Level |
 | --- | --- |
-| Выбор варианта, поиск ошибки, сопоставление, True / False / Not Given | узнавание |
-| Ввод в пропуск, трансформация («перепиши, используя since»), сборка предложения, перевод uz/ru → en, диктант | управляемое производство |
-| Своё предложение по заданию, письмо и эссе, IELTS Writing Task 1/2 | свободное производство |
+| Multiple choice, find the error, matching, True / False / Not Given | recognition |
+| Gap fill, transformation ("rewrite using since"), sentence assembly, translation uz/ru → en, dictation | guided production |
+| Own sentence on a prompt, letters and essays, IELTS Writing Task 1/2 | free production |
 
-Reading и listening — «пассажи»: текст или аудио с вложенными заданиями любого типа. IELTS-секция — тот же пассаж с жёстким таймингом и пересчётом в band.
+Reading and listening are "passages": a text or audio with embedded tasks of any type. An IELTS section is the same passage with strict timing and conversion to a band.
 
-**4. Уверенность.** Перед ответом ученик отмечает «уверен / сомневаюсь». Уверенная ошибка — сильный сигнал заблуждения; угаданный верный ответ — слабое свидетельство знания.
+**4. Confidence.** Before answering, the learner marks "sure / not sure". A confident error is a strong signal of a misconception; a lucky correct answer is weak evidence of knowledge.
 
-**5. Обратная связь — диагноз, а не «неверно».** Каждый дистрактор и шаблон ошибки привязан к конкретному заблуждению. Ответ «I live here since 2019» не просто «ошибка»: это «Present Simple вместо Present Perfect с since», и система покажет контрастное объяснение и подберёт задания-лекарства. Опечатка не наказывает грамматику: она идёт в тему орфографии, а целевая тема засчитывается.
+**5. Feedback is a diagnosis, not "wrong".** Every distractor and error pattern is tied to a specific misconception. "I live here since 2019" is not just "an error": it is "Present Simple instead of Present Perfect with since", and the system shows a contrastive explanation and picks remedial tasks. A typo does not penalise grammar: it goes to the spelling topic, and the target topic counts as passed.
 
-**6. Объяснения** — короткое, «почему» и глубокое. Контраст с родным языком пишется отдельно для узбекского и русского (это разные тексты, а не перевод). С B2 объяснения по умолчанию на английском, родной — по нажатию.
+**6. Explanations** come in three depths: short, "why" and deep. The contrast with the native language is written separately for Uzbek and Russian (different texts, not translations). From B2, explanations default to English, with the native language one tap away.
 
-**7. «Почему это задание».** Объяснение берётся из той же формулы, которая выбрала задание: «Повторяем X: без повторения через 3 дня вероятность вспомнить упадёт ниже 90%», «Ошибки в Y, похоже, идут от X — проверим X», «Ты 4 раза путал … — это задание как раз на это».
+**7. "Why this task".** The explanation comes from the same formula that chose the task: "Reviewing X: without a review, in 3 days the chance of recalling it drops below 90%", "Errors in Y seem to come from X; let's check X", "You've confused … 4 times; this task is exactly about that".
 
-**8. Долгосрочный план.** Дата экзамена → нагрузка по неделям с учётом слабых мест; прогноз IELTS band — только диапазоном и только когда хватает данных.
+**8. Long-term plan.** Exam date → weekly load accounting for weak spots; the IELTS band forecast is only shown as a range and only when there is enough data.
 
-### По навыкам
+### By skill
 
-| Навык | Что будет |
+| Skill | What it will include |
 | --- | --- |
-| Грамматика | граф тем A1–C1, уроки, задания с вводом, тетрадь ошибок |
-| Лексика | модель по значениям слов (не по словам), FSRS для каждого значения, личный словарь: слово из текста вместе с предложением сразу уходит в повторения |
-| Reading | открытая библиотека по уровням, тексты с персональным лексическим покрытием, клик по слову → карточка |
-| Listening | своё аудио (оригинальные сценарии + локальный TTS), плеер с циклом «смысл → детали → текст → интенсив», синхронная подсветка слов, диктант с классификацией ошибок (слабые формы, связки), shadowing |
-| Writing | свободные ответы, метрики (длина, связки, разнообразие), Hunspell и локальный LanguageTool, чеклист по критериям IELTS, образец, ревью ментором |
-| Speaking | измерительные инструменты, а не чат-бот: произношение по звукам, интонация и ритм (DSP прямо на устройстве), беглость, лексика и грамматика речи — локальные модели (whisper.cpp, ONNX) в асинхронной очереди |
+| Grammar | A1–C1 topic graph, lessons, typed-answer tasks, error notebook |
+| Vocabulary | a model by word senses (not words), FSRS for every sense, a personal dictionary: a word from a text goes into reviews together with its sentence |
+| Reading | an open library by level, texts with personal vocabulary coverage, tap a word → card |
+| Listening | our own audio (original scripts + local TTS), a player with a "gist → details → text → intensive" cycle, synchronised word highlighting, dictation with error classification (weak forms, linking), shadowing |
+| Writing | free answers, metrics (length, linkers, variety), Hunspell and a local LanguageTool, an IELTS criteria checklist, a model answer, mentor review |
+| Speaking | measuring instruments, not a chatbot: pronunciation by sound, intonation and rhythm (DSP on the device), fluency, vocabulary and grammar of speech via local models (whisper.cpp, ONNX) in an async queue |
 
-## Методика
+## Method
 
-Свой цикл из приёмов с самой сильной доказательной базой — **от рефлексии к рефлексу**: ученик сначала думает о правиле и о своём знании, потом доводит его до автоматизма. Каждый приём — механизм данных и планировщика, а не совет учителю ([docs/12](docs/12-method.md)).
+Our own cycle built from techniques with the strongest evidence: **from reflection to reflex**. The learner first thinks about the rule and their own knowledge, then makes it automatic. Every technique is a data and planner mechanism, not advice to a teacher ([docs/12](docs/12-method.md)).
 
-| Шаг | Приём | Как в refl |
+| Step | Technique | How refl does it |
 | --- | --- | --- |
-| Попытка до объяснения | productive failure | pretest в начале урока |
-| Объяснение | три глубины, контраст с родным языком, конкретное → наглядное → абстрактное | короткое / «почему» / глубокое; линии времени, полосы дробей |
-| Разбор с затуханием | worked examples, backward fading | многошаговое задание показывает часть шагов решёнными; сколько — решает модель, а не номер задания |
-| Вариация | теория вариации | серия, где меняется ровно один параметр: since ↔ for, знак коэффициента |
-| Практика | желательная трудность, лестница узнавание → производство | целевой прогноз 0,7–0,8 |
-| Перемешивание | interleaving | путаемые темы вперемешку после блока |
-| Диагноз и опровержение | диагностические дистракторы, buggy rules | контрастная пара или числовой контрпример к неверному правилу |
-| Самообъяснение | self-explanation | вопрос «почему?» после верного ответа; калибровка уверенности |
-| Интервалы | retrieval practice, spacing | FSRS-6 |
-| Автоматизм | fluency | модель времени ответа, беглые серии |
+| Attempt before explanation | productive failure | pretest at the start of a lesson |
+| Explanation | three depths, native-language contrast, concrete → pictorial → abstract | short / why / deep; timelines, fraction bars |
+| Faded worked examples | worked examples, backward fading | a multi-step task shows some steps already solved; how many is decided by the model, not by the task number |
+| Variation | variation theory | a series where exactly one parameter changes: since ↔ for, the sign of a coefficient |
+| Practice | desirable difficulty, recognition → production ladder | target prediction 0.7–0.8 |
+| Interleaving | interleaving | confusable topics mixed after the blocked phase |
+| Diagnosis and refutation | diagnostic distractors, buggy rules | a contrast pair or a numeric counterexample to the wrong rule |
+| Self-explanation | self-explanation | a "why?" question after a correct answer; confidence calibration |
+| Spacing | retrieval practice, spacing | FSRS-6 |
+| Automaticity | fluency | response-time model, fluency drills |
 
-## Модель ученика
+## Learner model
 
-Модель — чистая функция `fold(state, event) → state` в Rust-ядре. По каждой единице знания она хранит четыре независимые величины и предсказывает ответ на любое задание до того, как ученик его увидит.
+The model is a pure function `fold(state, event) → state` in the Rust core. For every knowledge component it keeps four independent quantities and predicts the answer to any task before the learner sees it.
 
-| Величина | Что означает | Как лечится, если плохо |
+| Quantity | Meaning | Remedy when low |
 | --- | --- | --- |
-| Знание μ, σ | насколько ученик владеет правилом и насколько система в этом уверена | объяснение и задания |
-| Память S, D, R (FSRS-6) | стабильность, сложность, вероятность вспомнить сейчас | повторение |
-| Автоматизм τ | насколько быстро верный ответ (логнормальная модель времени) | тренировка скорости |
-| Заблуждения α, β | сила каждой неверной идеи и надёжность оценки | контрастные задания |
+| Knowledge μ, σ | how well the learner knows the rule and how sure the system is | explanation and tasks |
+| Memory S, D, R (FSRS-6) | stability, difficulty, probability of recall now | review |
+| Automaticity τ | how fast a correct answer comes (lognormal time model) | speed practice |
+| Misconceptions α, β | strength of each wrong idea and reliability of the estimate | contrastive tasks |
 
-«Не знает», «забыл», «знает, но медленно» и «знает, но держится за неверную идею» — четыре разных состояния, и лечатся они по-разному.
+"Doesn't know", "forgot", "knows but slowly" and "knows but holds on to a wrong idea" are four different states, and each is treated differently.
 
-**Расширенная диагностика.** Ещё четыре состояния темы: «путает похожие» (знает обе по отдельности, путает в смеси), «знает в одной форме, не в другой» (узнаёт, но не производит; решает чистую задачу, но не в контексте), «верно, но не знает правила», «корень в пререквизите». И черты ученика: быстрые попытки наугад (такие ответы не меняют оценку), калибровка уверенности, промахи, темп, зависимость от подсказок, усталость. Новая ось сначала живёт как диагностика по логу и становится параметром модели, только если улучшает точность прогноза на реальных данных.
+**Extended diagnostics.** Four more topic states: "confuses similar topics" (knows both separately, mixes them up together), "knows it in one form but not another" (recognises but can't produce; solves a bare problem but not a word problem), "correct but doesn't know the rule", "root cause in a prerequisite". And learner traits: rapid guesses (such answers do not change the estimate), confidence calibration, slips, pace, hint dependence, fatigue. A new axis first lives as a log diagnostic and becomes a model parameter only if it improves prediction accuracy on real data.
 
-Память по FSRS-6: R(t) = (1 + F·t/S)^(−w₂₀), F = 0,9^(−1/w₂₀) − 1. Забывание временно снижает навык в прогнозе, повторение его возвращает.
+FSRS-6 memory: R(t) = (1 + F·t/S)^(−w₂₀), F = 0.9^(−1/w₂₀) − 1. Forgetting temporarily lowers the skill in predictions; a review restores it.
 
-**Тема освоена**, когда одновременно: вероятность, что навык выше порога, ≥ 0,8; автоматизм не ниже нормы; минимум два верных ответа на заданиях с вводом или свободным ответом.
+**A topic is mastered** when all hold at once: the probability that skill is above the threshold is ≥ 0.8; automaticity is at least normal; at least two correct answers on typed or free-answer tasks.
 
-**Модель проверяет себя:** прогноз считается до показа задания, и калибровка «прогноз против факта» видна ученику во вкладке «Модель» статистики. Новую модель можно запустить «в тени» рядом со старой (трейт `LearnerModel`) и сравнить на реальном логе.
+**The model checks itself:** the prediction is made before the task is shown, and "prediction vs outcome" calibration is visible to the learner in the "Model" tab of the statistics. A new model can run "in the shadow" next to the old one (the `LearnerModel` trait) and be compared on the real log.
 
-## Контроль качества
+## Quality control
 
-Как понять, что система правильно понимает ученика и составляет хороший план? Прямо проверяется прогноз, косвенно — план; поэтому уровней несколько ([docs/11](docs/11-quality.md)):
+How do we know the system understands the learner and builds a good plan? Predictions can be checked directly, plans only indirectly, so there are several levels ([docs/11](docs/11-quality.md)):
 
-| Уровень | Вопрос | Инструмент |
+| Level | Question | Instrument |
 | --- | --- | --- |
-| Прогноз | модель предсказывает ответы? | лог-лосс, калибровка, базовые линии, теневые модели |
-| Диагноз | заблуждения и сложности определены верно? | диагноз как прогноз следующей ошибки; аудит контента: мёртвые дистракторы, нераспознанные ответы, расхождение сложности |
-| Правила | план не нарушает педагогических ограничений? | валидатор каждого плана, порог нарушений — ноль |
-| Результат | «освоено» действительно освоено? | проверочные задания: их выбирает не планировщик, через 7 / 30 / 90 дней после освоения |
-| Решения | план лучше альтернатив? | лог решений с причинами, микрорандомизация почти равных вариантов, симулятор учеников (другой моделью, чем наша) против эталонных планировщиков |
-| Внешний взгляд | совпадаем с людьми? | внешние тесты, правки ментора, слепая оценка письма |
+| Prediction | does the model predict answers? | log-loss, calibration, baselines, shadow models |
+| Diagnosis | are misconceptions and difficulties identified correctly? | a diagnosis as a prediction of the next error; content audit: dead distractors, unrecognised answers, difficulty mismatch |
+| Rules | does a plan violate pedagogical constraints? | a validator on every plan, zero violations allowed |
+| Outcome | is "mastered" really mastered? | audit items chosen not by the planner, 7 / 30 / 90 days after mastery |
+| Decisions | is the plan better than alternatives? | a decision log with reasons, micro-randomisation of near-equal options, a learner simulator (built on a different model than ours) against baseline planners |
+| Outside view | do we agree with people? | external tests, mentor overrides, blind scoring of writing |
 
-Метрики считаются по темам и ответам, а не по ученикам, поэтому осмысленны даже при нескольких учениках; каждая показывается с доверительным интервалом. Параметры модели живут как экспертные оценки, которые данные сдвигают пропорционально своему объёму, — модель не подгоняется под шум.
+Metrics are computed per topic and per answer, not per learner, so they are meaningful even with a few learners; each is shown with a confidence interval. Model parameters live as expert priors that data shifts in proportion to its volume, so the model does not fit noise.
 
-**Пилот.** 6–15 учеников дают около 25 000 ответов за три месяца — достаточно для калибровки модели и проверки удержания на этапе 1, но не для сравнения планировщиков между учениками (это делают симулятор и микрорандомизация). Синтетические ученики проверяют код и пороги, но параметры по ним не подбираются. Критерии успеха записаны до запуска; причинное свидетельство на малой группе даёт дизайн множественной базовой линии: ещё не изучаемые темы того же ученика служат контролем. Публично об эффективности — не раньше шести месяцев данных ([docs/11](docs/11-quality.md)).
+**Pilot.** 6–15 learners give about 25,000 answers in three months: enough to calibrate the model and check retention at stage 1, but not to compare planners across learners (the simulator and micro-randomisation do that). Synthetic learners test code and thresholds, but parameters are never fitted on them. Success criteria are written down before launch; causal evidence in a small group comes from a multiple-baseline design: topics not yet being taught to the same learner serve as the control. No public efficacy claims before six months of data ([docs/11](docs/11-quality.md)).
 
-## Контент
+## Other subjects
 
-Контент — это код: всё лежит в git, пишется на [Nickel](https://nickel-lang.org) и проходит `content-build` на каждый коммит.
+Shared by all subjects: knowledge graph, misconceptions, slots, log, learner model, placement, planner, quality control, method. A subject supplies a level scale, topic domains, an input checker and item kinds; an item kind is the `ItemKind` trait in the core ([docs/10](docs/10-subjects.md)).
 
-**Единица знания (KC)** — маленькое проверяемое правило со связями «требует» и «часть темы». Граф тем — основа карты знаний и планировщика. Лексика моделируется отдельно: значение слова с частотным рангом, формами и аудио, через FSRS, а не через граф.
+- **Mathematics.** The goal is a reference course that beats the best products in the industry on diagnostic precision and adaptivity, without AI at runtime. The curriculum is our own: topic dependencies follow the logic of mathematics and researched learning trajectories; from the Singapore, Japanese, Davydov and Chinese traditions, Cognitive Tutor and ALEKS we take what each does best; the Uzbek state standard is only a grade mapping. Our own deterministic module in the core, no external CAS, verified by property and metamorphic tests and a golden corpus: exact rational numbers, expressions with canonicalisation and exact equivalence checking. A correct answer = equivalence + a form requirement ("expand the brackets" does not accept `(x+1)²`). Buggy rules (`(a+b)² → a²+b²`) are executable: from them the core derives expected errors, distractors and a numeric counterexample. Seeded problem generators (one template, unlimited tasks, each verified at build time), multi-step solutions, visual primitives (number line, fractions, coordinate plane). Scale: grades 1–11, then university tracks.
+- **Japanese.** Scale pre-N5 (kana) → N5…N1, input via IME without romaji, readings in content markup (`{食|た}べる`) give both furigana and accepted answers without a runtime analyser; common errors (っ, dakuten, long vowels, particles) are misconceptions with patterns. Uzbek is also agglutinative with SOV order, so contrast with it is especially useful.
 
-**Заблуждение** — именованная неверная идея (с происхождением: перенос из родного языка, сверхобобщение…) с темой-лекарством.
+## Content
 
-**Семья заданий** — одна конструкция в 40–60 вариантах: при повторении ученик получает другого члена семьи, и система проверяет правило, а не память на конкретное предложение.
+Content is code: everything lives in git, is written in [Nickel](https://nickel-lang.org) and goes through `content-build` on every commit.
 
-**Язык шаблонов ответов.** Допустимые и ошибочные ответы описываются компактно и компилируются в автомат:
+**A knowledge component (KC)** is a small testable rule with "requires" and "part of" links. The topic graph is the basis of the knowledge map and the planner. Vocabulary is modelled separately: a word sense with frequency rank, forms and audio, via FSRS rather than the graph.
+
+**A misconception** is a named wrong idea (with its origin: native-language transfer, overgeneralisation, …) and a remedy topic.
+
+**An item family** is one construction in 40–60 variants: on review the learner gets a different family member, so the system tests the rule, not memory of a particular sentence.
+
+**Answer pattern language.** Accepted and erroneous answers are described compactly and compiled to an automaton:
 
 ```
 I have (lived|been living) here since 2019 [.]
 (a|an) apple
 ```
 
-Альтернативы `( | )`, необязательное `[ ]`, вложенность до 4, без повторений — язык всегда конечен. Нормализация (регистр, пробелы, апострофы, однозначные сокращения) версионирована и живёт в ядре — одна реализация для сборки и для проверки у ученика.
+Alternatives `( | )`, optional `[ ]`, nesting up to 4, no repetition: the language is always finite. Normalisation (case, spaces, apostrophes, unambiguous contractions) is versioned and lives in the core: one implementation for the build and for checking on the learner's device.
 
-**Что проверяет content-build:**
+**What content-build checks:**
 
-- схема и ссылки (KC, заблуждения, объяснения, аудио);
-- граф без циклов пререквизитов;
-- у задания есть primary KC, достаточно дистракторов и шаблонов ошибок, у каждого — привязка к заблуждению;
-- верный ответ принимается, дистракторы не принимаются;
-- шаблоны «верно» и «ошибка» не пересекаются — проверяется точным произведением автоматов, с кратчайшим примером-свидетелем в отчёте;
-- статус темы (live / draft) вычисляется: live — только если есть объяснение на ru и en, не меньше 10 заданий, 3 семей, 3 заданий на производство и разброс сложности на два соседних уровня.
+- schema and references (KCs, misconceptions, explanations, audio);
+- no prerequisite cycles in the graph;
+- every task has a primary KC and enough distractors and error patterns, each tied to a misconception;
+- the correct answer is accepted, distractors are not;
+- accepted and error patterns do not overlap, checked by an exact automaton product with the shortest witness in the report;
+- topic status (live / draft) is computed: live only with an explanation in ru and en, at least 10 tasks, 3 families, 3 production tasks and difficulty spread over two adjacent levels.
 
-Результат — детерминированный bundle; версия контента — SHA-256 его содержимого. Если автор потом добавит ответ в допустимые, старые события не меняются: сервер пишет `reclassified`, и модель пересчитывается.
+The result is a deterministic bundle; the content version is the SHA-256 of its contents. If an author later adds an accepted answer, old events do not change: the server writes `reclassified` and the model is recomputed.
 
-**Стоимость контента** снижают три вещи ([docs/02](docs/02-layer1-content.md)): инструменты (`scaffold` заготовок тем и заблуждений на uz / ru / en, интерактивный `test-item`, отчёт «чего не хватает до live»), порядок (сначала темы с наибольшей важностью и числом тем, которые ждут их как пререквизит) и поток «черновик → автоматические проверки → вычитка», в котором автор читает только то, что уже прошло проверки. В математике основную часть заданий дают генераторы.
+**Content cost** is reduced by three things ([docs/02](docs/02-layer1-content.md)): tools (`scaffold` for topics and misconceptions in uz / ru / en, interactive `test-item`, a "what is missing before live" report), order (topics with the highest importance and the most dependants first) and a "draft → automatic checks → review" flow where the author only reads what has already passed checks. In mathematics, generators produce most of the tasks.
 
-## Другие предметы
+## Interface
 
-Общее для всех предметов: граф знаний, заблуждения, слоты, лог, модель ученика, placement, планировщик, контроль качества, методика. Предмет поставляет шкалу уровней, домены тем, проверщик ввода и виды заданий; вид задания — трейт `ItemKind` в ядре ([docs/10](docs/10-subjects.md)).
+The design code is in [docs/08](docs/08-design.md) and is being revised. Its fixed parts: the serious structure of a work tool (side panel, ⌘K search, dense data) with the living feel of a learning platform (illustrated scenes, motion where it means something). Mobile first: one column, large touch targets.
 
-- **Математика.** Цель — эталонный курс, сильнее лучших продуктов индустрии по точности диагноза и адаптивности, без ИИ в рантайме. Программа своя: связи тем — по логике математики и исследованным траекториям обучения; из сингапурской, японской, давыдовской и китайской школ, Cognitive Tutor и ALEKS берётся то, в чём каждая сильнее; стандарт Узбекистана — только карта соответствия классов. Свой детерминированный модуль в ядре без внешнего CAS, проверяемый property- и метаморфными тестами и золотым корпусом: точные рациональные числа, выражения с канонизацией и точной проверкой эквивалентности. Правильный ответ = эквивалентность + требование к форме («раскройте скобки» не принимает `(x+1)²`). Ошибочные правила (`(a+b)² → a²+b²`) исполняемы: из них ядро получает ожидаемые ошибки, дистракторы и числовой контрпример. Генераторы задач по seed (один шаблон — неограниченно заданий, каждый проверен при сборке), многошаговые решения, визуальные примитивы (числовая ось, дроби, координатная плоскость). Шкала — классы 1–11, затем вузовские треки.
-- **Японский.** Шкала pre-N5 (кана) → N5…N1, ввод через IME без ромадзи, чтения в разметке контента (`{食|た}べる`) дают и фуригану, и допустимые ответы без анализатора в рантайме; частые ошибки (っ, дакутэн, долгие гласные, частицы) — заблуждения с шаблонами. Узбекский тоже агглютинативный с порядком SOV, поэтому контраст с ним особенно полезен.
-
-## Интерфейс
-
-**Дизайн-код «Живая Студия»** (docs/08): серьёзная структура рабочего инструмента — боковая панель, поиск ⌘K, плотные данные — и живое ощущение учебной платформы: иллюстрированные сцены, «объёмные» кнопки и плитки, данные, которые прорисовываются при открытии. Один иллюстрированный блок на экран, остальное — спокойно. Телефон — первым: одна колонка, крупные зоны нажатия, плавающая панель вкладок.
-
-| Экран | Что на нём |
+| Screen | What is on it |
 | --- | --- |
-| Сегодня | маршрут занятия по сцене (остановки: пройдено, сейчас, впереди), навыки, память, прогноз |
-| Занятие | одно главное действие, «уверен / сомневаюсь», диагноз после ответа |
-| Карта знаний | граф тем, раскрашенный по состоянию |
-| Статистика | итог месяца и «Расширенно»: навыки, память, словарь, ошибки, время, честность модели (docs/09) |
-| Тетрадь ошибок | собирается сама: ошибка, исправление, правило, статус заблуждения |
-| Заметки | markdown со ссылками `[[…]]`, привязка к теме, слову или тексту, граф заметок поверх карты знаний |
-| Библиотека | открытые тексты по уровням |
-| Профиль | анимированный фон, аватар в рамке, титул, ачивки, карточки, подарки |
+| Today | the session route, skills, memory, forecast |
+| Session | one main action, "sure / not sure", a diagnosis after the answer |
+| Knowledge map | the topic graph coloured by state |
+| Statistics | monthly summary and "Advanced": skills, memory, vocabulary, errors, time, model honesty (docs/09) |
+| Error notebook | builds itself: error, correction, rule, misconception status |
+| Notes | markdown with `[[…]]` links, attached to a topic, word or text, a note graph over the knowledge map |
+| Library | open texts by level |
+| Profile | animated background, framed avatar, title, achievements, cards, gifts |
 
-**Темы** — пакеты данных: токены, иллюстрации по слотам, звуки, облик компаньонов. Новая тема или переделка дизайна не трогает код экранов. Три темы есть у всех: «Живая Студия», «Мир» (пиксельный архипелаг, по умолчанию детям) и строгая «Студия»; светлая и тёмная схема — по системе.
+**Themes** are data packages: tokens, illustrations by slot, sounds, companion looks. A new theme or a redesign does not touch screen code. Light and dark schemes follow the system.
 
-**Компаньоны** (docs/06) — пиксельные персонажи со своей историей: **Iella**, ласточка-почтальон, и **Sendo**, хранитель библиотеки. Сюжет движется только от реальных вех (уровень, закрытые темы), не от серии и не от времени в приложении. Компаньон никогда не упрекает и не давит, во время ответа неподвижен.
+**Companions** (docs/06) are pixel characters with their own story: **Iella**, a swallow mail carrier, and **Sendo**, keeper of the library. The story only advances on real milestones (level, mastered topics), never on streaks or time in the app. A companion never scolds or pressures, and stays still while the learner answers.
 
-**Первый вход** — пять шагов поверх настоящего интерфейса, ведёт компаньон; пропускается, повторяется из настроек.
+**First run**: a short tour over the real interface, led by a companion; skippable and replayable from settings.
 
-**Доступность:** контраст WCAG AA в каждой теме, «верно / неверно» не только цветом, уважение к «уменьшить движение», шрифты с полной кириллицей, узбекской латиницей (oʻ, gʻ) и IPA.
+**Accessibility:** WCAG AA contrast in every theme, "correct / wrong" never by colour alone, respect for "reduce motion", fonts with full Cyrillic, Uzbek Latin (oʻ, gʻ) and IPA.
 
-## Мотивация без давления
+## Motivation without pressure
 
-Всё строится на одной модели разблокировок и на том же логе событий (docs/07).
+Everything is built on one unlock model and the same event log (docs/07).
 
-- **Ачивки** — только за результат: освоенные темы, вылеченные заблуждения, долгая память, прочитанные тексты. До шести ступеней (I–VI) с прогрессом «осталось N до IV». Секретные — реальное условие, которое не раскрывается. Уникальные — первому в команде.
-- **Косметика профиля** — пять слотов: аватар, рамка, анимированный фон, титул, эффект. Редкость — от обычной до легендарной, но это трудность условия, а не шанс выпадения. «Примерочная» показывает любой предмет и как его получить.
-- **Рамки ступеней** растут с уровнем: Росток → Луговой венок → Иней → Сумеречный лавр → Аметистовые крылья → Солнечный венец — и никогда не понижаются.
-- **Карточки:** одна карточка — одна закрытая тема; редкость = уровень темы; на обороте правило, твой пример и вылеченная ошибка.
-- **Подарки** — открытки друзьям к их вехам.
-- **Серия дней с заморозкой:** один пропуск её не обнуляет.
+- **Achievements** only for results: mastered topics, cured misconceptions, long-term memory, texts read. Up to six tiers (I–VI) with progress "N more to IV". Secret ones have a real, undisclosed condition. Unique ones go to the first in a team.
+- **Profile cosmetics**: five slots: avatar, frame, animated background, title, effect. Rarity from common to legendary reflects how hard the condition is, never a drop chance. A "fitting room" shows any item and how to get it.
+- **Tier frames** grow with level: Sprout → Meadow wreath → Hoarfrost → Twilight laurel → Amethyst wings → Solar crown, and never go down.
+- **Cards**: one card per mastered topic; rarity = the topic's level; on the back, the rule, your example and the cured error.
+- **Gifts**: postcards to friends for their milestones.
+- **Day streak with freezes**: one missed day does not reset it.
 
-**Чего нет намеренно:** внутренней валюты и магазина, наград за ежедневный вход, XP-уровней и рейтингов, ачивок за время, наборов и случайных выпадений, обмена карточками.
+**Deliberately absent:** in-app currency and shop, daily login rewards, XP levels and leaderboards, achievements for time spent, loot boxes and random drops, card trading.
 
-## Социальные функции и безопасность
+## Social features and safety
 
-- **Команды** по ссылке-приглашению или публичному коду, общие цели вместо рейтинга; владелец команды может быть ментором.
-- **Друзья** по коду или из команды; чат в реальном времени — команды и личные между взаимными друзьями; в сообщение можно вложить задание, слово или заметку живой карточкой.
-- **Telegram-бот:** напоминание, когда накопились повторения, итог дня, уведомления ментору, вход через Telegram.
-- **Профиль** показывает уровень, косметику, витрину ачивок и карточек, подарки. Статистика, серия, ошибки и заметки не видны никому, кроме ученика и его ментора.
-- **Дети:** аккаунт создаёт взрослый, который становится опекуном; профиль по умолчанию закрыт; личных сообщений нет, общение только в чате команды; подарки — только внутри команды и без текста. Дата рождения не хранится.
-- **Вход** по одноразовому коду на почту или через Telegram; паролей нет.
-- **Удаление:** данные ученика стираются по запросу отдельной процедурой с отдельной ролью в базе.
+- **Teams** by invite link or public code, shared goals instead of leaderboards; a team owner can be a mentor.
+- **Friends** by code or from a team; real-time chat in teams and privately between mutual friends; a message can embed a task, word or note as a live card.
+- **Telegram bot:** a reminder when reviews pile up, a daily summary, mentor notifications, Telegram login.
+- **Profile** shows level, cosmetics, a showcase of achievements and cards, gifts. Statistics, streak, errors and notes are visible only to the learner and their mentor.
+- **Children:** an adult creates the account and becomes the guardian; the profile is private by default; no private messages, chat only in the team chat; gifts only within the team and without text. Date of birth is not stored.
+- **Login** by one-time email code or via Telegram; no passwords.
+- **Deletion:** a learner's data is erased on request by a separate procedure with a separate database role.
 
-## Архитектура
+## Privacy
+
+refl collects little and explains every field ([docs/14](docs/14-privacy-license.md)). Personal data is any information that identifies a person: email, Telegram ID, display name, avatar, chat messages, and the learning log, since it belongs to an account. No date of birth, phone, passwords, location, contacts or advertising IDs; no third-party analytics, trackers or ads. Servers and backups are in Tashkent, Uzbekistan. A child's account is created by a guardian, who gives consent. Learners can export all their data as JSON and delete their account completely; deleted data leaves backups within 35 days.
+
+## Architecture
 
 ```mermaid
 flowchart LR
   subgraph content["content/ (Nickel)"]
-    N[KC, заблуждения,<br/>задания, объяснения]
+    N[KCs, misconceptions,<br/>tasks, explanations]
   end
-  CB["tools/content-build<br/>проверки + bundle"]
+  CB["tools/content-build<br/>checks + bundle"]
   subgraph core["core/ — refl-core (Rust, no_std)"]
-    A[проверка ответов<br/>шаблоны → DFA]
-    M[модель ученика<br/>FSRS-6]
-    P[placement<br/>и планировщик]
+    A[answer checking<br/>patterns → DFA]
+    M[learner model<br/>FSRS-6]
+    P[placement<br/>and planner]
   end
   S["server/ — axum + sqlx"]
-  DB[(PostgreSQL<br/>лог событий)]
+  DB[(PostgreSQL<br/>event log)]
   W["web/ — SolidJS PWA<br/>IndexedDB"]
   N --> CB --> DB
-  CB -. использует .-> core
+  CB -. uses .-> core
   S --> core
   W -- WASM --> core
   S <--> DB
-  W <-- события, синхронизация --> S
+  W <-- events, sync --> S
 ```
 
-Вся логика обучения живёт в одном ядре на Rust. Сервер вызывает его нативно, PWA — через WASM, поэтому проверка ответов и модель ученика работают без интернета и считают одинаково.
+All learning logic lives in one Rust core. The server calls it natively, the PWA through WASM, so answer checking and the learner model work without internet and compute the same results.
 
-**Принципы** (полностью — в [CLAUDE.md](CLAUDE.md) и [docs/01](docs/01-architecture.md)):
+**Principles** (in full in [CLAUDE.md](CLAUDE.md) and [docs/01](docs/01-architecture.md)):
 
-1. **Лог событий — единственный источник правды.** Только дописывается; у события есть `schema_version`, старые форматы читаются через upcasters. Ошибки исправляются новыми событиями (`reclassified`), а не правкой старых. Снапшоты модели — только ускорение, их можно удалить и пересчитать.
-2. **Ядро чистое и детерминированное.** Без ввода-вывода, часов и случайности (время приходит аргументом; случайный выбор — только ГПСЧ ядра с seed, записанным в событие); float-математика только через `libm`, в состоянии только упорядоченные структуры. Нативная сборка и WASM дают бит-в-бит одинаковое состояние — тест сравнивает хэши.
-3. **Offline-first.** События создаются на клиенте с UUIDv7 и лежат в IndexedDB до синхронизации; синхронизация идемпотентна, конфликтов нет: лог только растёт.
-4. **Производные события пишет сервер.** Вехи, ачивки и разблокировки вычисляются из лога ядром и фиксируются сервером с уникальным ключом, поэтому пересчёт идемпотентен. Офлайн клиент празднует сразу по своей свёртке — вычисление то же самое.
-5. **Контент как код**, проверка ответов без внешних ИИ-сервисов.
-6. **Расширяемость через трейты:** `ItemKind` (ступень лестницы, правило качества и проверка вида задания; данные — enum `ItemBody`; отрисовка — компонент в реестре клиента на сгенерированных TS-типах) и `LearnerModel`. Граница предмета: шкала, домены, проверщик и виды заданий — у предмета, остальное общее ([docs/10](docs/10-subjects.md)).
-7. **Производительность закладывается при сборке контента:** замыкание графа, автоматы шаблонов, индексы — а не в рантайме.
-8. **Монолит на одном сервере.** Микросервисы, брокеры сообщений и многосерверность намеренно отложены; чат, уведомления и прогресс команды идут по одному WebSocket.
-9. **Решения проверяемы.** Планировщик пишет каждое решение с кандидатами и причинами; почти равные варианты выбираются ГПСЧ с записанным seed — план остаётся детерминированным и его можно оценить задним числом ([docs/11](docs/11-quality.md)).
+1. **The event log is the single source of truth.** Append-only; every event carries `schema_version`, old formats are read through upcasters. Mistakes are corrected with new events (`reclassified`), never by editing old ones. Model snapshots are only a speed-up and can be deleted and recomputed.
+2. **The core is pure and deterministic.** No I/O, clocks or randomness (time comes as an argument; random choice only through the core's PRNG with a seed recorded in the event); float maths only via `libm`, only ordered structures in state. Native and WASM builds produce bit-for-bit identical state; a test compares hashes.
+3. **Offline-first.** Events are created on the client with UUIDv7 and kept in IndexedDB until sync; sync is idempotent and conflict-free because the log only grows.
+4. **The server writes derived events.** Milestones, achievements and unlocks are computed from the log by the core and recorded by the server with a unique key, so recomputation is idempotent. Offline, the client celebrates immediately from its own fold: the computation is the same.
+5. **Content as code**, answer checking without external AI services.
+6. **Extensibility through traits:** `ItemKind` (ladder step, quality rule and checking for an item kind; data is the `ItemBody` enum; rendering is a component in the client registry over generated TS types) and `LearnerModel`. Subject boundary: scale, domains, checker and item kinds belong to the subject, everything else is shared ([docs/10](docs/10-subjects.md)).
+7. **Performance is built in at content build time:** graph closure, pattern automata, indexes, not at runtime.
+8. **A monolith on one server.** Microservices, message brokers and multiple servers are deliberately postponed; chat, notifications and team progress share one WebSocket.
+9. **Decisions are auditable.** The planner records every decision with its candidates and reasons; near-equal options are chosen by a PRNG with a recorded seed, so the plan stays deterministic and can be evaluated after the fact ([docs/11](docs/11-quality.md)).
 
-**Данные в PostgreSQL** (миграции в `server/migrations`):
+**Sync and versions** ([docs/13](docs/13-sync-versions.md)). One `/v1/sync` endpoint exchanges batches in both directions: the client uploads unsent events, the server returns events from other devices and derived events after the client's cursor (`server_seq`). The client corrects for a wrong device clock using the server time. Three versions are tracked separately: event schema, core (including the model and its parameters) and content. A device with an older core never drops or guesses at unknown events: it stores them, marks its state as incomplete and recomputes after updating; learning continues meanwhile. Updates are applied only between sessions; a new model version triggers a full recompute on the device in a Web Worker. The device keeps a snapshot plus recent events and fetches the full log from the server on demand. Ops: continuous WAL archiving (RPO ≤ 5 min), monthly automatic restore drills that compare recomputed model hashes, backward-compatible migrations, one-command rollback.
 
-| Что | Как |
+**Data in PostgreSQL** (migrations in `server/migrations`):
+
+| What | How |
 | --- | --- |
-| лог событий | append-only, изменение и удаление запрещены триггерами; роль приложения может только дописывать |
-| снапшоты модели | ускорение свёртки, привязаны к версии модели и весов |
-| пользователи, вход, роли | learner, mentor, author, admin; флаг ребёнка; способы входа отдельной таблицей |
-| соцграф и приватность | команды, друзья, блокировки, жалобы, публичные коды, `profile_visibility` |
-| уведомления | каналы (Telegram, push, почта), настройки по паре (вид, канал), outbox |
-| контент | таблицы по версии контента, идемпотентный импорт bundle |
-| удаление | отдельная роль и процедура стирания данных ученика |
+| event log | append-only, updates and deletes rejected by triggers; the application role can only append |
+| model snapshots | fold speed-up, tied to model and weights version |
+| users, login, roles | learner, mentor, author, admin; child flag; login methods in a separate table |
+| social graph and privacy | teams, friends, blocks, reports, public codes, `profile_visibility` |
+| notifications | channels (Telegram, push, email), settings per (kind, channel) pair, outbox |
+| content | tables by content version, idempotent bundle import |
+| deletion | a separate role and procedure for erasing a learner's data |
 
-## Структура репозитория
+## Repository layout
 
-| Путь | Что там |
+| Path | Contents |
 | --- | --- |
-| `core/` | `refl-core` — типы домена, события, нормализация, язык шаблонов, DFA, модель разблокировок. `no_std` + `alloc`; фича `std` — для тестов и инструментов, `ts` — для генерации TS-типов |
-| `server/` | `refl-server` — миграции, запись событий, импорт bundle, тесты на временном PostgreSQL. HTTP — с этапа 1 |
-| `tools/content-build/` | CLI сборки и проверки контента; тестовые фикстуры на каждую проверку |
-| `content/` | контент на Nickel: схема (`lib/`) и пример темы «Артикли» (`articles/`) |
-| `web/` | клиент; сейчас — сгенерированные из Rust TS-типы в `web/src/generated/core/` |
-| `docs/` | спецификации — единственный источник правды по решениям |
-| `flake.nix`, `justfile` | окружение, сборка и CI |
+| `core/` | `refl-core`: domain types, events, normalisation, pattern language, DFA, unlock model. `no_std` + `alloc`; the `std` feature is for tests and tools, `ts` for TS type generation |
+| `server/` | `refl-server`: migrations, event writes, bundle import, tests on a temporary PostgreSQL. HTTP from stage 1 |
+| `tools/content-build/` | CLI for building and checking content; test fixtures for every check |
+| `content/` | Nickel content: schema (`lib/`) and a sample "Articles" topic (`articles/`) |
+| `web/` | the client; for now, TS types generated from Rust in `web/src/generated/core/` |
+| `docs/` | specifications (in Russian), the single source of truth for decisions |
+| `flake.nix`, `justfile` | environment, build and CI |
 
-## Стек
+## Stack
 
-| Часть | Выбор |
+| Part | Choice |
 | --- | --- |
-| Ядро | Rust (версия в `rust-toolchain.toml`), нативно и `wasm32-unknown-unknown` |
-| Сервер | axum + tokio, sqlx, PostgreSQL |
-| Клиент | TypeScript + SolidJS + Vite, PWA, IndexedDB; типы из Rust (ts-rs) |
-| Контент | Nickel → `content-build` на Rust |
-| Память | FSRS-6 в ядре; fsrs-rs — только офлайн, для подбора весов |
-| Аудио | оригинальные сценарии → Piper / Kokoro → Opus; Montreal Forced Aligner для времени слов; отдаёт nginx |
-| Письмо | Hunspell, локальный LanguageTool |
-| Speaking | DSP в ядре, whisper.cpp (whisper-rs), ONNX Runtime; очередь — таблица в Postgres |
-| i18n | Fluent (uz / ru / en, правильные склонения чисел) |
-| Наблюдаемость | tracing, Prometheus, Grafana; метрики качества модели |
-| Бэкапы | pgBackRest, архивация WAL |
-| Сборка и деплой | Nix flake (fenix + crane), модуль NixOS, systemd |
+| Core | Rust (version in `rust-toolchain.toml`), native and `wasm32-unknown-unknown` |
+| Server | axum + tokio, sqlx, PostgreSQL |
+| Client | TypeScript + SolidJS + Vite, PWA, IndexedDB; types from Rust (ts-rs) |
+| Content | Nickel → `content-build` in Rust |
+| Memory | FSRS-6 in the core; fsrs-rs only offline, for fitting weights |
+| Audio | original scripts → Piper / Kokoro → Opus; Montreal Forced Aligner for word timings; served by nginx |
+| Writing | Hunspell, local LanguageTool |
+| Speaking | DSP in the core, whisper.cpp (whisper-rs), ONNX Runtime; the queue is a Postgres table |
+| i18n | Fluent (uz / ru / en, correct plural forms) |
+| Observability | tracing, Prometheus, Grafana; model quality metrics |
+| Backups | pgBackRest, WAL archiving, monthly restore drills |
+| Build and deploy | Nix flake (fenix + crane), NixOS module, systemd |
 
-## Разработка
+## Development
 
-Нужен Nix с включёнными flakes; всё остальное приходит из окружения. С direnv окружение подхватывается само (`.envrc`).
+You need Nix with flakes enabled; everything else comes from the environment. With direnv the environment loads automatically (`.envrc`).
 
 ```sh
 nix develop        # Rust, sqlx-cli, PostgreSQL, Nickel, Node, just
-just               # fmt-check, clippy, тесты, wasm32-сборка ядра, content-build
-just --list        # рецепты по отдельности
-just ci            # полный герметичный CI = nix flake check
+just               # fmt-check, clippy, tests, wasm32 core build, content-build
+just --list        # individual recipes
+just ci            # full hermetic CI = nix flake check
 ```
 
-| Рецепт | Что делает |
+| Recipe | What it does |
 | --- | --- |
-| `just fmt` / `just fmt-check` | форматирование / проверка |
-| `just lint` | clippy с `-D warnings` |
-| `just test` | все тесты, включая базу (временный PostgreSQL) и свежесть TS-типов |
-| `just wasm` | сборка ядра под браузер |
-| `just content` | проверка `content/`, bundle в `target/bundle.json` |
-| `just bindings` | перегенерировать TS-типы после изменения типов ядра (результат коммитится) |
+| `just fmt` / `just fmt-check` | format / check formatting |
+| `just lint` | clippy with `-D warnings` |
+| `just test` | all tests, including the database (temporary PostgreSQL) and TS type freshness |
+| `just wasm` | build the core for the browser |
+| `just content` | check `content/`, bundle into `target/bundle.json` |
+| `just bindings` | regenerate TS types after core type changes (the result is committed) |
 
-Тесты сервера сами поднимают одноразовый кластер PostgreSQL (`initdb` во временном каталоге), системная база не нужна.
+Server tests start a throwaway PostgreSQL cluster themselves (`initdb` in a temporary directory); no system database is needed.
 
-**Как добавить:**
+**How to add:**
 
-- **тему контента** — файлы Nickel в `content/<тема>/`: KC, заблуждения, объяснения, задания с шаблонами; `just content` покажет отчёт и статус live / draft;
-- **тип задания** — вариант `ItemBody` с реализацией `ItemKind` в ядре (ступень, правило качества, проверка) и компонент отрисовки в реестре клиента;
-- **предмет** — запись предмета в контенте (шкала, домены, проверщик) и его виды заданий; модель и планировщик не меняются (docs/10);
-- **ачивку** — контент на существующем предикате ядра; новая ачивка выдаётся задним числом всем, кто её заслужил;
-- **тему оформления** — пакет данных по схеме слотов (docs/08), без кода.
+- **a content topic**: Nickel files in `content/<topic>/`: KCs, misconceptions, explanations, tasks with patterns; `just content` shows the report and live / draft status;
+- **an item kind**: an `ItemBody` variant implementing `ItemKind` in the core (ladder step, quality rule, checking) and a rendering component in the client registry;
+- **a subject**: a subject record in content (scale, domains, checker) and its item kinds; the model and planner do not change (docs/10);
+- **an achievement**: content on an existing core predicate; a new achievement is awarded retroactively to everyone who earned it;
+- **a visual theme**: a data package following the slot schema (docs/08), no code.
 
-**Правила** (подробно — [CLAUDE.md](CLAUDE.md)):
+**Rules** (in detail in [CLAUDE.md](CLAUDE.md)):
 
-- спека правится раньше кода, с обоснованием в коммите; решения, которых нет в спеке, не принимаются молча;
-- README дополняется вместе со спекой: всё сделанное или запланированное отражается здесь в том же изменении;
-- коммиты маленькие, по одному смыслу, на английском;
-- никаких временных обходов и хаков — если не ложится в архитектуру, правится архитектура;
-- любое изменение модели ученика — через регрессию на симуляторе и сравнение лог-лосса;
-- секреты не коммитятся.
+- the spec changes before the code, with a rationale in the commit; decisions not in the spec are never made silently;
+- this README is updated together with the spec, in English: everything built or planned is reflected here in the same change;
+- small commits, one purpose each, in English;
+- no temporary workarounds or hacks: if something doesn't fit the architecture, the architecture is fixed;
+- any learner model change goes through simulator regression and a log-loss comparison;
+- no secrets in commits;
+- personal data: a new field is added to docs/14 before the code.
 
-## Этапы
+## Stages
 
-У каждого этапа есть измеримый критерий перехода. Польза начинается после этапа 1, а не в конце.
+Every stage has a measurable exit criterion. Value starts after stage 1, not at the end.
 
-| Этап | Что входит | Статус |
+| Stage | Scope | Status |
 | --- | --- | --- |
-| 0. Фундамент | монорепо, Nix flake, CI; типы домена; content-build с проверками; схема БД и лог событий | идёт: 0.1–0.3 готовы |
-| 1. Ядро обучения | типы заданий, конвейер проверки, модель ученика v1 + FSRS, уроки, PWA с офлайном, Telegram-бот; грамматика A1–A2 (~60 KC) | — |
-| 2. Placement и планировщик | адаптивный placement, планировщик, карта знаний, «почему это задание», ментор, команды и друзья, тетрадь ошибок; до B1 (~120 KC) | — |
-| 3. Лексика, reading, библиотека | модель лексики, FSRS для слов, тексты, личный словарь, заметки с графом, ачивки, косметика, карточки | — |
-| 4. Listening | аудио-конвейер, плеер, диктант с классификацией ошибок, shadowing | — |
-| 5. Writing | свободные ответы, LanguageTool, чеклисты критериев, ревью ментором | — |
-| 6. IELTS | полные моки с таймингом, пересчёт в band, прогноз с интервалом; B2–C1 | — |
-| 7. Speaking | интонация и ритм через DSP, затем оценка произношения | — |
+| 0. Foundation | monorepo, Nix flake, CI; domain types; content-build with checks; DB schema and event log | in progress: 0.1–0.3 done |
+| 1. Learning core | item kinds, checking pipeline, learner model v1 + FSRS, lessons, offline PWA, sync, Telegram bot; grammar A1–A2 (~60 KCs) | — |
+| 2. Placement and planner | adaptive placement, planner, knowledge map, "why this task", mentor, teams and friends, error notebook; up to B1 (~120 KCs) | — |
+| 3. Vocabulary, reading, library | vocabulary model, FSRS for words, texts, personal dictionary, notes graph, achievements, cosmetics, cards | — |
+| 4. Listening | audio pipeline, player, dictation with error classification, shadowing | — |
+| 5. Writing | free answers, LanguageTool, criteria checklists, mentor review | — |
+| 6. IELTS | full timed mocks, band conversion, forecast with an interval; B2–C1 | — |
+| 7. Speaking | intonation and rhythm via DSP, then pronunciation scoring | — |
 
-Треки других предметов ([docs/10](docs/10-subjects.md)), после этапа 2:
+Other subject tracks ([docs/10](docs/10-subjects.md)), after stage 2:
 
-| Трек | Что входит | Статус |
+| Track | Scope | Status |
 | --- | --- | --- |
-| М1. Математика: основа | модуль выражений, генераторы, многошаговые задания, визуальные примитивы; классы 1–6 | запланировано |
-| М2. Математика: 7–9 | алгебра, функции и графики, геометрия | запланировано |
-| М3. Математика: 10–11 и дальше | радикалы, тригонометрия, логарифмы, начала анализа; вузовские треки позже | запланировано |
-| Я1. Японский: кана и N5 | проверщик японского, фуригана, CJK-шрифт | когда будет вычитывающий носитель |
+| M1. Mathematics: foundations | expression module, generators, multi-step tasks, visual primitives; grades 1–6 | planned |
+| M2. Mathematics: 7–9 | algebra, functions and graphs, geometry | planned |
+| M3. Mathematics: 10–11 and beyond | radicals, trigonometry, logarithms, introductory calculus; university tracks later | planned |
+| J1. Japanese: kana and N5 | Japanese checker, furigana, CJK font | when a native reviewer is available |
 
-Конструктор доказательств для вузовского уровня — дальний горизонт, пока не проектируется.
+A proof builder for university level is on the far horizon and is not being designed yet.
 
-## Спецификации
+## Specifications
 
-| Файл | О чём |
+In Russian; the index is in [docs/README.md](docs/README.md).
+
+| File | Topic |
 | --- | --- |
-| [01-architecture](docs/01-architecture.md) | архитектура, фундамент, стек, этапы, социальные функции, пользователи и соцграф |
-| [02-layer1-content](docs/02-layer1-content.md) | KC, граф, заблуждения, задания, язык шаблонов ответов, объяснения, уроки, события, версии |
-| [03-layer2-learner-model](docs/03-layer2-learner-model.md) | модель ученика: знание, FSRS-6, автоматизм, заблуждения, освоение, самопроверка |
-| [04-placement-planner](docs/04-placement-planner.md) | placement и планировщик сессий, «почему это задание» |
-| [05-audio-player-speaking](docs/05-audio-player-speaking.md) | аудио-конвейер, плеер, диктант, speaking |
-| [06-companions](docs/06-companions.md) | компаньоны Iella и Sendo, главы по вехам, приватность |
-| [07-themes-achievements-frames](docs/07-themes-achievements-frames.md) | темы, ачивки, косметика, карточки, подарки, профиль |
-| [08-design](docs/08-design.md) | дизайн-код «Живая Студия», темы как пакеты данных, движение, первый вход |
-| [09-stats](docs/09-stats.md) | статистика и откуда берётся каждое число |
-| [10-subjects](docs/10-subjects.md) | граница ядра и предмета, японский, математика |
-| [11-quality](docs/11-quality.md) | контроль качества: прогноз, диагноз, валидатор плана, проверочные задания, лог решений, симулятор |
-| [12-method](docs/12-method.md) | методика: цикл от рефлексии к рефлексу |
+| [01-architecture](docs/01-architecture.md) | architecture, foundation, stack, stages, social features, users and social graph |
+| [02-layer1-content](docs/02-layer1-content.md) | KCs, graph, misconceptions, tasks, answer pattern language, explanations, lessons, events, versions, authoring tools |
+| [03-layer2-learner-model](docs/03-layer2-learner-model.md) | learner model: knowledge, FSRS-6, automaticity, misconceptions, breaks and returns, extended diagnostics, mastery, self-check |
+| [04-placement-planner](docs/04-placement-planner.md) | placement, continuous level, session planner, return checks, "why this task" |
+| [05-audio-player-speaking](docs/05-audio-player-speaking.md) | audio pipeline, player, dictation, speaking |
+| [06-companions](docs/06-companions.md) | companions Iella and Sendo, chapters by milestone, privacy |
+| [07-themes-achievements-frames](docs/07-themes-achievements-frames.md) | themes, achievements, cosmetics, cards, gifts, profile |
+| [08-design](docs/08-design.md) | design code, themes as data packages, motion, first run |
+| [09-stats](docs/09-stats.md) | statistics and where every number comes from |
+| [10-subjects](docs/10-subjects.md) | core / subject boundary, Japanese, mathematics |
+| [11-quality](docs/11-quality.md) | quality control: prediction, diagnosis, plan validator, audit items, decision log, simulator, pilot |
+| [12-method](docs/12-method.md) | method: the reflection-to-reflex cycle |
+| [13-sync-versions](docs/13-sync-versions.md) | sync protocol, versions, on-device storage, multiple devices, backups and deployment |
+| [14-privacy-license](docs/14-privacy-license.md) | personal data, children and consent, licenses |
+
+## License
+
+The code (everything except `content/`) is licensed under the [GNU Affero General Public License v3.0 only](LICENSE). If you run a modified version of refl as a network service, you must offer its source code to its users.
+
+The learning content in `content/` (topics, tasks, patterns, misconceptions, explanations, media) is © the refl author, all rights reserved; see [content/LICENSE](content/LICENSE). The schema in `content/lib/` is part of the software and is under the AGPL.
+
+Third-party data and models are listed with their licenses in `THIRD_PARTY.md` as they are added.
