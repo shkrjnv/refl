@@ -303,6 +303,33 @@ impl KnowledgeModel {
         ))
     }
 
+    /// Fisher information of `slot` of `item` about `kc` at `now`, from the
+    /// same response model as [`LearnerModel::predict`]; the planner's Ī
+    /// (`docs/04-placement-planner.md`, «Следующее задание внутри блока»).
+    /// `None` if the bundle has no such item version or slot, or `kc` is not
+    /// in the slot.
+    pub fn information(
+        &self,
+        s: &State,
+        bundle: &Bundle,
+        item: &ItemRef,
+        slot: u16,
+        kc: &KcId,
+        now: Timestamp,
+    ) -> Option<f64> {
+        let item = bundle.projection(item)?;
+        let kcs = &item.slots.get(usize::from(slot))?.kcs;
+        let index = kcs.iter().position(|k| &k.kc == kc)?;
+        let b = difficulty(item);
+        let terms = kcs
+            .iter()
+            .map(|k| Some(self.term(self.belief(s, bundle, &k.kc, now)?, b)))
+            .collect::<Option<Vec<_>>>()?;
+        // The information does not depend on the outcome.
+        let evidence = math::evidence(item.guessing(slot), self.params.slip, true, &terms);
+        Some(evidence[index].info)
+    }
+
     /// The KC's state with σ² grown to `t`, created from the prior on first
     /// touch; `None` if the KC is not in the bundle.
     fn touch<'s>(

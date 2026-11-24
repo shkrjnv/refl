@@ -291,9 +291,16 @@ pub enum PlanScope {
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum PlanAction {
-    Learn { kc: KcId },
-    Review { kc: KcId },
-    Item { item: ItemRef, slot: u16 },
+    Learn {
+        kc: KcId,
+    },
+    Review {
+        kc: KcId,
+    },
+    Item {
+        item: ItemRef,
+        slot: u16,
+    },
     /// Suggest a break (`docs/04-placement-planner.md`, «Адаптация на ходу»).
     Break,
 }
