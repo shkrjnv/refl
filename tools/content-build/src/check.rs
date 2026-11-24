@@ -5,11 +5,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use eng_core::content::{ExplanationDepth, ExplanationTarget};
-use eng_core::ids::{InstructionId, KcId, MisconceptionId};
-use eng_core::item::{ItemStatus, KcRole, QualityRule};
-use eng_core::lesson::LessonStep;
-use eng_core::value::{Lang, Localized};
+use refl_core::content::{ExplanationDepth, ExplanationTarget};
+use refl_core::ids::{InstructionId, KcId, MisconceptionId};
+use refl_core::item::{ItemStatus, KcRole, QualityRule};
+use refl_core::lesson::LessonStep;
+use refl_core::value::{Lang, Localized};
 
 use crate::load::{Content, Sourced};
 use crate::report::{Code, Diagnostic, Severity};

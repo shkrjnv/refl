@@ -14,12 +14,12 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::PathBuf;
 
-use eng_core::answer::normalize::NORMALIZATION_VERSION;
-use eng_core::bundle::{
+use refl_core::answer::normalize::NORMALIZATION_VERSION;
+use refl_core::bundle::{
     BUNDLE_FORMAT_VERSION, Bundle, BundleContent, ItemEntry, KcEntry, KcItems, KcStatus,
 };
-use eng_core::ids::{ContentVersion, ItemRef};
-use eng_core::item::{ItemStatus, KcRole};
+use refl_core::ids::{ContentVersion, ItemRef};
+use refl_core::item::{ItemStatus, KcRole};
 use sha2::{Digest, Sha256};
 
 use crate::report::Report;

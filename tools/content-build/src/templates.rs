@@ -6,12 +6,12 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use eng_core::answer::dfa::{Dfa, TokenId, TokenTable, intersection_witness};
-use eng_core::answer::normalize::{NormalizeOptions, normalize};
-use eng_core::answer::template::{NormPattern, Pattern};
-use eng_core::bundle::{ErrorAutomaton, SlotAutomata};
-use eng_core::ids::MisconceptionId;
-use eng_core::item::{AnswerPattern, Item, ItemStatus, QualityRule, Slot};
+use refl_core::answer::dfa::{Dfa, TokenId, TokenTable, intersection_witness};
+use refl_core::answer::normalize::{NormalizeOptions, normalize};
+use refl_core::answer::template::{NormPattern, Pattern};
+use refl_core::bundle::{ErrorAutomaton, SlotAutomata};
+use refl_core::ids::MisconceptionId;
+use refl_core::item::{AnswerPattern, Item, ItemStatus, QualityRule, Slot};
 
 use crate::load::Sourced;
 use crate::report::{Code, Diagnostic, Severity};

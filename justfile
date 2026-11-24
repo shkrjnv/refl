@@ -22,7 +22,7 @@ test:
 
 # The core must build for the browser (no_std + alloc, default features)
 wasm:
-    cargo build --locked --release -p eng-core --target wasm32-unknown-unknown
+    cargo build --locked --release -p refl-core --target wasm32-unknown-unknown
 
 # Check content/ and write the bundle to target/bundle.json
 content:
@@ -30,7 +30,7 @@ content:
 
 # Regenerate the committed TS types in web/src/generated/core/
 bindings:
-    UPDATE_TS_BINDINGS=1 cargo test --locked -p eng-core --all-features --test ts_bindings
+    UPDATE_TS_BINDINGS=1 cargo test --locked -p refl-core --all-features --test ts_bindings
 
 # Full hermetic CI, the same as on every commit
 ci:

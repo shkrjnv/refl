@@ -1,23 +1,23 @@
 //! Serialization round trips and byte-level determinism for the log and content types.
 
-use eng_core::content::{
+use proptest::prelude::*;
+use refl_core::content::{
     Edge, EdgeKind, Kc, KcDomain, L1Prior, L1Set, Misconception, MisconceptionOrigin,
 };
-use eng_core::event::{
+use refl_core::event::{
     AnswerContext, AnswerEvent, Confidence, EventPayload, ReclassifiedEvent, Response, Verdict,
 };
-use eng_core::ids::{
+use refl_core::ids::{
     AchievementId, ContentVersion, EventId, ExplanationId, ItemId, ItemRef, ItemVersion, KcId,
     LearnerId, LessonId, MisconceptionId, PackageKey, SessionId, Tag, UserId,
 };
-use eng_core::item::{
+use refl_core::item::{
     AnswerPattern, AuthorDifficulty, ChoiceOption, Contractions, ExpectedWrong, Item, ItemStatus,
     ItemType, KcRole, Slot, SlotKc, Stimulus,
 };
-use eng_core::unlock::{Milestone, UnlockKind, UnlockSource};
-use eng_core::value::{Cefr, Localized, Timestamp, UnitInterval};
-use eng_core::{CURRENT_SCHEMA_VERSION, DecodeError, Event, decode_event, encode_event};
-use proptest::prelude::*;
+use refl_core::unlock::{Milestone, UnlockKind, UnlockSource};
+use refl_core::value::{Cefr, Localized, Timestamp, UnitInterval};
+use refl_core::{CURRENT_SCHEMA_VERSION, DecodeError, Event, decode_event, encode_event};
 use uuid::Uuid;
 
 fn slug<T: std::fmt::Debug>(make: fn(String) -> Option<T>) -> impl Strategy<Value = T> {
@@ -133,7 +133,7 @@ fn payload() -> impl Strategy<Value = EventPayload> {
         (slug(ExplanationId::new), any::<u32>()).prop_map(|(explanation, seconds)| {
             EventPayload::ExplanationViewed {
                 explanation,
-                depth: eng_core::content::ExplanationDepth::Why,
+                depth: refl_core::content::ExplanationDepth::Why,
                 seconds,
             }
         }),
@@ -267,18 +267,18 @@ fn item() -> impl Strategy<Value = Item> {
         (
             slug(ItemId::new),
             any::<u32>(),
-            slug(eng_core::ids::FamilyId::new),
+            slug(refl_core::ids::FamilyId::new),
         ),
         prop_oneof![
             Just(ItemType::Choice),
             Just(ItemType::GapFill),
             Just(ItemType::Transformation)
         ],
-        slug(eng_core::ids::InstructionId::new),
+        slug(refl_core::ids::InstructionId::new),
         text(),
         proptest::collection::vec(slot(), 1..4),
         (1u8..=5, any::<u32>()),
-        proptest::option::of(slug(eng_core::ids::TopicId::new)),
+        proptest::option::of(slug(refl_core::ids::TopicId::new)),
         prop_oneof![Just(ItemStatus::Draft), Just(ItemStatus::Live)],
         (
             proptest::option::of(text()),

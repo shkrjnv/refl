@@ -7,7 +7,7 @@ refl — платформа изучения английского (general Eng
 - **Ядро** `core/` — Rust, crate без ввода-вывода: проверка ответов, модель ученика, placement, планировщик. Собирается нативно (сервер) и в WASM (PWA).
 - **Сервер** `server/` — axum + tokio + sqlx, PostgreSQL. WebSocket для чата и уведомлений.
 - **Клиент** `web/` — TypeScript + SolidJS + Vite, PWA, IndexedDB. Вся логика обучения вызывается из WASM-ядра, в TS её нет. Типы API генерируются из Rust (ts-rs или specta).
-- **Контент** `content/` — Nickel → JSON → CLI `content-build` (Rust, на eng-core) → Postgres.
+- **Контент** `content/` — Nickel → JSON → CLI `content-build` (Rust, на refl-core) → Postgres.
 - **Инструменты** `tools/` — `content-build`, симулятор учеников, аудио-конвейер (Piper/Kokoro → Opus).
 - FSRS-6 — своя реализация в core на `libm`; fsrs-rs только офлайн для подбора весов.
 - Прочее: Hunspell, локальный LanguageTool, Fluent (i18n), tracing + Prometheus + Grafana, pgBackRest.
@@ -52,12 +52,12 @@ refl — платформа изучения английского (general Eng
 ## Команды
 
 - Окружение: `nix develop` (или `nix develop -c <команда>`).
-- Локальный CI: `nix flake check` — fmt, clippy `-D warnings`, все тесты, сборка `eng-core` под wasm32.
+- Локальный CI: `nix flake check` — fmt, clippy `-D warnings`, все тесты, сборка `refl-core` под wasm32.
 - Одной командой: `just` (в `nix develop`) — fmt-check, clippy, тесты, сборка wasm32, content-build; рецепты по отдельности — `just --list`, полный герметичный CI — `just ci`.
 - Тесты: `cargo test --workspace --all-features` (без `--all-features` тест TS-биндингов пропускается).
 - Линт: `cargo clippy --workspace --all-targets --all-features -- -D warnings`.
-- TS-типы из Rust: `UPDATE_TS_BINDINGS=1 cargo test -p eng-core --all-features --test ts_bindings`; результат в `web/src/generated/core/` коммитится, тест падает, если он устарел.
-- `eng-core` по умолчанию `no_std` + `alloc`: в нём нет файлов, сети, часов, потоков, `HashMap` и float-функций std. Фича `std` — только для тестов и инструментов, `ts` — для генерации TS.
+- TS-типы из Rust: `UPDATE_TS_BINDINGS=1 cargo test -p refl-core --all-features --test ts_bindings`; результат в `web/src/generated/core/` коммитится, тест падает, если он устарел.
+- `refl-core` по умолчанию `no_std` + `alloc`: в нём нет файлов, сети, часов, потоков, `HashMap` и float-функций std. Фича `std` — только для тестов и инструментов, `ts` — для генерации TS.
 
 ## Правила работы
 

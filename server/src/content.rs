@@ -2,9 +2,9 @@
 //! версии»): per-entity tables keyed by content version, idempotent by
 //! version, exactly one active version.
 
-use eng_core::bundle::{Bundle, BundleContent, KcStatus};
-use eng_core::content::ExplanationTarget;
-use eng_core::item::KcRole;
+use refl_core::bundle::{Bundle, BundleContent, KcStatus};
+use refl_core::content::ExplanationTarget;
+use refl_core::item::KcRole;
 use serde::Serialize;
 use serde_json::Value;
 use sqlx::{PgConnection, Postgres, Transaction};

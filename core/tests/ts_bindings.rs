@@ -2,16 +2,16 @@
 //! and committed under `web/src/generated/core/`. This test fails when they
 //! are stale. Regenerate with:
 //!
-//!     UPDATE_TS_BINDINGS=1 cargo test -p eng-core --all-features --test ts_bindings
+//!     UPDATE_TS_BINDINGS=1 cargo test -p refl-core --all-features --test ts_bindings
 
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use eng_core::Event;
-use eng_core::content::{Edge, Explanation, Instruction, Kc, Misconception};
-use eng_core::item::Item;
-use eng_core::lesson::Lesson;
+use refl_core::Event;
+use refl_core::content::{Edge, Explanation, Instruction, Kc, Misconception};
+use refl_core::item::Item;
+use refl_core::lesson::Lesson;
 use ts_rs::{Config, TS};
 
 fn committed_dir() -> PathBuf {
@@ -77,6 +77,6 @@ fn ts_bindings_are_up_to_date() {
     assert!(
         stale.is_empty(),
         "web/src/generated/core is stale ({stale:?}); run \
-         UPDATE_TS_BINDINGS=1 cargo test -p eng-core --all-features --test ts_bindings"
+         UPDATE_TS_BINDINGS=1 cargo test -p refl-core --all-features --test ts_bindings"
     );
 }

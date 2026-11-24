@@ -186,7 +186,7 @@ flowchart LR
     N[KC, заблуждения,<br/>задания, объяснения]
   end
   CB["tools/content-build<br/>проверки + bundle"]
-  subgraph core["core/ — eng-core (Rust, no_std)"]
+  subgraph core["core/ — refl-core (Rust, no_std)"]
     A[проверка ответов<br/>шаблоны → DFA]
     M[модель ученика<br/>FSRS-6]
     P[placement<br/>и планировщик]
@@ -231,8 +231,8 @@ flowchart LR
 
 | Путь | Что там |
 | --- | --- |
-| `core/` | `eng-core` — типы домена, события, нормализация, язык шаблонов, DFA, модель разблокировок. `no_std` + `alloc`; фича `std` — для тестов и инструментов, `ts` — для генерации TS-типов |
-| `server/` | `eng-server` — миграции, запись событий, импорт bundle, тесты на временном PostgreSQL. HTTP — с этапа 1 |
+| `core/` | `refl-core` — типы домена, события, нормализация, язык шаблонов, DFA, модель разблокировок. `no_std` + `alloc`; фича `std` — для тестов и инструментов, `ts` — для генерации TS-типов |
+| `server/` | `refl-server` — миграции, запись событий, импорт bundle, тесты на временном PostgreSQL. HTTP — с этапа 1 |
 | `tools/content-build/` | CLI сборки и проверки контента; тестовые фикстуры на каждую проверку |
 | `content/` | контент на Nickel: схема (`lib/`) и пример темы «Артикли» (`articles/`) |
 | `web/` | клиент; сейчас — сгенерированные из Rust TS-типы в `web/src/generated/core/` |

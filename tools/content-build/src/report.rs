@@ -16,7 +16,7 @@ pub enum Severity {
 pub enum Code {
     /// `nickel export` failed.
     Nickel,
-    /// Exported JSON does not match the eng-core types.
+    /// Exported JSON does not match the refl-core types.
     Schema,
     DuplicateId,
     UnknownReference,

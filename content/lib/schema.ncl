@@ -1,5 +1,5 @@
 # Authoring contracts for content files. They catch typos and wrong shapes
-# while writing; the eng-core Rust types are the source of truth, and
+# while writing; the refl-core Rust types are the source of truth, and
 # content-build checks every file against them (docs/02-layer1-content.md).
 let OneOf = fun values => std.contract.from_predicate (fun v => std.array.elem v values) in
 let Unit = std.contract.from_predicate (fun v => std.is_number v && v >= 0 && v <= 1) in

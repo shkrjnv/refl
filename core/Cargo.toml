@@ -1,5 +1,5 @@
 [package]
-name = "eng-core"
+name = "refl-core"
 version = "0.0.0"
 description = "Pure learning core: domain types, event log, (later) answer checking, learner model, planner. No I/O."
 edition.workspace = true

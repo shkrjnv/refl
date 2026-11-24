@@ -3,8 +3,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
-use eng_core::content::EdgeKind;
-use eng_core::ids::KcId;
+use refl_core::content::EdgeKind;
+use refl_core::ids::KcId;
 
 use crate::check::Ids;
 use crate::load::Content;

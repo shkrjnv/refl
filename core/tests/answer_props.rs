@@ -6,10 +6,10 @@
 
 use std::collections::BTreeSet;
 
-use eng_core::answer::dfa::{Dfa, State, TokenId, TokenTable, intersection_witness};
-use eng_core::answer::normalize::NormalizeOptions;
-use eng_core::answer::template::{MAX_DEPTH, Node, NormPattern, Pattern, Seq};
 use proptest::prelude::*;
+use refl_core::answer::dfa::{Dfa, State, TokenId, TokenTable, intersection_witness};
+use refl_core::answer::normalize::NormalizeOptions;
+use refl_core::answer::template::{MAX_DEPTH, Node, NormPattern, Pattern, Seq};
 
 /// Patterns as the parser produces them, from words drawn by `word`.
 fn seq(word: BoxedStrategy<String>, depth: usize) -> BoxedStrategy<Seq> {

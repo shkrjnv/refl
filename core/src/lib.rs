@@ -1,4 +1,4 @@
-//! Pure learning core of eng-learn.
+//! Pure learning core of refl.
 //!
 //! This crate performs no I/O and reads no clock or randomness: every input,
 //! including time, arrives as an argument. The default build is `no_std` +

@@ -1,5 +1,5 @@
 {
-  description = "eng-learn: English learning platform (Rust core + WASM, axum, Postgres, SolidJS, Nickel)";
+  description = "refl: English learning platform (Rust core + WASM, axum, Postgres, SolidJS, Nickel)";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -55,7 +55,7 @@
           };
           commonArgs = {
             inherit src;
-            pname = "eng-learn";
+            pname = "refl";
             version = "0.0.0";
             strictDeps = true;
             cargoExtraArgs = "--locked --workspace --all-features";
@@ -91,7 +91,7 @@
           );
           test = craneLib.cargoTest (commonArgs // { inherit cargoArtifacts; });
           # The real content must pass every check; the bundle and report are the output.
-          content = pkgs.runCommand "eng-learn-content" { } ''
+          content = pkgs.runCommand "refl-content" { } ''
             mkdir -p $out
             ${content-build}/bin/content-build ${./content} \
               --nickel ${pkgs.nickel}/bin/nickel \
@@ -104,7 +104,7 @@
             // {
               pnameSuffix = "-core-wasm32";
               cargoArtifacts = null;
-              buildPhaseCargoCommand = "cargo build --locked --release -p eng-core --target wasm32-unknown-unknown";
+              buildPhaseCargoCommand = "cargo build --locked --release -p refl-core --target wasm32-unknown-unknown";
               installPhaseCommand = "mkdir -p $out";
               doInstallCargoArtifacts = false;
             }
@@ -115,7 +115,7 @@
       devShells = forAllSystems (
         system: pkgs: {
           default = pkgs.mkShell {
-            name = "eng-learn";
+            name = "refl";
             packages = [
               (rustToolchain system)
               pkgs.sqlx-cli
@@ -129,7 +129,7 @@
             # hunspell + dictionaries (writing checks), ffmpeg/opus-tools (audio
             # pipeline).
 
-            DATABASE_URL = "postgres://eng_learn@localhost/eng_learn";
+            DATABASE_URL = "postgres://refl@localhost/refl";
           };
         }
       );

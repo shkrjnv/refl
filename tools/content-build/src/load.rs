@@ -1,14 +1,14 @@
 //! Loading content: every `.ncl` file under the content root (except those in
 //! `lib/` directories, which hold imports such as contracts and helpers) is
-//! exported with `nickel export` and parsed into eng-core types. The Rust
+//! exported with `nickel export` and parsed into refl-core types. The Rust
 //! types are the source of truth; Nickel contracts only help authors.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use eng_core::content::{Edge, Explanation, Instruction, Kc, Misconception};
-use eng_core::item::Item;
-use eng_core::lesson::Lesson;
+use refl_core::content::{Edge, Explanation, Instruction, Kc, Misconception};
+use refl_core::item::Item;
+use refl_core::lesson::Lesson;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 

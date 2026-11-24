@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use content_build::report::{Code, Severity};
 use content_build::{Options, Output, build, to_bytes};
-use eng_core::bundle::KcStatus;
+use refl_core::bundle::KcStatus;
 
 fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -99,9 +99,9 @@ fn example_content_builds_with_computed_status() {
     }
     assert_eq!(
         bundle.content.requires_closure
-            [&eng_core::ids::KcId::new("gram.article.second-mention").unwrap()]
+            [&refl_core::ids::KcId::new("gram.article.second-mention").unwrap()]
             .iter()
-            .map(eng_core::ids::KcId::as_str)
+            .map(refl_core::ids::KcId::as_str)
             .collect::<Vec<_>>(),
         ["gram.article.first-mention", "gram.noun.countability"]
     );
@@ -112,6 +112,6 @@ fn bundle_is_byte_identical_across_builds() {
     let a = run(&repo().join("content")).bundle.expect("bundle");
     let b = run(&repo().join("content")).bundle.expect("bundle");
     assert_eq!(to_bytes(&a), to_bytes(&b));
-    let parsed: eng_core::bundle::Bundle = serde_json::from_slice(&to_bytes(&a)).unwrap();
+    let parsed: refl_core::bundle::Bundle = serde_json::from_slice(&to_bytes(&a)).unwrap();
     assert_eq!(to_bytes(&parsed), to_bytes(&a), "bundle round-trips");
 }
