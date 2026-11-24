@@ -580,14 +580,18 @@ fn subject() -> impl Strategy<Value = Subject> {
         ),
         finite(),
         proptest::collection::vec(slug(DomainId::new), 0..8),
+        slug(KcId::new),
     )
-        .prop_map(|(id, title, levels, step_logit, domains)| Subject {
-            id,
-            title,
-            scale: ScaleDef { levels, step_logit },
-            domains,
-            checker: Checker::EnWords,
-        })
+        .prop_map(
+            |(id, title, levels, step_logit, domains, spelling_kc)| Subject {
+                id,
+                title,
+                scale: ScaleDef { levels, step_logit },
+                domains,
+                checker: Checker::EnWords,
+                spelling_kc,
+            },
+        )
 }
 
 fn kc() -> impl Strategy<Value = Kc> {

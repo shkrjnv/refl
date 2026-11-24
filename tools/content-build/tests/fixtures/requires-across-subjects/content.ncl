@@ -9,6 +9,7 @@ let b = import "../lib/base.ncl" in
       scale = { levels = [{ key = "g1", title = { en = "Grade 1" } }], step_logit = 0.8 },
       domains = ["arithmetic"],
       checker = "en-words",
+      spelling_kc = "math.k.x",
     },
   ],
   kcs = b.kcs @ [

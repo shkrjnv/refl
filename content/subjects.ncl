@@ -27,6 +27,7 @@ let s = import "lib/schema.ncl" in
         "writing-skill",
       ],
       checker = "en-words",
+      spelling_kc = "en.orth.spelling",
     },
   ],
 } | s.File

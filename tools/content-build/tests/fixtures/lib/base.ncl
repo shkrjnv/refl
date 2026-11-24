@@ -13,9 +13,19 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
       },
       domains = ["grammar"],
       checker = "en-words",
+      spelling_kc = "en.k.spelling",
     },
   ],
   kcs = [
+    {
+      id = "en.k.spelling",
+      subject = "en",
+      domain = "grammar",
+      title = { en = "Spelling" },
+      level = "A1",
+      importance = 0.5,
+      rule = "spelling",
+    },
     {
       id = "en.k.a",
       subject = "en",

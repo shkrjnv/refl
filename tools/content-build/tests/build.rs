@@ -181,3 +181,21 @@ fn only_requires_may_not_cross_subjects() {
         Some("edge `en.k.a` requires `math.k.x`")
     );
 }
+
+#[test]
+fn kcs_stay_within_their_subject() {
+    let out = run(&fixtures().join("kc-outside-subject"));
+    let subjects: Vec<&str> = out
+        .report
+        .diagnostics
+        .iter()
+        .filter(|d| d.code == Code::KcOutsideSubject)
+        .filter_map(|d| d.subject.as_deref())
+        .collect();
+    assert_eq!(
+        subjects,
+        ["subject `math`", "item `it.gap`"],
+        "{}",
+        out.report
+    );
+}

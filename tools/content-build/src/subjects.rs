@@ -3,7 +3,9 @@
 //! names an existing subject, a level key of its scale and one of its
 //! domains; level keys and domains are unique within a subject. Ids of KCs,
 //! misconceptions and item families start with their subject's slug, and
-//! `requires` never crosses subjects (`supports` may).
+//! `requires` never crosses subjects (`supports` may). The scale is not
+//! empty and its step is positive; the spelling KC and slot KCs belong to
+//! the subject.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -27,6 +29,15 @@ pub fn by_id(c: &Content) -> BTreeMap<&SubjectId, &Subject> {
 pub fn check(c: &Content, diags: &mut Vec<Diagnostic>) {
     for s in &c.subjects {
         let subject = format!("subject `{}`", s.value.id);
+        let scale = &s.value.scale;
+        if scale.levels.is_empty() || scale.step_logit.get() <= 0.0 {
+            let message = format!(
+                "the scale needs at least one level and step_logit > 0, has {} level(s) and {}",
+                scale.levels.len(),
+                scale.step_logit.get()
+            );
+            diags.push(diag(Code::InvalidScale, &s.file, subject.clone(), message));
+        }
         let mut keys = BTreeSet::new();
         for level in &s.value.scale.levels {
             if !keys.insert(&level.key) {
@@ -58,6 +69,54 @@ pub fn check(c: &Content, diags: &mut Vec<Diagnostic>) {
         if !s.domains.contains(&kc.domain) {
             let message = format!("domain `{}` is not a domain of `{}`", kc.domain, s.id);
             diags.push(diag(Code::UnknownDomain, &k.file, subject, message));
+        }
+    }
+}
+
+/// The subject's spelling KC and every KC of an item's slots belong to the
+/// subject: a typo updates the subject's own spelling KC, and an item is
+/// assessed within one subject. Unknown subjects and KCs are reported
+/// elsewhere.
+pub fn kc_subjects(c: &Content, diags: &mut Vec<Diagnostic>) {
+    let kc_subject: BTreeMap<&KcId, &SubjectId> = c
+        .kcs
+        .iter()
+        .map(|k| (&k.value.id, &k.value.subject))
+        .collect();
+    for s in &c.subjects {
+        let subject = &s.value;
+        let who = format!("subject `{}`", subject.id);
+        match kc_subject.get(&subject.spelling_kc) {
+            None => {
+                let message = format!("unknown spelling KC `{}`", subject.spelling_kc);
+                diags.push(diag(Code::UnknownReference, &s.file, who, message));
+            }
+            Some(&of) if of != &subject.id => {
+                let message = format!(
+                    "spelling KC `{}` belongs to subject `{of}`",
+                    subject.spelling_kc
+                );
+                diags.push(diag(Code::KcOutsideSubject, &s.file, who, message));
+            }
+            Some(_) => {}
+        }
+    }
+    for it in &c.items {
+        let item = &it.value;
+        for (j, slot) in item.body.slots().iter().enumerate() {
+            for sk in &slot.kcs {
+                let Some(&of) = kc_subject.get(&sk.kc) else {
+                    continue;
+                };
+                if of != &item.subject {
+                    let message = format!(
+                        "slots[{j}]: KC `{}` belongs to subject `{of}`, the item to `{}`",
+                        sk.kc, item.subject
+                    );
+                    let who = format!("item `{}`", item.id);
+                    diags.push(diag(Code::KcOutsideSubject, &it.file, who, message));
+                }
+            }
         }
     }
 }

@@ -8,7 +8,7 @@ use alloc::vec::Vec;
 use core::fmt;
 use serde::{Deserialize, Serialize};
 
-use crate::ids::{DomainId, SubjectId};
+use crate::ids::{DomainId, KcId, SubjectId};
 use crate::value::{Finite, Localized, ValueError};
 
 /// Key of a level in a subject's scale as content and the interface name it,
@@ -94,4 +94,7 @@ pub struct Subject {
     pub domains: Vec<DomainId>,
     /// Default checker of the subject's typed input.
     pub checker: Checker,
+    /// The orthography KC a typo updates as wrong, while the item's target
+    /// KC counts as passed (`docs/02-layer1-content.md`, «Проверка ответов на ввод»).
+    pub spelling_kc: KcId,
 }

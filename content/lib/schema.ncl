@@ -16,6 +16,8 @@ let Lang = OneOf ["uz", "ru", "en"] in
     },
     domains | Array String,
     checker | OneOf ["en-words"],
+    # The orthography KC a typo updates.
+    spelling_kc | String,
   },
   Kc = {
     id | String,

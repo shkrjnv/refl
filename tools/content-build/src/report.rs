@@ -47,6 +47,10 @@ pub enum Code {
     SubjectPrefix,
     /// A `requires` edge joins KCs of different subjects.
     RequiresAcrossSubjects,
+    /// A scale without levels, or with `step_logit <= 0`.
+    InvalidScale,
+    /// A slot KC or a spelling KC of another subject.
+    KcOutsideSubject,
     /// A `contrasts` edge between live KCs has no live item marked
     /// `confuses_with` across it.
     ContrastWithoutConfusion,
@@ -54,7 +58,7 @@ pub enum Code {
 
 impl Code {
     /// Every check; tests require a negative fixture named after each one.
-    pub const ALL: [Self; 25] = [
+    pub const ALL: [Self; 27] = [
         Self::Nickel,
         Self::Schema,
         Self::DuplicateId,
@@ -79,6 +83,8 @@ impl Code {
         Self::UnknownDomain,
         Self::SubjectPrefix,
         Self::RequiresAcrossSubjects,
+        Self::InvalidScale,
+        Self::KcOutsideSubject,
         Self::ContrastWithoutConfusion,
     ];
 
@@ -108,6 +114,8 @@ impl Code {
             Self::UnknownDomain => "unknown-domain",
             Self::SubjectPrefix => "subject-prefix",
             Self::RequiresAcrossSubjects => "requires-across-subjects",
+            Self::InvalidScale => "invalid-scale",
+            Self::KcOutsideSubject => "kc-outside-subject",
             Self::ContrastWithoutConfusion => "contrast-without-confusion",
         }
     }
