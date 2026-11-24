@@ -5,7 +5,9 @@ use refl_core::content::{
     Edge, EdgeKind, Kc, KcDomain, L1Prior, L1Set, Misconception, MisconceptionOrigin,
 };
 use refl_core::event::{
-    AnswerContext, AnswerEvent, Confidence, EventPayload, ReclassifiedEvent, Response, Verdict,
+    AnswerContext, AnswerEvent, Confidence, CriterionScore, EventPayload, HalfBands,
+    MentorOverrideEvent, OverrideKind, OverrideReason, PlanAction, PlanCandidate, PlanFactor,
+    PlanIssuedEvent, PlanScope, ReclassifiedEvent, Response, Verdict, WritingScoredEvent,
 };
 use refl_core::ids::{
     AchievementId, ContentVersion, EventId, ExplanationId, ItemId, ItemRef, ItemVersion, KcId,
@@ -154,7 +156,100 @@ fn payload() -> impl Strategy<Value = EventPayload> {
             }
         }),
         reward_payload(),
+        quality_payload(),
     ]
+}
+
+fn user() -> impl Strategy<Value = UserId> {
+    any::<u128>().prop_map(|u| UserId(Uuid::from_u128(u)))
+}
+
+/// `plan_issued`, `mentor_override`, `writing_scored` (docs/11).
+fn quality_payload() -> impl Strategy<Value = EventPayload> {
+    let action = prop_oneof![
+        slug(KcId::new).prop_map(|kc| PlanAction::Learn { kc }),
+        slug(KcId::new).prop_map(|kc| PlanAction::Review { kc }),
+        (item_ref(), any::<u16>()).prop_map(|(item, slot)| PlanAction::Item { item, slot }),
+    ];
+    let candidate = (
+        action,
+        any::<f64>(),
+        proptest::collection::vec(
+            (text(), any::<f64>()).prop_map(|(name, value)| PlanFactor { name, value }),
+            0..4,
+        ),
+    )
+        .prop_map(|(action, value_per_minute, factors)| PlanCandidate {
+            action,
+            value_per_minute,
+            factors,
+        });
+    let plan = (
+        (text(), text()),
+        prop_oneof![Just(PlanScope::Session), Just(PlanScope::NextItem)],
+        proptest::collection::vec(candidate, 0..4),
+        (any::<u16>(), unit(), any::<u64>()),
+    )
+        .prop_map(
+            |((planner_version, model_version), scope, candidates, (chosen, propensity, seed))| {
+                EventPayload::PlanIssued(PlanIssuedEvent {
+                    planner_version,
+                    model_version,
+                    scope,
+                    candidates,
+                    chosen,
+                    propensity,
+                    seed,
+                })
+            },
+        );
+    let mentor = (
+        user(),
+        prop_oneof![
+            Just(OverrideKind::PlanChange),
+            slug(KcId::new).prop_map(|kc| OverrideKind::MarkKnown { kc }),
+            uuid_v7().prop_map(|event| OverrideKind::DisputeVerdict { event }),
+        ],
+        prop_oneof![
+            Just(OverrideReason::KnowsElsewhere),
+            Just(OverrideReason::TooHard),
+            Just(OverrideReason::TooEasy),
+            Just(OverrideReason::WrongVerdict),
+            Just(OverrideReason::Other),
+        ],
+        proptest::option::of(text()),
+    )
+        .prop_map(|(mentor, kind, reason, note)| {
+            EventPayload::MentorOverride(MentorOverrideEvent {
+                mentor,
+                kind,
+                reason,
+                note,
+            })
+        });
+    let writing = (
+        item_ref(),
+        any::<u16>(),
+        user(),
+        proptest::collection::vec(
+            (text(), 0u8..=18).prop_map(|(criterion, h)| CriterionScore {
+                criterion,
+                half_bands: HalfBands::new(h).unwrap(),
+            }),
+            0..5,
+        ),
+        any::<bool>(),
+    )
+        .prop_map(|(item, slot, scorer, scores, blind)| {
+            EventPayload::WritingScored(WritingScoredEvent {
+                item,
+                slot,
+                scorer,
+                scores,
+                blind,
+            })
+        });
+    prop_oneof![plan, mentor, writing]
 }
 
 fn milestone() -> impl Strategy<Value = Milestone> {
@@ -694,4 +789,80 @@ fn new_answer_fields_default_on_input() {
     ] {
         assert_eq!(serde_json::to_value(context).unwrap(), tag);
     }
+}
+
+fn writing_scored(half_bands: u64) -> serde_json::Value {
+    serde_json::json!({
+        "type": "writing_scored",
+        "item": { "id": "ielts.task2.1", "version": 1 },
+        "slot": 0,
+        "scorer": "00000000-0000-0000-0000-000000000002",
+        "scores": [{ "criterion": "coherence", "half_bands": half_bands }],
+        "blind": true,
+    })
+}
+
+#[test]
+fn half_bands_are_validated() {
+    for ok in [0, 13, 18] {
+        let EventPayload::WritingScored(w) =
+            known(&sample_with_payload(1, &writing_scored(ok))).payload
+        else {
+            panic!("not writing_scored");
+        };
+        assert_eq!(u64::from(w.scores[0].half_bands.get()), ok);
+    }
+    for bad in [19, 255, 256] {
+        assert!(
+            matches!(
+                decode_event(&sample_with_payload(1, &writing_scored(bad))),
+                Err(DecodeError::Json(_))
+            ),
+            "{bad}"
+        );
+    }
+    assert!(HalfBands::new(19).is_none());
+}
+
+#[test]
+fn quality_events_wire_shape() {
+    let plan = serde_json::json!({
+        "type": "plan_issued",
+        "planner_version": "p1",
+        "model_version": "m1",
+        "scope": "next_item",
+        "candidates": [
+            {
+                "action": { "kind": "item", "item": { "id": "articles.a-an.1", "version": 2, "seed": 7 }, "slot": 1 },
+                "value_per_minute": 0.5,
+                "factors": [{ "name": "forgetting", "value": 0.25 }],
+            },
+            { "action": { "kind": "learn", "kc": "gram.article.first-mention" }, "value_per_minute": 0.25, "factors": [] },
+        ],
+        "chosen": 0,
+        "propensity": 0.75,
+        "seed": 42,
+    });
+    let mentor = serde_json::json!({
+        "type": "mentor_override",
+        "mentor": "00000000-0000-0000-0000-000000000002",
+        "kind": { "kind": "dispute_verdict", "event": V7 },
+        "reason": "wrong_verdict",
+        "note": null,
+    });
+    for payload in [plan, mentor, writing_scored(13)] {
+        let json = sample_with_payload(1, &payload);
+        let e = known(&json);
+        assert_eq!(serde_json::to_value(&e.payload).unwrap(), payload);
+        // Not derived: no uniqueness key (docs/02, «События контроля качества»).
+        assert!(e.payload.derived_key().is_none());
+    }
+    let mut out_of_range = serde_json::json!({
+        "type": "plan_issued", "planner_version": "p1", "model_version": "m1",
+        "scope": "session", "candidates": [], "chosen": 0, "propensity": 1.5, "seed": 1,
+    });
+    assert!(decode_event(&sample_with_payload(1, &out_of_range)).is_err());
+    out_of_range["propensity"] = 1.0.into();
+    out_of_range["scope"] = "lesson".into();
+    assert!(decode_event(&sample_with_payload(1, &out_of_range)).is_err());
 }

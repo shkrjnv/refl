@@ -4,11 +4,14 @@ import type { AnswerEvent } from "./AnswerEvent";
 import type { ExplanationDepth } from "./ExplanationDepth";
 import type { ExplanationId } from "./ExplanationId";
 import type { LessonId } from "./LessonId";
+import type { MentorOverrideEvent } from "./MentorOverrideEvent";
 import type { Milestone } from "./Milestone";
 import type { PackageKey } from "./PackageKey";
+import type { PlanIssuedEvent } from "./PlanIssuedEvent";
 import type { ReclassifiedEvent } from "./ReclassifiedEvent";
 import type { UnlockKind } from "./UnlockKind";
 import type { UnlockSource } from "./UnlockSource";
 import type { UserId } from "./UserId";
+import type { WritingScoredEvent } from "./WritingScoredEvent";
 
-export type EventPayload = { "type": "answer" } & AnswerEvent | { "type": "reclassified" } & ReclassifiedEvent | { "type": "lesson_started", lesson: LessonId, } | { "type": "lesson_finished", lesson: LessonId, } | { "type": "explanation_viewed", explanation: ExplanationId, depth: ExplanationDepth, seconds: number, } | { "type": "milestone_reached", milestone: Milestone, } | { "type": "achievement_earned", achievement: AchievementId, } | { "type": "achievement_visibility_set", achievement: AchievementId, visible: boolean, } | { "type": "unlock_granted", kind: UnlockKind, key: PackageKey, source: UnlockSource, } | { "type": "unlock_revoked", kind: UnlockKind, key: PackageKey, by: UserId, } | { "type": "theme_selected", theme: PackageKey, } | { "type": "companion_selected", companion: PackageKey, };
+export type EventPayload = { "type": "answer" } & AnswerEvent | { "type": "reclassified" } & ReclassifiedEvent | { "type": "lesson_started", lesson: LessonId, } | { "type": "lesson_finished", lesson: LessonId, } | { "type": "explanation_viewed", explanation: ExplanationId, depth: ExplanationDepth, seconds: number, } | { "type": "milestone_reached", milestone: Milestone, } | { "type": "achievement_earned", achievement: AchievementId, } | { "type": "achievement_visibility_set", achievement: AchievementId, visible: boolean, } | { "type": "unlock_granted", kind: UnlockKind, key: PackageKey, source: UnlockSource, } | { "type": "unlock_revoked", kind: UnlockKind, key: PackageKey, by: UserId, } | { "type": "theme_selected", theme: PackageKey, } | { "type": "companion_selected", companion: PackageKey, } | { "type": "plan_issued" } & PlanIssuedEvent | { "type": "mentor_override" } & MentorOverrideEvent | { "type": "writing_scored" } & WritingScoredEvent;

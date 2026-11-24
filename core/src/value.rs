@@ -106,6 +106,7 @@ pub enum ValueError {
     InvalidSlug,
     NotUuidV7,
     DifficultyOutOfRange,
+    HalfBandsOutOfRange,
 }
 
 impl fmt::Display for ValueError {
@@ -117,6 +118,7 @@ impl fmt::Display for ValueError {
             }
             Self::NotUuidV7 => "event id must be a UUIDv7",
             Self::DifficultyOutOfRange => "author difficulty must be 1..=5",
+            Self::HalfBandsOutOfRange => "half bands must be 0..=18 (IELTS band × 2)",
         })
     }
 }

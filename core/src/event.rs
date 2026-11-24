@@ -6,17 +6,18 @@
 //! deserialization. Corrections are new events (`reclassified`), never edits.
 
 use alloc::string::String;
+use alloc::vec::Vec;
 use core::fmt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::content::ExplanationDepth;
 use crate::ids::{
-    AchievementId, ContentVersion, EventId, ExplanationId, ItemRef, LearnerId, LessonId,
+    AchievementId, ContentVersion, EventId, ExplanationId, ItemRef, KcId, LearnerId, LessonId,
     MisconceptionId, PackageKey, SessionId, UserId,
 };
 use crate::unlock::{Milestone, UnlockKind, UnlockSource};
-use crate::value::Timestamp;
+use crate::value::{Timestamp, UnitInterval, ValueError};
 
 /// Schema version written into every new event.
 pub const CURRENT_SCHEMA_VERSION: u16 = 1;
@@ -93,6 +94,13 @@ pub enum EventPayload {
     CompanionSelected {
         companion: PackageKey,
     },
+    /// A planner decision; the learner-model fold skips it
+    /// (`docs/11-quality.md`, «Лог решений»).
+    PlanIssued(PlanIssuedEvent),
+    /// A mentor corrected a decision of the system (`docs/11-quality.md`, «К6»).
+    MentorOverride(MentorOverrideEvent),
+    /// Criterion scores of a written answer (stage 5).
+    WritingScored(WritingScoredEvent),
 }
 
 /// Uniqueness key of an event the server derives from the log: the database
@@ -121,6 +129,9 @@ impl EventPayload {
             Self::UnlockRevoked { .. } => "unlock_revoked",
             Self::ThemeSelected { .. } => "theme_selected",
             Self::CompanionSelected { .. } => "companion_selected",
+            Self::PlanIssued(_) => "plan_issued",
+            Self::MentorOverride(_) => "mentor_override",
+            Self::WritingScored(_) => "writing_scored",
         }
     }
 
@@ -237,6 +248,146 @@ pub struct ReclassifiedEvent {
     pub content_version: ContentVersion,
 }
 
+/// What a planner decision covers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename_all = "snake_case"))]
+#[serde(rename_all = "snake_case")]
+pub enum PlanScope {
+    /// The plan of a whole session.
+    Session,
+    /// The choice of the next item.
+    NextItem,
+}
+
+/// An action the planner considered.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum PlanAction {
+    Learn { kc: KcId },
+    Review { kc: KcId },
+    Item { item: ItemRef, slot: u16 },
+}
+
+/// One multiplier of a candidate's value, e.g. `("forgetting", 0.42)`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct PlanFactor {
+    pub name: String,
+    pub value: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct PlanCandidate {
+    pub action: PlanAction,
+    pub value_per_minute: f64,
+    /// The value broken down into its multipliers.
+    pub factors: Vec<PlanFactor>,
+}
+
+/// Every plan and every next-item choice, so that decisions can be checked
+/// and replayed (`docs/11-quality.md`, «Лог решений», «Микрорандомизация»).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct PlanIssuedEvent {
+    pub planner_version: String,
+    pub model_version: String,
+    pub scope: PlanScope,
+    /// Top candidates by value per minute.
+    pub candidates: Vec<PlanCandidate>,
+    /// Index of the chosen candidate in `candidates`.
+    pub chosen: u16,
+    /// Probability with which `chosen` was picked.
+    pub propensity: UnitInterval,
+    /// Seed of the core PRNG that made the choice.
+    pub seed: u64,
+}
+
+/// What a mentor changed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum OverrideKind {
+    /// Changed the plan, e.g. "no new topic today".
+    PlanChange,
+    /// Marked a topic as known: a low-weight observation that later answers check.
+    MarkKnown { kc: KcId },
+    /// Disputed the verdict of this answer event.
+    DisputeVerdict { event: EventId },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename_all = "snake_case"))]
+#[serde(rename_all = "snake_case")]
+pub enum OverrideReason {
+    KnowsElsewhere,
+    TooHard,
+    TooEasy,
+    WrongVerdict,
+    Other,
+}
+
+/// The share and reasons of overrides show where the system is wrong; an
+/// override is not ground truth either.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct MentorOverrideEvent {
+    pub mentor: UserId,
+    pub kind: OverrideKind,
+    pub reason: OverrideReason,
+    pub note: Option<String>,
+}
+
+/// An IELTS band in half-band steps: band × 2, `0..=18` (band 6.5 is 13).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(type = "number"))]
+#[serde(try_from = "u8", into = "u8")]
+pub struct HalfBands(u8);
+
+impl HalfBands {
+    pub fn new(v: u8) -> Option<Self> {
+        (v <= 18).then_some(Self(v))
+    }
+
+    pub fn get(self) -> u8 {
+        self.0
+    }
+}
+
+impl TryFrom<u8> for HalfBands {
+    type Error = ValueError;
+    fn try_from(v: u8) -> Result<Self, ValueError> {
+        Self::new(v).ok_or(ValueError::HalfBandsOutOfRange)
+    }
+}
+
+impl From<HalfBands> for u8 {
+    fn from(v: HalfBands) -> u8 {
+        v.0
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct CriterionScore {
+    pub criterion: String,
+    pub half_bands: HalfBands,
+}
+
+/// A person's scores for a written answer by IELTS criteria; their gap to
+/// the analyzer is its metric (`docs/11-quality.md`, «К6»).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct WritingScoredEvent {
+    pub item: ItemRef,
+    pub slot: u16,
+    pub scorer: UserId,
+    pub scores: Vec<CriterionScore>,
+    /// The scorer did not see the analyzer's scores.
+    pub blind: bool,
+}
+
 /// `type` tags of every [`EventPayload`] variant this core knows. An event
 /// with any other tag was written by a newer core and decodes as
 /// [`Decoded::Unknown`]. A unit test checks this list against the enum.
@@ -253,6 +404,9 @@ pub const EVENT_TYPES: &[&str] = &[
     "unlock_revoked",
     "theme_selected",
     "companion_selected",
+    "plan_issued",
+    "mentor_override",
+    "writing_scored",
 ];
 
 /// `kind` tags of every [`Response`] variant this core knows; checked like
