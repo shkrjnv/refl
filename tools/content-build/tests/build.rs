@@ -199,3 +199,18 @@ fn kcs_stay_within_their_subject() {
         out.report
     );
 }
+
+#[test]
+fn items_carry_only_the_fields_of_their_kind() {
+    let typed = run(&fixtures().join("kind-fields-typed"));
+    assert!(typed.report.diagnostics.is_empty(), "{}", typed.report);
+    let choice = run(&fixtures().join("kind-fields"));
+    let d = &choice.report.diagnostics;
+    assert_eq!(d.len(), 1, "{}", choice.report);
+    assert_eq!(d[0].code, Code::Nickel);
+    assert!(
+        d[0].message.contains("extra field `case_sensitive`"),
+        "{}",
+        d[0].message
+    );
+}

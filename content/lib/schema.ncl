@@ -66,26 +66,51 @@ let Lang = OneOf ["uz", "ru", "en"] in
     hint | Localized | optional,
     why | Localized,
   },
-  Item = {
+  # The fields every item has (docs/10, «Вид задания: трейт и данные»).
+  ItemHeader = {
     id | String,
     version | Number,
     subject | String,
     family | String,
-    type | OneOf ["choice", "find_error", "matching", "true_false_not_given", "gap_fill", "transformation", "sentence_assembly", "translation", "dictation", "own_sentence", "writing", "shadowing"],
+    type | String,
     instruction | String,
-    stimulus | { text | String, audio | String | optional, image | String | optional },
-    slots | Array Slot,
     difficulty | OneOf [1, 2, 3, 4, 5],
     expected_time | Number,
     topic | String | optional,
     status | OneOf ["draft", "review", "live", "retired"],
-    case_sensitive | Bool | optional,
-    contractions | OneOf ["strict", "equivalent"] | optional,
-    punctuation_sensitive | Bool | optional,
     source | String | optional,
     license | String | optional,
     breaks_calibration | Bool | optional,
   },
+  ItemBody = {
+    stimulus | { text | String, audio | String | optional, image | String | optional },
+    slots | Array Slot,
+  },
+  # Settings of the English input checker; only typed-input kinds have them.
+  EnglishCheck = {
+    case_sensitive | Bool | optional,
+    contractions | OneOf ["strict", "equivalent"] | optional,
+    punctuation_sensitive | Bool | optional,
+  },
+  english_input_kinds = ["gap_fill", "transformation", "sentence_assembly", "translation", "dictation"],
+  other_kinds = ["choice", "find_error", "matching", "true_false_not_given", "own_sentence", "writing", "shadowing"],
+  # An item accepts exactly the fields of its kind, chosen by `type`: a
+  # checker flag on a choice item is an error, not silently ignored.
+  Item =
+    std.contract.custom
+      (
+        fun label value =>
+          if !(std.is_record value) || !(std.record.has_field "type" value) then
+            'Error { message = "an item needs a `type`" }
+          else
+            let kind = value."type" in
+            if std.array.elem kind english_input_kinds then
+              'Ok (std.contract.apply (ItemHeader & ItemBody & EnglishCheck) label value)
+            else if std.array.elem kind other_kinds then
+              'Ok (std.contract.apply (ItemHeader & ItemBody) label value)
+            else
+              'Error { message = "unknown item type `%{std.to_string kind}`" }
+      ),
   # What every content file exports. Lessons are checked by content-build only.
   File = {
     subjects | Array Subject | optional,
