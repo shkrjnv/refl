@@ -16,8 +16,17 @@ fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
+/// Options for a fixture. The fixtures' reviewed records are written by hand
+/// without the hash of their text, so the hash check is off unless the
+/// fixture opts in with a `.check-hashes` file.
+fn options(dir: &Path) -> Options {
+    let mut opts = Options::new(dir);
+    opts.check_text_hashes = dir.join(".check-hashes").exists();
+    opts
+}
+
 fn run(dir: &Path) -> Output {
-    build(&Options::new(dir)).unwrap_or_else(|e| panic!("{}: {e}", dir.display()))
+    build(&options(dir)).unwrap_or_else(|e| panic!("{}: {e}", dir.display()))
 }
 
 fn fixtures() -> PathBuf {
@@ -38,7 +47,7 @@ fn each_check_catches_its_own_defect() {
         let dir = fixtures().join(code.as_str());
         // Only `lock-outdated` is about `--locked`; the other fixtures have
         // no lock or a matching one.
-        let mut opts = Options::new(&dir);
+        let mut opts = options(&dir);
         opts.locked = code == Code::LockOutdated;
         let out = build(&opts).unwrap_or_else(|e| panic!("{}: {e}", dir.display()));
         let codes: Vec<Code> = out.report.diagnostics.iter().map(|d| d.code).collect();
@@ -183,6 +192,28 @@ fn an_uncrossed_contrast_blocks_both_kcs() {
     }
 }
 
+/// The live conditions count tasks a learner can be given: ten live tasks of
+/// which one is unreviewed are nine.
+#[test]
+fn live_counts_only_reviewed_tasks() {
+    let out = run(&fixtures().join("unreviewed-task"));
+    assert!(out.report.diagnostics.is_empty(), "{}", out.report);
+    let missing = &out
+        .report
+        .draft
+        .iter()
+        .find(|d| d.kc == "en.k.a")
+        .unwrap()
+        .missing;
+    assert_eq!(
+        missing,
+        &["9 reviewed live task(s) of 10 live, needs 10".to_owned()]
+    );
+    // The same ten, all reviewed, make the KC live (the clean fixture does).
+    let clean = run(&fixtures().join("contrast-with-confusion"));
+    assert!(clean.report.live.contains(&"en.k.a".to_owned()));
+}
+
 #[test]
 fn an_unreviewed_title_keeps_a_kc_draft() {
     let out = run(&fixtures().join("title-unreviewed"));
@@ -202,7 +233,7 @@ fn an_unreviewed_title_keeps_a_kc_draft() {
 #[test]
 fn the_review_queue_lists_drafts_by_language_with_a_line() {
     let root = fixtures().join("eligibility");
-    let (out, content) = content_build::build_with_content(&Options::new(&root)).unwrap();
+    let (out, content) = content_build::build_with_content(&options(&root)).unwrap();
     assert!(out.bundle.is_some());
     let files = content_build::review::review_files(&root, &content);
     let sections: Vec<&str> = files
@@ -223,15 +254,23 @@ fn the_review_queue_lists_drafts_by_language_with_a_line() {
         .unwrap();
     let entry = ru
         .lines()
-        .find(|l| l.contains("task `it.unreviewed`"))
+        .find(|l| l.starts_with("it.unreviewed#why,hint — "))
         .unwrap_or_else(|| panic!("{ru}"));
-    let (place, what) = entry.split_once(" — ").unwrap();
+    // The key comes first; the place is a hint at the end.
+    let (key, rest) = entry.split_once(" — ").unwrap();
+    assert_eq!(key, "it.unreviewed#why,hint");
+    assert!(rest.starts_with("task v1: why and hint"), "{rest}");
+    let place = rest
+        .rsplit_once("(≈ ")
+        .unwrap()
+        .1
+        .strip_suffix(')')
+        .unwrap();
     let (path, line) = place.rsplit_once(':').unwrap();
     assert!(path.ends_with("content.ncl"), "{path}");
     assert!(line.parse::<usize>().unwrap() >= 1);
-    assert!(what.starts_with("task `it.unreviewed` v1: why and hint"));
     // A reviewed task is not in the queue.
-    assert!(!ru.contains("it.gap`"), "{ru}");
+    assert!(!ru.contains("it.gap#"), "{ru}");
     // The tasks file has a block per language with the review status.
     assert!(files.tasks.contains("## it.unreviewed v1 · gapfill"));
     assert!(files.tasks.contains("### ru [draft]"));
@@ -243,24 +282,31 @@ fn the_review_queue_lists_drafts_by_language_with_a_line() {
 #[test]
 fn the_queue_finds_the_nearest_line_of_templated_text() {
     let root = repo().join("content");
-    let (_, content) = content_build::build_with_content(&Options::new(&root)).unwrap();
+    let (_, content) = content_build::build_with_content(&options(&root)).unwrap();
     let files = content_build::review::review_files(&root, &content);
+    // The Articles tasks are one shared review: one hash per language.
+    for lang in ["uz", "ru", "en"] {
+        let line = files
+            .hashes
+            .lines()
+            .find(|l| l.starts_with(&format!("group:articles\t{lang}\t")))
+            .unwrap_or_else(|| panic!("{}", files.hashes));
+        assert_eq!(line.rsplit('\t').next().unwrap().len(), 64);
+    }
     // `*apple* здесь упоминается впервые…` is built from a template in items.ncl.
     let line = files
         .queue
         .lines()
-        .find(|l| l.contains("task `art.fm.choice.dog`") && l.contains("items.ncl"))
+        .find(|l| l.starts_with("art.fm.choice.dog#why,hint — ") && l.contains("items.ncl"))
         .unwrap();
     let source = std::fs::read_to_string(root.join("articles/items.ncl")).unwrap();
-    let n: usize = line
-        .split(" — ")
-        .next()
+    let place = line
+        .rsplit_once("(≈ ")
         .unwrap()
-        .rsplit(':')
-        .next()
-        .unwrap()
-        .parse()
+        .1
+        .strip_suffix(')')
         .unwrap();
+    let n: usize = place.rsplit(':').next().unwrap().parse().unwrap();
     assert!(
         source.lines().nth(n - 1).unwrap().contains("впервые")
             || source.lines().nth(n - 1).unwrap().contains("birinchi")
@@ -301,8 +347,16 @@ fn example_content_builds_with_computed_status() {
             .find(|d| d.kc == kc)
             .unwrap()
             .missing;
+        // Everything missing is about review. The bank counts only reviewed
+        // live tasks, so with none reviewed it is reported as such.
         assert!(
-            missing.iter().all(|m| m.contains("not reviewed")),
+            missing.iter().all(|m| m.contains("reviewed")),
+            "{kc}: {missing:?}"
+        );
+        assert!(
+            missing
+                .iter()
+                .any(|m| m.starts_with("0 reviewed live task(s) of ") && m.ends_with(", needs 10")),
             "{kc}: {missing:?}"
         );
     }
@@ -415,7 +469,7 @@ fn lock_is_append_only_and_tamper_evident() {
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("lock-append-only");
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("item-versions.lock");
-    let mut opts = Options::new(fixtures().join("clean"));
+    let mut opts = options(&fixtures().join("clean"));
     opts.lock = path.clone();
     std::fs::write(&path, &text).unwrap();
     let again = build(&opts).expect("build");
@@ -505,4 +559,125 @@ fn items_carry_only_the_fields_of_their_kind() {
         "{}",
         d[0].message
     );
+}
+
+/// A review is bound to its text (docs/02, «Вычитка и показ»): editing a
+/// reviewed text is an error until the new hash is set.
+mod review_hash {
+    use std::path::PathBuf;
+
+    use content_build::report::Code;
+    use content_build::{Options, build, build_with_content};
+
+    use super::fixtures;
+
+    /// A tiny content root whose only reviewable record is one en
+    /// explanation, with the given body and review.
+    struct Root(PathBuf);
+
+    impl Root {
+        fn new(name: &str) -> Self {
+            let dir = std::env::temp_dir().join(format!("refl-{name}-{}", std::process::id()));
+            std::fs::create_dir_all(&dir).unwrap();
+            Self(dir)
+        }
+
+        fn write(&self, body: &str, review: &str) {
+            let base = fixtures().join("lib/base.ncl");
+            let content = format!(
+                r#"let b = import "{}" in
+let undone = fun r => std.record.update "review" {{}} r in
+{{
+  subjects = b.subjects,
+  kcs = std.array.map undone b.kcs,
+  edges = b.edges,
+  misconceptions = b.misconceptions,
+  instructions = std.array.map undone b.instructions,
+  explanations = [
+    {{
+      id = "e.k.a.en",
+      target = {{ kind = "kc", id = "en.k.a" }},
+      depth = "short",
+      lang = "en",
+      body = "{body}",
+      review = {review},
+    }},
+  ],
+}}
+"#,
+                base.display()
+            );
+            std::fs::write(self.0.join("content.ncl"), content).unwrap();
+        }
+
+        fn codes(&self) -> Vec<(Code, String)> {
+            let out = build(&Options::new(&self.0)).unwrap();
+            out.report
+                .diagnostics
+                .iter()
+                .map(|d| (d.code, d.message.clone()))
+                .collect()
+        }
+
+        /// What the explanation's hash is now (the check is off to read it).
+        fn hash(&self) -> String {
+            let mut opts = Options::new(&self.0);
+            opts.check_text_hashes = false;
+            let (_, content) = build_with_content(&opts).unwrap();
+            content_build::review::covered(&content)
+                .into_iter()
+                .find(|c| c.key == "explanation:e.k.a.en")
+                .unwrap()
+                .hash
+        }
+    }
+
+    impl Drop for Root {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn reviewed(hash: &str) -> String {
+        format!(r#"{{ status = "reviewed", by = "Hara", hash = "{hash}" }}"#)
+    }
+
+    #[test]
+    fn editing_a_reviewed_text_is_an_error_and_marking_again_passes() {
+        let root = Root::new("hash");
+        // Reviewed by a person but with no hash: the text is not pinned.
+        root.write("A cat.", r#"{ status = "reviewed", by = "Hara" }"#);
+        let codes = root.codes();
+        assert_eq!(codes.len(), 1, "{codes:?}");
+        assert_eq!(codes[0].0, Code::ReviewedTextChanged);
+        assert!(codes[0].1.contains("without a `hash`"), "{}", codes[0].1);
+
+        // Marked: the hash of the text as it stands.
+        let marked = root.hash();
+        root.write("A cat.", &reviewed(&marked));
+        assert_eq!(root.codes(), []);
+
+        // Edited after the review: an error naming the record and language.
+        root.write("A cat!", &reviewed(&marked));
+        let codes = root.codes();
+        assert_eq!(codes.len(), 1, "{codes:?}");
+        assert_eq!(codes[0].0, Code::ReviewedTextChanged);
+        assert!(codes[0].1.contains("language en"), "{}", codes[0].1);
+        assert!(codes[0].1.contains(&marked), "{}", codes[0].1);
+
+        // Re-read and marked again with the new hash: passes.
+        let again = root.hash();
+        assert_ne!(again, marked);
+        root.write("A cat!", &reviewed(&again));
+        assert_eq!(root.codes(), []);
+    }
+
+    #[test]
+    fn a_draft_needs_no_hash_and_may_change_freely() {
+        let root = Root::new("draft");
+        root.write("One.", r#"{ status = "draft" }"#);
+        assert_eq!(root.codes(), []);
+        root.write("Two.", r#"{ status = "draft" }"#);
+        assert_eq!(root.codes(), []);
+    }
 }

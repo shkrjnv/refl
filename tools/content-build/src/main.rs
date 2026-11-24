@@ -110,7 +110,8 @@ fn report_command(args: impl Iterator<Item = std::ffi::OsString>) -> ExitCode {
         let files = content_build::review::review_files(&content, &loaded);
         let written = std::fs::create_dir_all(&out)
             .and_then(|()| std::fs::write(out.join("queue.txt"), &files.queue))
-            .and_then(|()| std::fs::write(out.join("tasks.md"), &files.tasks));
+            .and_then(|()| std::fs::write(out.join("tasks.md"), &files.tasks))
+            .and_then(|()| std::fs::write(out.join("hashes.txt"), &files.hashes));
         if let Err(e) = written {
             eprintln!("content-build: cannot write {}: {e}", out.display());
             return ExitCode::from(2);
@@ -120,6 +121,7 @@ fn report_command(args: impl Iterator<Item = std::ffi::OsString>) -> ExitCode {
             out.join("queue.txt").display()
         );
         println!("tasks written to {}", out.join("tasks.md").display());
+        println!("hashes written to {}", out.join("hashes.txt").display());
     }
     ExitCode::SUCCESS
 }

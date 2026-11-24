@@ -12,11 +12,11 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
-use refl_core::content::LangReviews;
+use refl_core::content::{LangReviews, Review, text_hash};
 use refl_core::item::Item;
 use refl_core::value::{Lang, Localized};
 
-use crate::load::Content;
+use crate::load::{Content, Sourced};
 
 const LANGS: [Lang; 3] = [Lang::Uz, Lang::Ru, Lang::En];
 
@@ -34,6 +34,8 @@ pub struct ReviewFiles {
     pub queue: String,
     /// `tasks.md`.
     pub tasks: String,
+    /// `hashes.txt`.
+    pub hashes: String,
 }
 
 /// The sources of the content files, read once.
@@ -95,16 +97,16 @@ fn quote(text: &str) -> String {
     format!("“{short}”")
 }
 
-fn push_entry(
-    queue: &mut BTreeMap<Lang, Vec<(String, usize, String)>>,
-    lang: Lang,
-    place: (String, usize),
-    what: String,
-) {
+/// One line of the queue. The key — record id and field — is what names the
+/// text; the place is only a hint, because matching a text to a line can hit
+/// a duplicate.
+type Queue = BTreeMap<Lang, Vec<(String, String, usize, String)>>;
+
+fn push_entry(queue: &mut Queue, lang: Lang, key: String, place: (String, usize), what: String) {
     queue
         .entry(lang)
         .or_default()
-        .push((place.0, place.1, what));
+        .push((key, place.0, place.1, what));
 }
 
 /// Whether the item has any `why` or `hint` text in `lang`.
@@ -126,7 +128,7 @@ fn reviewed(reviews: &LangReviews, lang: Lang) -> bool {
 /// Never: writing to a `String` does not fail.
 pub fn review_files(root: &Path, content: &Content) -> ReviewFiles {
     let mut sources = Sources::new(root);
-    let mut queue: BTreeMap<Lang, Vec<(String, usize, String)>> = BTreeMap::new();
+    let mut queue = Queue::new();
 
     for e in &content.explanations {
         let x = &e.value;
@@ -135,12 +137,13 @@ pub fn review_files(root: &Path, content: &Content) -> ReviewFiles {
         }
         let place = sources.place(&e.file, &[&x.body]);
         let depth = format!("{:?}", x.depth).to_lowercase();
-        let what = format!("explanation `{}` ({depth}): {}", x.id, quote(&x.body));
-        push_entry(&mut queue, x.lang, place, what);
+        let what = format!("explanation ({depth}): {}", quote(&x.body));
+        push_entry(&mut queue, x.lang, format!("{}#body", x.id), place, what);
         if let Some(contrast) = &x.l1_contrast {
             let place = sources.place(&e.file, &[contrast]);
-            let what = format!("explanation `{}`: L1 contrast {}", x.id, quote(contrast));
-            push_entry(&mut queue, x.lang, place, what);
+            let what = format!("explanation: L1 contrast {}", quote(contrast));
+            let key = format!("{}#l1_contrast", x.id);
+            push_entry(&mut queue, x.lang, key, place, what);
         }
     }
     for e in &content.instructions {
@@ -152,8 +155,9 @@ pub fn review_files(root: &Path, content: &Content) -> ReviewFiles {
                 .filter(|_| !reviewed(&e.value.review, lang))
             {
                 let place = sources.place(&e.file, &[text]);
-                let what = format!("instruction `{}`: {}", e.value.id, quote(text));
-                push_entry(&mut queue, lang, place, what);
+                let what = format!("instruction: {}", quote(text));
+                let key = format!("{}#text", e.value.id);
+                push_entry(&mut queue, lang, key, place, what);
             }
         }
     }
@@ -166,8 +170,9 @@ pub fn review_files(root: &Path, content: &Content) -> ReviewFiles {
                 .filter(|_| !reviewed(&e.value.review, lang))
             {
                 let place = sources.place(&e.file, &[text]);
-                let what = format!("KC `{}`: title {}", e.value.id, quote(text));
-                push_entry(&mut queue, lang, place, what);
+                let what = format!("KC title {}", quote(text));
+                let key = format!("{}#title", e.value.id);
+                push_entry(&mut queue, lang, key, place, what);
             }
         }
     }
@@ -180,8 +185,9 @@ pub fn review_files(root: &Path, content: &Content) -> ReviewFiles {
                 .filter(|_| !reviewed(&e.value.review, lang))
             {
                 let place = sources.place(&e.file, &[text]);
-                let what = format!("misconception `{}`: title {}", e.value.id, quote(text));
-                push_entry(&mut queue, lang, place, what);
+                let what = format!("misconception title {}", quote(text));
+                let key = format!("{}#title", e.value.id);
+                push_entry(&mut queue, lang, key, place, what);
             }
         }
     }
@@ -199,13 +205,9 @@ pub fn review_files(root: &Path, content: &Content) -> ReviewFiles {
                 .and_then(|h| h.get(lang))
                 .unwrap_or_default();
             let place = sources.place(&e.file, &[why, hint]);
-            let what = format!(
-                "task `{}` v{}: why and hint {}",
-                item.id,
-                item.version.0,
-                quote(why)
-            );
-            push_entry(&mut queue, lang, place, what);
+            let what = format!("task v{}: why and hint {}", item.version.0, quote(why));
+            let key = format!("{}#why,hint", item.id);
+            push_entry(&mut queue, lang, key, place, what);
         }
     }
 
@@ -215,15 +217,137 @@ pub fn review_files(root: &Path, content: &Content) -> ReviewFiles {
         let mut entries = queue.remove(&lang).unwrap_or_default();
         entries.sort();
         entries.dedup();
-        for (file, line, what) in &entries {
-            let _ = writeln!(out, "{file}:{line} — {what}");
+        for (key, file, line, what) in &entries {
+            let _ = writeln!(out, "{key} — {what} (≈ {file}:{line})");
         }
         let _ = writeln!(out, "({} to review)\n", entries.len());
     }
     ReviewFiles {
         queue: out,
         tasks: tasks_file(content),
+        hashes: hashes_file(content),
     }
+}
+
+/// A text a review record covers, with the hash of exactly that text and the
+/// review records that must carry the hash.
+#[derive(Debug)]
+pub struct Covered<'a> {
+    /// `explanation:<id>`, `instruction:<id>`, `kc:<id>`, `misconception:<id>`,
+    /// `item:<id>`, or `group:<name>` for a shared task review.
+    pub key: String,
+    pub lang: Lang,
+    pub file: PathBuf,
+    pub hash: String,
+    /// Every record whose `reviewed` status claims this text.
+    pub reviews: Vec<&'a Review>,
+}
+
+/// Every review-covered text of the content, hashed in the fixed order of
+/// `docs/02-layer1-content.md`, «Вычитка и показ». Records without text in
+/// a language are left out.
+pub fn covered(content: &Content) -> Vec<Covered<'_>> {
+    fn push<'a>(
+        out: &mut Vec<Covered<'a>>,
+        key: String,
+        lang: Lang,
+        file: &Path,
+        parts: &[&str],
+        reviews: Vec<&'a Review>,
+    ) {
+        if parts.iter().all(|p| p.is_empty()) {
+            return;
+        }
+        out.push(Covered {
+            key,
+            lang,
+            file: file.to_path_buf(),
+            hash: text_hash(parts),
+            reviews,
+        });
+    }
+    let mut out = Vec::new();
+    for e in &content.explanations {
+        let x = &e.value;
+        push(
+            &mut out,
+            format!("explanation:{}", x.id),
+            x.lang,
+            &e.file,
+            &x.covered_text(),
+            vec![&x.review],
+        );
+    }
+    for lang in LANGS {
+        for e in &content.instructions {
+            let reviews = e.value.review.get(lang).into_iter().collect();
+            push(
+                &mut out,
+                format!("instruction:{}", e.value.id),
+                lang,
+                &e.file,
+                &e.value.covered_text(lang),
+                reviews,
+            );
+        }
+        for e in &content.kcs {
+            let reviews = e.value.review.get(lang).into_iter().collect();
+            push(
+                &mut out,
+                format!("kc:{}", e.value.id),
+                lang,
+                &e.file,
+                &e.value.covered_text(lang),
+                reviews,
+            );
+        }
+        for e in &content.misconceptions {
+            let reviews = e.value.review.get(lang).into_iter().collect();
+            push(
+                &mut out,
+                format!("misconception:{}", e.value.id),
+                lang,
+                &e.file,
+                &e.value.covered_text(lang),
+                reviews,
+            );
+        }
+        // Items: alone, or together with the others of their group, in id order.
+        let mut groups: BTreeMap<String, Vec<&Sourced<Item>>> = BTreeMap::new();
+        for e in &content.items {
+            let key = e
+                .value
+                .review_group
+                .as_ref()
+                .map_or_else(|| format!("item:{}", e.value.id), |g| format!("group:{g}"));
+            groups.entry(key).or_default().push(e);
+        }
+        for (key, mut members) in groups {
+            members.sort_by(|a, b| a.value.id.cmp(&b.value.id));
+            let parts: Vec<&str> = members
+                .iter()
+                .flat_map(|m| m.value.covered_text(lang))
+                .collect();
+            let reviews = members
+                .iter()
+                .filter_map(|m| m.value.review.get(lang))
+                .collect();
+            push(&mut out, key, lang, &members[0].file, &parts, reviews);
+        }
+    }
+    out
+}
+
+/// `hashes.txt`: the hash to set in a record when a person marks its text
+/// reviewed — `key`, language, hash.
+fn hashes_file(content: &Content) -> String {
+    let mut out = String::from(
+        "# record\tlang\thash: set `status = \"reviewed\"`, `by` and this `hash` in the record's review\n",
+    );
+    for c in covered(content) {
+        let _ = writeln!(out, "{}\t{}\t{}", c.key, name(c.lang), c.hash);
+    }
+    out
 }
 
 fn localized(text: &Localized, lang: Lang) -> &str {

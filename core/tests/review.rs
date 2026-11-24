@@ -12,6 +12,7 @@ fn review(status: ReviewStatus, by: Option<&str>) -> Review {
     Review {
         status,
         by: by.map(Into::into),
+        hash: None,
     }
 }
 
@@ -99,6 +100,20 @@ fn an_instruction_is_shown_per_language() {
         ..instruction
     };
     assert_eq!(unreviewed.text_for(Lang::Ru), None);
+}
+
+#[test]
+fn the_text_hash_pins_text_order_and_split() {
+    use refl_core::content::text_hash;
+    let h = text_hash(&["a cat", "the cat"]);
+    assert_eq!(h.len(), 64);
+    assert_eq!(h, text_hash(&["a cat", "the cat"]));
+    // Another text, another order and another split are all other hashes.
+    assert_ne!(h, text_hash(&["a cat", "the cats"]));
+    assert_ne!(h, text_hash(&["the cat", "a cat"]));
+    assert_ne!(text_hash(&["ab", "c"]), text_hash(&["a", "bc"]));
+    // An absent optional piece is an empty one, still a piece.
+    assert_ne!(text_hash(&["a", ""]), text_hash(&["a"]));
 }
 
 #[test]

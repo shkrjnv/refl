@@ -245,6 +245,7 @@ fn projection_answers_like_the_item() {
             license: None,
             breaks_calibration: false,
             review: refl_core::content::LangReviews::default(),
+            review_group: None,
             body: body.clone(),
         };
         let p = ItemProjection::of(&item);

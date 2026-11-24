@@ -145,7 +145,7 @@ pub fn compute(c: &Content, report: &mut Report) -> BTreeMap<KcId, KcStatus> {
                 "short explanation",
             ));
         }
-        let items: Vec<_> = c
+        let live: Vec<_> = c
             .items
             .iter()
             .map(|i| &i.value)
@@ -158,8 +158,11 @@ pub fn compute(c: &Content, report: &mut Report) -> BTreeMap<KcId, KcStatus> {
                 })
             })
             .collect();
+        // The conditions count what a learner can be given: live tasks with
+        // `why` and `hint` reviewed in ru and en (docs/02, «Вычитка и показ»).
+        let items: Vec<_> = live.iter().copied().filter(|i| i.is_reviewed()).collect();
         missing.extend(title_gaps(c, kc));
-        missing.extend(review_gaps(c, kc, &items));
+        missing.extend(review_gaps(c, kc, &live));
         for &(from, to) in &uncrossed {
             let other = if from == kc {
                 to
@@ -177,23 +180,27 @@ pub fn compute(c: &Content, report: &mut Report) -> BTreeMap<KcId, KcStatus> {
         let levels: BTreeSet<u8> = items.iter().map(|i| i.difficulty.get()).collect();
         let adjacent = levels.iter().any(|d| levels.contains(&(d + 1)));
         if items.len() < MIN_ITEMS {
-            missing.push(format!("{} live item(s), needs {MIN_ITEMS}", items.len()));
+            missing.push(format!(
+                "{} reviewed live task(s) of {} live, needs {MIN_ITEMS}",
+                items.len(),
+                live.len()
+            ));
         }
         if families.len() < MIN_FAMILIES {
             missing.push(format!(
-                "{} family(ies), needs {MIN_FAMILIES}",
+                "{} family(ies) among reviewed tasks, needs {MIN_FAMILIES}",
                 families.len()
             ));
         }
         if production < MIN_PRODUCTION {
             missing.push(format!(
-                "{production} production item(s), needs {MIN_PRODUCTION}"
+                "{production} reviewed production task(s), needs {MIN_PRODUCTION}"
             ));
         }
         if !adjacent {
             let levels: Vec<String> = levels.iter().map(u8::to_string).collect();
             missing.push(format!(
-                "difficulty levels [{}], needs two adjacent",
+                "difficulty levels [{}] among reviewed tasks, needs two adjacent",
                 levels.join(", ")
             ));
         }

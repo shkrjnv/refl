@@ -564,6 +564,7 @@ fn item() -> impl Strategy<Value = Item> {
                 license,
                 breaks_calibration,
                 review: LangReviews::default(),
+                review_group: None,
                 body,
             },
         )

@@ -184,6 +184,7 @@ pub fn synthetic_bundle(spec: BundleSpec) -> Bundle {
             review: Review {
                 status: ReviewStatus::Draft,
                 by: None,
+                hash: None,
             },
         });
         for j in 0..spec.items_per_kc {
@@ -268,6 +269,7 @@ pub fn synthetic_bundle(spec: BundleSpec) -> Bundle {
                 license: None,
                 breaks_calibration: false,
                 review: LangReviews::default(),
+                review_group: None,
                 body,
             };
             let tokens = TokenTable::default();

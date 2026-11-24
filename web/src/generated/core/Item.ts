@@ -44,4 +44,9 @@ breaks_calibration: boolean,
  * record means draft. Not part of the model projection: it opens the
  * item for sessions, it does not change what the fold reads.
  */
-review: LangReviews, } & ({ "type": "choice" } & ChoiceBody | { "type": "find_error" } & FindErrorBody | { "type": "matching" } & MatchingBody | { "type": "true_false_not_given" } & TrueFalseNotGivenBody | { "type": "gap_fill" } & GapFillBody | { "type": "transformation" } & TransformationBody | { "type": "sentence_assembly" } & SentenceAssemblyBody | { "type": "translation" } & TranslationBody | { "type": "dictation" } & DictationBody | { "type": "own_sentence" } & OwnSentenceBody | { "type": "writing" } & WritingBody | { "type": "shadowing" } & ShadowingBody);
+review: LangReviews, 
+/**
+ * Items with the same group are reviewed together: one hash covers all
+ * their texts (`docs/02-layer1-content.md`, «Вычитка и показ»).
+ */
+review_group?: string, } & ({ "type": "choice" } & ChoiceBody | { "type": "find_error" } & FindErrorBody | { "type": "matching" } & MatchingBody | { "type": "true_false_not_given" } & TrueFalseNotGivenBody | { "type": "gap_fill" } & GapFillBody | { "type": "transformation" } & TransformationBody | { "type": "sentence_assembly" } & SentenceAssemblyBody | { "type": "translation" } & TranslationBody | { "type": "dictation" } & DictationBody | { "type": "own_sentence" } & OwnSentenceBody | { "type": "writing" } & WritingBody | { "type": "shadowing" } & ShadowingBody);

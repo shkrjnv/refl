@@ -435,12 +435,32 @@ pub struct Item {
     /// item for sessions, it does not change what the fold reads.
     #[serde(default)]
     pub review: LangReviews,
+    /// Items with the same group are reviewed together: one hash covers all
+    /// their texts (`docs/02-layer1-content.md`, «Вычитка и показ»).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub review_group: Option<String>,
     #[serde(flatten)]
     #[cfg_attr(feature = "ts", ts(flatten))]
     pub body: ItemBody,
 }
 
 impl Item {
+    /// What the review of `lang` covers: the `why` and `hint` of every slot,
+    /// in slot order (an absent hint is an empty piece).
+    pub fn covered_text(&self, lang: Lang) -> Vec<&str> {
+        self.body
+            .slots()
+            .iter()
+            .flat_map(|s| {
+                [
+                    s.why.get(lang).unwrap_or(""),
+                    s.hint.as_ref().and_then(|h| h.get(lang)).unwrap_or(""),
+                ]
+            })
+            .collect()
+    }
+
     /// Whether the `why` and `hint` are reviewed in ru and en: the item may
     /// go into a session (`docs/02-layer1-content.md`, «Вычитка и показ»).
     pub fn is_reviewed(&self) -> bool {

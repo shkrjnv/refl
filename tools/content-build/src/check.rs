@@ -373,6 +373,37 @@ pub fn instruction_text(c: &Content, diags: &mut Vec<Diagnostic>) {
     }
 }
 
+/// A review is bound to the text it covers: a `reviewed` record must carry
+/// the hash of exactly that text, else the text changed after the review
+/// (docs/02, «Вычитка и показ»). One error per record and language.
+pub fn reviewed_texts(c: &Content, diags: &mut Vec<Diagnostic>) {
+    for cov in crate::review::covered(c) {
+        let wrong = cov
+            .reviews
+            .iter()
+            .filter(|r| r.status == ReviewStatus::Reviewed)
+            .find(|r| r.hash.as_deref() != Some(cov.hash.as_str()));
+        let Some(r) = wrong else { continue };
+        let lang = format!("{:?}", cov.lang).to_lowercase();
+        let message = match &r.hash {
+            None => format!(
+                "language {lang} is `reviewed` without a `hash`; the text now hashes to {}",
+                cov.hash
+            ),
+            Some(old) => format!(
+                "language {lang}: the text changed since it was reviewed (recorded hash {old}, now {})",
+                cov.hash
+            ),
+        };
+        diags.push(diag(
+            Code::ReviewedTextChanged,
+            &cov.file,
+            format!("review of `{}`", cov.key),
+            message,
+        ));
+    }
+}
+
 /// `reviewed` comes with the name of the person who reviewed
 /// (docs/02, «Вычитка и показ»).
 pub fn reviewers(c: &Content, diags: &mut Vec<Diagnostic>) {

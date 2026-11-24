@@ -62,11 +62,14 @@ pub enum Code {
     /// `review = reviewed` without `by`: review is a person, so the status
     /// comes with a name (docs/02, «Вычитка и показ»).
     ReviewedWithoutReviewer,
+    /// A `reviewed` record without a hash, or whose hash is not that of the
+    /// text it covers: the text changed after the review.
+    ReviewedTextChanged,
 }
 
 impl Code {
     /// Every check; tests require a negative fixture named after each one.
-    pub const ALL: [Self; 30] = [
+    pub const ALL: [Self; 31] = [
         Self::Nickel,
         Self::Schema,
         Self::DuplicateId,
@@ -97,6 +100,7 @@ impl Code {
         Self::LockCorrupt,
         Self::LockOutdated,
         Self::ReviewedWithoutReviewer,
+        Self::ReviewedTextChanged,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -131,6 +135,7 @@ impl Code {
             Self::LockCorrupt => "lock-corrupt",
             Self::LockOutdated => "lock-outdated",
             Self::ReviewedWithoutReviewer => "reviewed-without-reviewer",
+            Self::ReviewedTextChanged => "reviewed-text-changed",
         }
     }
 }

@@ -5,7 +5,9 @@
 # Review of the `why` and `hint` of every task of the unit, in one place:
 # empty, so every language is draft and no task goes into a session
 # (docs/02, «Вычитка и показ»). After a person has read a language, name them:
-#   { ru = { status = "reviewed", by = "<name>" }, en = { ... } }
+#   { ru = { status = "reviewed", by = "<name>", hash = "<from hashes.txt>" }, en = { ... } }
+# The hash is of all tasks' why and hint in that language (key `group:articles`
+# in `hashes.txt`); editing any of them is the build error `reviewed-text-changed`.
 let task_review = {} in
 {
   kc = {
@@ -50,6 +52,8 @@ let task_review = {} in
       expected_time = r.expected_time,
       status = "live",
       review = task_review,
+      # One review of all tasks' why and hint per language: one hash.
+      review_group = "articles",
       stimulus = { text = r.stimulus },
       slots = [r.slot],
     },

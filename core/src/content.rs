@@ -132,6 +132,33 @@ pub struct Review {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "ts", ts(optional))]
     pub by: Option<String>,
+    /// SHA-256 of the exact text this review covers ([`text_hash`]); a
+    /// `reviewed` record without it, or with another, is a build error
+    /// (`docs/02-layer1-content.md`, «Вычитка и показ»).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub hash: Option<String>,
+}
+
+/// The hash a review stores: hex SHA-256 over the covered text pieces in
+/// their fixed order, each as its byte length, `:`, the text and a newline,
+/// so a different split of the same characters is a different text.
+///
+/// # Panics
+/// Never.
+pub fn text_hash(parts: &[&str]) -> String {
+    use core::fmt::Write as _;
+    use sha2::{Digest, Sha256};
+    let mut h = Sha256::new();
+    for p in parts {
+        h.update(alloc::format!("{}:", p.len()).as_bytes());
+        h.update(p.as_bytes());
+        h.update(b"\n");
+    }
+    h.finalize().iter().fold(String::new(), |mut s, b| {
+        let _ = write!(s, "{b:02x}");
+        s
+    })
 }
 
 impl Review {
@@ -265,6 +292,11 @@ impl Instruction {
     pub fn text_for(&self, interface: Lang) -> Option<(Lang, &str)> {
         localized_for(&self.text, &self.review, interface)
     }
+
+    /// What the review of `lang` covers: the instruction text.
+    pub fn covered_text(&self, lang: Lang) -> Vec<&str> {
+        alloc::vec![self.text.get(lang).unwrap_or("")]
+    }
 }
 
 impl Kc {
@@ -272,11 +304,34 @@ impl Kc {
     pub fn title_for(&self, interface: Lang) -> Option<(Lang, &str)> {
         localized_for(&self.title, &self.review, interface)
     }
+
+    /// What the review of `lang` covers: the title.
+    pub fn covered_text(&self, lang: Lang) -> Vec<&str> {
+        alloc::vec![self.title.get(lang).unwrap_or("")]
+    }
 }
 
 impl Misconception {
     /// The title a learner sees; see [`localized_for`].
     pub fn title_for(&self, interface: Lang) -> Option<(Lang, &str)> {
         localized_for(&self.title, &self.review, interface)
+    }
+
+    /// What the review of `lang` covers: the title.
+    pub fn covered_text(&self, lang: Lang) -> Vec<&str> {
+        alloc::vec![self.title.get(lang).unwrap_or("")]
+    }
+}
+
+impl Explanation {
+    /// What the review covers: the body, the native-language contrast and
+    /// the example sentences, in this order.
+    pub fn covered_text(&self) -> Vec<&str> {
+        let mut parts = alloc::vec![
+            self.body.as_str(),
+            self.l1_contrast.as_deref().unwrap_or("")
+        ];
+        parts.extend(self.examples.iter().map(|e| e.text.as_str()));
+        parts
     }
 }

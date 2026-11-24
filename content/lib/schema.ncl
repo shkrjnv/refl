@@ -7,7 +7,10 @@ let Localized = { uz | String | optional, ru | String | optional, en | String | 
 let Lang = OneOf ["uz", "ru", "en"] in
 # Review per language; a language without a record is draft (docs/02,
 # «Вычитка и показ»). `reviewed` needs `by`: the name of the reviewer.
-let ReviewRecord = { status | OneOf ["draft", "reviewed"], by | String | optional } in
+# `hash` is the SHA-256 of the exact text the review covers; `reviewed` needs
+# it, and a text edited after the review is the error `reviewed-text-changed`.
+# `hashes.txt` from `report --review` has the current one.
+let ReviewRecord = { status | OneOf ["draft", "reviewed"], by | String | optional, hash | String | optional } in
 let LangReviews = { uz | ReviewRecord | optional, ru | ReviewRecord | optional, en | ReviewRecord | optional } in
 
 {
@@ -65,7 +68,7 @@ let LangReviews = { uz | ReviewRecord | optional, ru | ReviewRecord | optional, 
     body | String,
     l1_contrast | String | optional,
     examples | Array Example | optional,
-    review | { status | OneOf ["draft", "reviewed"], by | String | optional },
+    review | ReviewRecord,
   },
   Slot = {
     kcs | Array { kc | String, role | OneOf ["primary", "secondary"] },
@@ -93,6 +96,8 @@ let LangReviews = { uz | ReviewRecord | optional, ru | ReviewRecord | optional, 
     breaks_calibration | Bool | optional,
     # Review of the `why` and `hint` texts of all slots, per language.
     review | LangReviews | optional,
+    # Items with the same group are reviewed together: one hash for all.
+    review_group | String | optional,
   },
   ItemBody = {
     stimulus | { text | String, audio | String | optional, image | String | optional },
