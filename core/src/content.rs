@@ -128,6 +128,71 @@ pub struct Review {
     pub by: Option<String>,
 }
 
+impl Review {
+    /// Reviewed by a named person. `reviewed` without `by` is a build error,
+    /// and this check also keeps such a record away from learners.
+    pub fn is_shown(&self) -> bool {
+        self.status == ReviewStatus::Reviewed && self.by.is_some()
+    }
+}
+
+/// Review of an instruction per language; a language without a record is draft
+/// (`docs/02-layer1-content.md`, «Вычитка и показ»).
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct LangReviews {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub uz: Option<Review>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub ru: Option<Review>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub en: Option<Review>,
+}
+
+impl LangReviews {
+    pub fn get(&self, lang: Lang) -> Option<&Review> {
+        match lang {
+            Lang::Uz => self.uz.as_ref(),
+            Lang::Ru => self.ru.as_ref(),
+            Lang::En => self.en.as_ref(),
+        }
+    }
+
+    /// The text in `lang` may be shown to a learner.
+    pub fn is_shown(&self, lang: Lang) -> bool {
+        self.get(lang).is_some_and(Review::is_shown)
+    }
+}
+
+/// The languages tried for a learner, in order: the interface language, then
+/// ru, then en (`docs/02-layer1-content.md`, «Запасной язык»).
+pub fn language_chain(interface: Lang) -> &'static [Lang] {
+    match interface {
+        Lang::Uz => &[Lang::Uz, Lang::Ru, Lang::En],
+        Lang::Ru => &[Lang::Ru, Lang::En],
+        Lang::En => &[Lang::En, Lang::Ru],
+    }
+}
+
+/// The explanation a learner sees: the first language of the chain that has a
+/// reviewed record for this target and depth. Draft records are skipped as
+/// if absent, so a draft is never shown.
+pub fn explanation_for<'a>(
+    explanations: &'a [Explanation],
+    target: &ExplanationTarget,
+    depth: ExplanationDepth,
+    interface: Lang,
+) -> Option<&'a Explanation> {
+    language_chain(interface).iter().find_map(|&lang| {
+        explanations.iter().find(|e| {
+            &e.target == target && e.depth == depth && e.lang == lang && e.review.is_shown()
+        })
+    })
+}
+
 /// Path of a generated audio file, relative to the audio root.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
@@ -171,4 +236,18 @@ pub struct Explanation {
 pub struct Instruction {
     pub id: InstructionId,
     pub text: Localized,
+    /// Per language; without a record the language is draft.
+    #[serde(default)]
+    pub review: LangReviews,
+}
+
+impl Instruction {
+    /// The text a learner sees: the first language of the chain with a text
+    /// and a reviewed record. `None` if no language qualifies.
+    pub fn text_for(&self, interface: Lang) -> Option<(Lang, &str)> {
+        language_chain(interface).iter().find_map(|&lang| {
+            let text = self.text.get(lang)?;
+            self.review.is_shown(lang).then_some((lang, text))
+        })
+    }
 }

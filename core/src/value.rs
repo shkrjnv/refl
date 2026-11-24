@@ -151,6 +151,16 @@ pub struct Localized {
     pub en: Option<String>,
 }
 
+impl Localized {
+    pub fn get(&self, lang: Lang) -> Option<&str> {
+        match lang {
+            Lang::Uz => self.uz.as_deref(),
+            Lang::Ru => self.ru.as_deref(),
+            Lang::En => self.en.as_deref(),
+        }
+    }
+}
+
 /// CEFR level; `level()` gives the numeric scale pre-A1 = 0 … C2 = 6.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]

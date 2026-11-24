@@ -114,6 +114,36 @@ fn contrast_crossed_by_a_confusion_passes() {
     assert_eq!(status("en.k.c"), Some(KcStatus::Draft));
 }
 
+/// A KC with everything written but not reviewed is draft, and the report
+/// names each missing review (docs/02, «Вычитка и показ»).
+#[test]
+fn unreviewed_texts_keep_a_kc_draft() {
+    let out = run(&fixtures().join("unreviewed"));
+    assert!(out.report.diagnostics.is_empty(), "{}", out.report);
+    assert_eq!(out.report.live, Vec::<String>::new());
+    let missing = &out
+        .report
+        .draft
+        .iter()
+        .find(|d| d.kc == "en.k.a")
+        .unwrap()
+        .missing;
+    for expected in [
+        "short explanation in ru not reviewed",
+        "instruction `i.gap` not reviewed in en",
+        "micro-explanation of `en.m.one` in en not reviewed",
+    ] {
+        assert!(
+            missing.iter().any(|m| m == expected),
+            "{expected}: {missing:?}"
+        );
+    }
+    // Nothing else blocks it: no item count or family complaint.
+    assert_eq!(missing.len(), 3, "{missing:?}");
+    let bundle = out.bundle.expect("bundle");
+    assert!(bundle.content.items.iter().all(|e| !e.session_eligible));
+}
+
 #[test]
 fn draft_items_and_items_on_draft_kcs_are_not_eligible() {
     let out = run(&fixtures().join("eligibility"));
@@ -139,7 +169,9 @@ fn example_content_builds_with_computed_status() {
             .find(|k| k.kc.id.as_str() == id)
             .map(|k| k.status)
     };
-    // The Articles unit of the prototype is live (docs/15, «Состав темы»).
+    // The Articles unit of the prototype (docs/15, «Состав темы») is complete
+    // but draft until a person has reviewed its texts (docs/02, «Вычитка и
+    // показ»): the only thing that keeps a KC from live is review.
     for kc in [
         "en.gram.noun.countability",
         "en.gram.article.a-an-sound",
@@ -147,11 +179,22 @@ fn example_content_builds_with_computed_status() {
         "en.gram.article.second-mention",
         "en.gram.article.zero-general",
     ] {
-        assert_eq!(status(kc), Some(KcStatus::Live), "{kc}");
+        assert_eq!(status(kc), Some(KcStatus::Draft), "{kc}");
+        let missing = &out
+            .report
+            .draft
+            .iter()
+            .find(|d| d.kc == kc)
+            .unwrap()
+            .missing;
+        assert!(
+            missing.iter().all(|m| m.contains("not reviewed")),
+            "{kc}: {missing:?}"
+        );
     }
-    // Every item is live with live primary KCs, so every item is eligible.
+    // Items on draft KCs are not given in sessions.
     for entry in &bundle.content.items {
-        assert!(entry.session_eligible, "{}", entry.item.id);
+        assert!(!entry.session_eligible, "{}", entry.item.id);
     }
     assert_eq!(
         bundle.content.requires_closure

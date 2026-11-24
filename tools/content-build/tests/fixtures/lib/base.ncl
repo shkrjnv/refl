@@ -1,6 +1,10 @@
 # Valid base content for the negative fixtures. Each fixture directory has
 # one content.ncl that reuses these parts and introduces exactly one defect.
 let why_text = { ru = "почему", en = "why" } in
+# Reviewed by a named person: draft texts keep a KC from going live (docs/02,
+# «Вычитка и показ»), so the base content is reviewed.
+let checked = { status = "reviewed", by = "test" } in
+let both_checked = { ru = checked, en = checked } in
 let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
 {
   subjects = [
@@ -67,8 +71,8 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
     },
   ],
   instructions = [
-    { id = "i.gap", text = { ru = "заполните", en = "fill in" } },
-    { id = "i.choice", text = { ru = "выберите", en = "choose" } },
+    { id = "i.gap", text = { ru = "заполните", en = "fill in" }, review = both_checked },
+    { id = "i.choice", text = { ru = "выберите", en = "choose" }, review = both_checked },
   ],
   explanations = [
     {
@@ -77,7 +81,7 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
       depth = "short",
       lang = "ru",
       body = "один",
-      review = { status = "draft" },
+      review = checked,
     },
     {
       id = "e.m.two.ru",
@@ -85,7 +89,7 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
       depth = "short",
       lang = "ru",
       body = "два",
-      review = { status = "draft" },
+      review = checked,
     },
     {
       id = "e.m.one",
@@ -93,7 +97,7 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
       depth = "short",
       lang = "en",
       body = "one",
-      review = { status = "draft" },
+      review = checked,
     },
     {
       id = "e.m.two",
@@ -101,7 +105,7 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
       depth = "short",
       lang = "en",
       body = "two",
-      review = { status = "draft" },
+      review = checked,
     },
   ],
 
@@ -158,7 +162,7 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
         depth = "short",
         lang = l,
         body = "rule",
-        review = { status = "draft" },
+        review = checked,
       }
     in
     {

@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use refl_core::bundle::KcStatus;
-use refl_core::content::{EdgeKind, ExplanationDepth, ExplanationTarget};
+use refl_core::content::{EdgeKind, ExplanationDepth, ExplanationTarget, Review, ReviewStatus};
 use refl_core::ids::{InstructionId, KcId, MisconceptionId};
 use refl_core::item::{ItemStatus, KcRole};
 use refl_core::kind::{self, ItemKind, QualityCtx, QualityIssueKind};
@@ -378,6 +378,34 @@ pub fn instruction_text(c: &Content, diags: &mut Vec<Diagnostic>) {
                     missing.join(", ")
                 ),
             ));
+        }
+    }
+}
+
+/// `reviewed` comes with the name of the person who reviewed
+/// (docs/02, «Вычитка и показ»).
+pub fn reviewers(c: &Content, diags: &mut Vec<Diagnostic>) {
+    let nameless = |r: &Review| r.status == ReviewStatus::Reviewed && r.by.is_none();
+    for e in &c.explanations {
+        if nameless(&e.value.review) {
+            diags.push(diag(
+                Code::ReviewedWithoutReviewer,
+                &e.file,
+                format!("explanation `{}`", e.value.id),
+                "review is `reviewed` but `by` is missing".to_owned(),
+            ));
+        }
+    }
+    for ins in &c.instructions {
+        for lang in [Lang::Uz, Lang::Ru, Lang::En] {
+            if ins.value.review.get(lang).is_some_and(nameless) {
+                diags.push(diag(
+                    Code::ReviewedWithoutReviewer,
+                    &ins.file,
+                    format!("instruction `{}`", ins.value.id),
+                    format!("review of {lang:?} is `reviewed` but `by` is missing"),
+                ));
+            }
         }
     }
 }

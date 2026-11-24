@@ -665,13 +665,14 @@ async fn content_bundle_imports_idempotently(c: &Cluster) {
     let content = &bundle.content;
     assert_eq!(count("content_kcs").await, n(content.kcs.len()));
     assert_eq!(count("content_subjects").await, n(content.subjects.len()));
-    // Every KC carries its level as a rank: A1 is 1 on the English scale.
+    // Every KC carries its level as a rank: A1 is 1 and A2 is 2 on the
+    // English scale (the Articles unit has KCs of both).
     let ranks: Vec<Option<i32>> =
         sqlx::query_scalar("SELECT DISTINCT level_rank FROM content_kcs ORDER BY 1")
             .fetch_all(&db)
             .await
             .unwrap();
-    assert_eq!(ranks, [Some(1)]);
+    assert_eq!(ranks, [Some(1), Some(2)]);
     assert_eq!(count("content_items").await, n(content.items.len()));
     // Every published version's projection is there, not only the current ones.
     assert_eq!(

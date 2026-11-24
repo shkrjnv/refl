@@ -98,6 +98,7 @@ pub fn build(opts: &Options) -> std::io::Result<Output> {
     subjects::kc_subjects(&content, &mut diags);
     check::misconception_feedback(&content, &mut diags);
     check::instruction_text(&content, &mut diags);
+    check::reviewers(&content, &mut diags);
     let requires = graph::Requires::new(&content, &ids);
     requires.check_acyclic(&mut diags);
     let compiled = templates::compile(&content.items, &mut diags);

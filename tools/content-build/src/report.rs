@@ -62,11 +62,14 @@ pub enum Code {
     LockCorrupt,
     /// With `--locked`: the build would append entries to the lock file.
     LockOutdated,
+    /// `review = reviewed` without `by`: review is a person, so the status
+    /// comes with a name (docs/02, «Вычитка и показ»).
+    ReviewedWithoutReviewer,
 }
 
 impl Code {
     /// Every check; tests require a negative fixture named after each one.
-    pub const ALL: [Self; 30] = [
+    pub const ALL: [Self; 31] = [
         Self::Nickel,
         Self::Schema,
         Self::DuplicateId,
@@ -97,6 +100,7 @@ impl Code {
         Self::ProjectionChanged,
         Self::LockCorrupt,
         Self::LockOutdated,
+        Self::ReviewedWithoutReviewer,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -131,6 +135,7 @@ impl Code {
             Self::ProjectionChanged => "projection-changed",
             Self::LockCorrupt => "lock-corrupt",
             Self::LockOutdated => "lock-outdated",
+            Self::ReviewedWithoutReviewer => "reviewed-without-reviewer",
         }
     }
 }

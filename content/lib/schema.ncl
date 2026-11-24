@@ -45,7 +45,14 @@ let Lang = OneOf ["uz", "ru", "en"] in
     prior | { uz | Unit, ru | Unit },
     remedy | String,
   },
-  Instruction = { id | String, text | Localized },
+  Review = { status | OneOf ["draft", "reviewed"], by | String | optional },
+  # Review per language; a language without a record is draft (docs/02,
+  # «Вычитка и показ»). `reviewed` needs `by`: the name of the reviewer.
+  Instruction = {
+    id | String,
+    text | Localized,
+    review | { uz | Review | optional, ru | Review | optional, en | Review | optional } | optional,
+  },
   Example = { text | String, audio | String | optional },
   Explanation = {
     id | String,
