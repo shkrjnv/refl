@@ -621,6 +621,8 @@ fn plan_issued(kc: &KcId, tail: u64) -> EventPayload {
         propensity: UnitInterval::new(1.0).expect("unit"),
         seed: Seed::new(tail >> 11).expect("53 bits"),
         violations: Vec::new(),
+        dominant: "gap".into(),
+        trigger: None,
     })
 }
 

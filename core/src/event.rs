@@ -294,6 +294,8 @@ pub enum PlanAction {
     Learn { kc: KcId },
     Review { kc: KcId },
     Item { item: ItemRef, slot: u16 },
+    /// Suggest a break (`docs/04-placement-planner.md`, «Адаптация на ходу»).
+    Break,
 }
 
 /// One multiplier of a candidate's value, e.g. `("forgetting", 0.42)`.
@@ -334,6 +336,12 @@ pub struct PlanIssuedEvent {
     /// Codes of plan validator violations (`docs/11-quality.md`, «К3»); empty
     /// when the plan is valid.
     pub violations: Vec<String>,
+    /// The dominant factor of the chosen candidate: «Почему это задание»
+    /// picks its template by it (`docs/04-placement-planner.md`).
+    pub dominant: String,
+    /// The adaptation rule that changed the plan; `None` for a plan built
+    /// afresh and for a next-item choice.
+    pub trigger: Option<String>,
 }
 
 /// [`PlanIssuedEvent`] as it arrives, before the `chosen` check.
@@ -347,6 +355,8 @@ struct PlanIssuedUnchecked {
     propensity: UnitInterval,
     seed: Seed,
     violations: Vec<String>,
+    dominant: String,
+    trigger: Option<String>,
 }
 
 impl TryFrom<PlanIssuedUnchecked> for PlanIssuedEvent {
@@ -364,6 +374,8 @@ impl TryFrom<PlanIssuedUnchecked> for PlanIssuedEvent {
             propensity: p.propensity,
             seed: p.seed,
             violations: p.violations,
+            dominant: p.dominant,
+            trigger: p.trigger,
         })
     }
 }

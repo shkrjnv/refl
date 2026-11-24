@@ -30,4 +30,14 @@ seed: Seed,
  * Codes of plan validator violations (`docs/11-quality.md`, «К3»); empty
  * when the plan is valid.
  */
-violations: Array<string>, };
+violations: Array<string>, 
+/**
+ * The dominant factor of the chosen candidate: «Почему это задание»
+ * picks its template by it (`docs/04-placement-planner.md`).
+ */
+dominant: string, 
+/**
+ * The adaptation rule that changed the plan; `None` for a plan built
+ * afresh and for a next-item choice.
+ */
+trigger: string | null, };

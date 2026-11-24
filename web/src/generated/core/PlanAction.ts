@@ -5,4 +5,4 @@ import type { KcId } from "./KcId";
 /**
  * An action the planner considered.
  */
-export type PlanAction = { "kind": "learn", kc: KcId, } | { "kind": "review", kc: KcId, } | { "kind": "item", item: ItemRef, slot: number, };
+export type PlanAction = { "kind": "learn", kc: KcId, } | { "kind": "review", kc: KcId, } | { "kind": "item", item: ItemRef, slot: number, } | { "kind": "break" };

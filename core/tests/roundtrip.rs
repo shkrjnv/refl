@@ -196,6 +196,7 @@ fn quality_payload() -> impl Strategy<Value = EventPayload> {
         slug(KcId::new).prop_map(|kc| PlanAction::Learn { kc }),
         slug(KcId::new).prop_map(|kc| PlanAction::Review { kc }),
         (item_ref(), any::<u16>()).prop_map(|(item, slot)| PlanAction::Item { item, slot }),
+        Just(PlanAction::Break),
     ];
     let candidate = (
         action,
@@ -216,6 +217,7 @@ fn quality_payload() -> impl Strategy<Value = EventPayload> {
         proptest::collection::vec(candidate, 1..5),
         (any::<u16>(), unit(), seed()),
         proptest::collection::vec(text(), 0..3),
+        (text(), proptest::option::of(text())),
     )
         .prop_map(
             |(
@@ -224,6 +226,7 @@ fn quality_payload() -> impl Strategy<Value = EventPayload> {
                 candidates,
                 (chosen, propensity, seed),
                 violations,
+                (dominant, trigger),
             )| {
                 // A valid plan chooses one of its candidates.
                 let chosen = chosen % u16::try_from(candidates.len()).unwrap();
@@ -236,6 +239,8 @@ fn quality_payload() -> impl Strategy<Value = EventPayload> {
                     propensity,
                     seed,
                     violations,
+                    dominant,
+                    trigger,
                 })
             },
         );
@@ -1018,11 +1023,14 @@ fn quality_events_wire_shape() {
                 "factors": [{ "name": "forgetting", "value": 0.25 }],
             },
             { "action": { "kind": "learn", "kc": "gram.article.first-mention" }, "value_per_minute": 0.25, "factors": [] },
+            { "action": { "kind": "break" }, "value_per_minute": 0.0, "factors": [] },
         ],
         "chosen": 0,
         "propensity": 0.75,
         "seed": 42,
         "violations": ["too-many-new-kcs"],
+        "dominant": "memory",
+        "trigger": "block_closed",
     });
     let mentor = |kind: serde_json::Value| {
         serde_json::json!({
@@ -1051,6 +1059,7 @@ fn quality_events_wire_shape() {
     let mut out_of_range = serde_json::json!({
         "type": "plan_issued", "planner_version": "p1", "model_version": "m1",
         "scope": "session", "chosen": 0, "propensity": 1.5, "seed": 1, "violations": [],
+        "dominant": "memory", "trigger": null,
         "candidates": [{ "action": { "kind": "review", "kc": "a" }, "value_per_minute": 1.0, "factors": [] }],
     });
     assert!(decode_event(&sample_with_payload(1, &out_of_range)).is_err());
@@ -1148,7 +1157,7 @@ fn plan_with(chosen: u64, value_per_minute: &serde_json::Value) -> String {
         &serde_json::json!({
             "type": "plan_issued", "planner_version": "p1", "model_version": "m1",
             "scope": "session", "chosen": chosen, "propensity": 1.0, "seed": 1,
-            "violations": [],
+            "violations": [], "dominant": "memory", "trigger": null,
             "candidates": [
                 { "action": { "kind": "review", "kc": "a" }, "value_per_minute": value_per_minute,
                   "factors": [{ "name": "f", "value": 2.0 }] },
