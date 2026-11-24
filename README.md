@@ -214,6 +214,7 @@ Alternatives `( | )`, optional `[ ]`, nesting up to 4, no repetition: the langua
 - the correct answer is accepted, distractors are not;
 - accepted and error patterns do not overlap, checked by an exact automaton product with the shortest witness in the report;
 - topic status (live / draft) is computed: live only with a reviewed explanation in ru and en, at least 10 tasks, 3 families, 3 production tasks and difficulty spread over two adjacent levels.
+- **publication:** a published task version never changes or disappears. The server rejects a bundle that lacks a stored (task, version) projection or changes one, even if `item-versions.lock` was lost; the lock's digest only guards the file itself.
 - **review gate:** a text written by Claude is `draft`, in every language, until a named person has read it (`reviewed` without `by` is a build error). A draft is never shown to a learner: the language chain interface → ru → en skips it. A topic is live only if its explanation, the micro-explanations of the misconceptions its tasks diagnose, and those tasks' instructions are reviewed in ru and en; the report says which one blocks. uz is optional and not shown until reviewed. The "Articles" unit is complete, but draft until it is reviewed.
 - every `contrasts` pair of live topics has a live task whose wrong answer is right for the other topic (`confuses_with`), so confusing the two can be measured.
 - task versions are locked: `content/item-versions.lock` holds, for every published (task id, version), the *model projection* of that version (kind, per-slot topics with roles, number of choices and diagnosed misconceptions, difficulty, expected time, family). content-build only appends to it; changing the projection of a published version without a version bump, or losing an entry, fails the build (`projection-changed`, `lock-corrupt`; CI runs `--locked`).
@@ -317,7 +318,7 @@ All learning logic lives in one Rust core. The server calls it natively, the PWA
 | What | How |
 | --- | --- |
 | event log | append-only, updates and deletes rejected by triggers; the application role can only append; each row gets a `server_seq` receipt number for the sync cursor, and inserts take a per-learner lock so a cursor never skips an event; events from a newer client are rejected, not stored; every integer in an event fits in 2⁵³ − 1 so the JavaScript client reads it exactly |
-| model snapshots | fold speed-up, tied to model and weights version and to the content version they were computed with; another content version means a full refold (on the device too) |
+| model snapshots | fold speed-up, tied to model and weights version and to the **fold version** they were computed with: a hash of exactly what the fold reads from the bundle (requires graph, KC ranks and importance, misconception priors, subject parameters), without item projections. Another fold version means a full refold (on the device too); editing a text or adding a task keeps it |
 | users, login, roles | learner, mentor, author, admin; child flag; login methods in a separate table |
 | social graph and privacy | teams, friends, blocks, reports, public codes, `profile_visibility` |
 | notifications | channels (Telegram, push, email), settings per (kind, channel) pair, outbox |
