@@ -44,6 +44,7 @@
               (craneLib.fileset.commonCargoSources ./.)
               ./core/clippy.toml
               ./tools/content-build/clippy.toml
+              ./tools/sim/clippy.toml
               # content-build tests build the example content and the negative fixtures.
               ./content
               ./tools/content-build/tests/fixtures
@@ -112,6 +113,28 @@
               doInstallCargoArtifacts = false;
             }
           );
+          # The learner-model fold is bit-identical native and in WASM: one
+          # generated log, folded by both builds, gives one state hash (docs/03).
+          core-wasm-hash = craneLib.mkCargoDerivation (
+            commonArgs
+            // {
+              pnameSuffix = "-core-wasm-hash";
+              cargoArtifacts = null;
+              nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ pkgs.wasmtime ];
+              buildPhaseCargoCommand = ''
+                export HOME=$TMPDIR
+                cargo build --locked --release -p refl-sim --bin fold-hash --target wasm32-wasip1
+                cargo build --locked --release -p refl-sim --bin fold-hash
+                native="$(target/release/fold-hash 20000 7)"
+                wasm="$(wasmtime run target/wasm32-wasip1/release/fold-hash.wasm 20000 7)"
+                echo "native: $native"
+                echo "wasm:   $wasm"
+                test "$native" = "$wasm"
+              '';
+              installPhaseCommand = "mkdir -p $out";
+              doInstallCargoArtifacts = false;
+            }
+          );
         };
     in
     {
@@ -127,6 +150,8 @@
               pkgs.nodejs
               pkgs.pnpm
               pkgs.just
+              # Runs the wasm32-wasip1 fold for the native = WASM hash check.
+              pkgs.wasmtime
             ];
             # Stages 3-5 bring back: piper-tts (audio), languagetool and
             # hunspell (writing checks), ffmpeg/opus-tools (audio pipeline).
@@ -138,8 +163,8 @@
       );
 
       # Local CI: `nix flake check` runs fmt, clippy (-D warnings), all tests
-      # (including the TS bindings freshness check), the wasm32 build of the core
-      # and content-build on content/. Database tests run against a throwaway
+      # (including the TS bindings freshness check), the wasm32 build of the core,
+      # the native = WASM learner-state hash and content-build on content/. Database tests run against a throwaway
       # PostgreSQL started inside the test check.
       checks = forAllSystems (
         system: pkgs:

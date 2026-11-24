@@ -1,0 +1,464 @@
+//! Behaviour of learner model v1 on a small synthetic bundle: three grammar
+//! KCs in a chain (k02 requires k01 requires k00), ranks A1, A2, B1; items
+//! alternate choice (even) and gap fill (odd); expected time 8 + 2·(j % 4) s.
+
+use refl_core::bundle::Bundle;
+use refl_core::event::{
+    AnswerContext, AnswerEvent, Confidence, Decoded, EventPayload, ReclassifiedEvent, Response,
+    Verdict,
+};
+use refl_core::ids::{ContentVersion, KcId};
+use refl_core::model::derived::{KcProgress, MisconceptionStatus};
+use refl_core::model::{
+    Applied, FoldCtx, KcState, KnowledgeModel, LearnerModel, NeedsReplay, Profile, State, replay,
+};
+use refl_core::value::Timestamp;
+use refl_sim::{
+    BundleSpec, DAY_MS, SPELLING_KC, T0, answer, event, explanation_id, item_ref, kc_id,
+    misconception_id, synthetic_bundle, unknown_event,
+};
+
+fn bundle() -> Bundle {
+    synthetic_bundle(BundleSpec {
+        kcs: 3,
+        items_per_kc: 6,
+    })
+}
+
+fn at(day: i64, ms: i64) -> Timestamp {
+    Timestamp(T0.0 + day * DAY_MS + ms)
+}
+
+fn spelling() -> KcId {
+    KcId::new(SPELLING_KC).unwrap()
+}
+
+/// Gap fill `j` (odd) of KC `i`, answered correctly with `text`.
+fn typed(i: usize, j: usize, text: &str) -> AnswerEvent {
+    answer(
+        item_ref(i, j),
+        Verdict::Correct,
+        Response::Text(text.into()),
+        8_000,
+    )
+}
+
+/// Choice `j` (even) of KC `i`, correct.
+fn chosen(i: usize, j: usize) -> AnswerEvent {
+    answer(item_ref(i, j), Verdict::Correct, Response::Option(0), 8_000)
+}
+
+fn ev(t: Timestamp, tail: u64, a: AnswerEvent) -> Decoded {
+    event(t, tail, EventPayload::Answer(a))
+}
+
+fn fold(bundle: &Bundle, events: &[Decoded]) -> State {
+    replay(
+        &KnowledgeModel::default(),
+        &Profile::default(),
+        bundle,
+        events,
+    )
+}
+
+fn mu(s: &State, kc: &KcId) -> f64 {
+    s.kcs[kc].mu
+}
+
+/// Starting μ with L = 0: `clamp(1.2 · (0 − rank), ±3)`.
+fn prior_mu(rank: f64) -> f64 {
+    (-1.2 * rank).max(-3.0)
+}
+
+#[test]
+fn correct_typed_answer_raises_spelling() {
+    let b = bundle();
+    let s = fold(&b, &[ev(at(0, 0), 1, typed(0, 1, "the"))]);
+    let k = &s.kcs[&spelling()];
+    assert!(k.mu > prior_mu(1.0), "{}", k.mu);
+    assert!(k.var < 2.25);
+    assert_eq!(k.observations, 1);
+    // Never a slot KC: no memory, no automaticity.
+    assert!(k.card.is_none());
+    assert_eq!(k.timed, 0);
+}
+
+#[test]
+fn choice_answer_does_not_touch_spelling() {
+    let b = bundle();
+    let s = fold(&b, &[ev(at(0, 0), 1, chosen(0, 0))]);
+    assert!(!s.kcs.contains_key(&spelling()));
+    assert!(s.kcs.contains_key(&kc_id(0)));
+}
+
+#[test]
+fn spelling_success_needs_a_letter_only_answer() {
+    let b = bundle();
+    for text in ["it's", "well-known", "b2", "  ...  "] {
+        let s = fold(&b, &[ev(at(0, 0), 1, typed(0, 1, text))]);
+        assert!(!s.kcs.contains_key(&spelling()), "{text}");
+    }
+}
+
+#[test]
+fn spelling_success_is_weaker_than_a_typo_failure() {
+    let b = bundle();
+    let ok = fold(&b, &[ev(at(0, 0), 1, typed(0, 1, "the"))]);
+    let mut a = typed(0, 1, "teh");
+    a.verdict = Verdict::Typo;
+    let typo = fold(&b, &[ev(at(0, 0), 1, a)]);
+    let up = mu(&ok, &spelling()) - prior_mu(1.0);
+    let down = prior_mu(1.0) - mu(&typo, &spelling());
+    assert!(up > 0.0 && down > 0.0);
+    // Weight 0.3 against 1 on the same prior.
+    assert!(ok.kcs[&spelling()].var > typo.kcs[&spelling()].var);
+    // The typo still counts as correct for the target KC.
+    assert!(mu(&typo, &kc_id(0)) > prior_mu(1.0));
+}
+
+#[test]
+fn spelling_success_takes_hint_and_attempt_multipliers() {
+    let b = bundle();
+    let plain = fold(&b, &[ev(at(0, 0), 1, typed(0, 1, "the"))]);
+    let mut a = typed(0, 1, "the");
+    a.hints = 1;
+    a.attempt = 2;
+    let helped = fold(&b, &[ev(at(0, 0), 1, a)]);
+    let gain = |s: &State| mu(s, &spelling()) - prior_mu(1.0);
+    assert!(gain(&helped) < gain(&plain) && gain(&helped) > 0.0);
+}
+
+#[test]
+fn unrecognized_answer_gives_no_spelling_observation() {
+    let b = bundle();
+    let mut a = typed(0, 1, "the");
+    a.verdict = Verdict::Unrecognized;
+    let s = fold(&b, &[ev(at(0, 0), 1, a)]);
+    assert!(!s.kcs.contains_key(&spelling()));
+    assert!(mu(&s, &kc_id(0)) < prior_mu(1.0));
+}
+
+#[test]
+fn rapid_guess_changes_nothing_but_the_counters() {
+    let b = bundle();
+    // Choice, expected 8 s: 1 s is under a quarter.
+    let mut a = chosen(0, 0);
+    a.latency_ms = 1_000;
+    let s = fold(&b, &[ev(at(0, 0), 1, a.clone())]);
+    assert!(s.kcs.is_empty() && s.misconceptions.is_empty());
+    assert_eq!((s.rapid.total, s.rapid.streak), (1, 1));
+    // Typed, expected 10 s: 2.4 s is under a quarter but not under 2 s.
+    let mut t = typed(0, 1, "the");
+    t.latency_ms = 2_400;
+    let s = fold(&b, &[ev(at(0, 0), 1, a), ev(at(0, 10_000), 2, t)]);
+    assert!(s.kcs.contains_key(&kc_id(0)));
+    assert_eq!((s.rapid.total, s.rapid.streak), (1, 0));
+}
+
+#[test]
+fn unknown_event_marks_the_state_incomplete_and_changes_nothing_else() {
+    let b = bundle();
+    let base = [ev(at(0, 0), 1, chosen(0, 0))];
+    let plain = fold(&b, &base);
+    let with_unknown = fold(&b, &[base[0].clone(), unknown_event(at(0, 5_000), 2)]);
+    assert!(!plain.incomplete && with_unknown.incomplete);
+    assert_eq!(plain.kcs, with_unknown.kcs);
+    let model = KnowledgeModel::default();
+    let mut s = model.init(&Profile::default());
+    let ctx = FoldCtx::new(&b);
+    let applied = model.apply(&mut s, &unknown_event(at(0, 0), 3), &ctx);
+    assert_eq!(applied, Ok(Applied::Unknown));
+}
+
+#[test]
+fn lesson_success_starts_memory_only_after_the_explanation() {
+    let b = bundle();
+    let mut lesson = chosen(0, 0);
+    lesson.context = AnswerContext::Lesson;
+    let s = fold(&b, &[ev(at(0, 0), 1, lesson.clone())]);
+    assert!(s.kcs[&kc_id(0)].card.is_none());
+    let viewed = event(
+        at(0, 1_000),
+        2,
+        EventPayload::ExplanationViewed {
+            explanation: explanation_id(0),
+            depth: refl_core::content::ExplanationDepth::Short,
+            seconds: 30,
+        },
+    );
+    let s = fold(&b, &[viewed, ev(at(0, 60_000), 3, lesson)]);
+    assert!(s.kcs[&kc_id(0)].card.is_some());
+    // Outside a lesson the first success starts it without an explanation.
+    let mut review = chosen(0, 0);
+    review.context = AnswerContext::Review;
+    let s = fold(&b, &[ev(at(0, 0), 1, review)]);
+    assert!(s.kcs[&kc_id(0)].card.is_some());
+}
+
+#[test]
+fn fsrs_counts_the_first_answer_per_kc_per_day() {
+    let b = bundle();
+    let events = [
+        ev(at(0, 0), 1, chosen(0, 0)),
+        ev(at(0, 60_000), 2, chosen(0, 2)),
+        ev(at(0, 120_000), 3, chosen(0, 4)),
+    ];
+    let s = fold(&b, &events);
+    let card = s.kcs[&kc_id(0)].card.unwrap();
+    assert_eq!(card.last_review, at(0, 0));
+    let mut next = events.to_vec();
+    next.push(ev(at(1, 0), 4, chosen(0, 0)));
+    let s = fold(&b, &next);
+    let later = s.kcs[&kc_id(0)].card.unwrap();
+    assert_eq!(later.last_review, at(1, 0));
+    assert!(later.stability > card.stability);
+}
+
+#[test]
+fn success_propagates_down_requires_and_errors_do_not() {
+    let b = bundle();
+    let s = fold(&b, &[ev(at(0, 0), 1, chosen(2, 0))]);
+    let d1 = mu(&s, &kc_id(1)) - prior_mu(2.0);
+    let d2 = mu(&s, &kc_id(0)) - prior_mu(1.0);
+    assert!(d1 > d2 && d2 > 0.0, "{d1} {d2}");
+    // Pseudo-observations are not answers.
+    assert_eq!(s.kcs[&kc_id(1)].observations, 0);
+    let mut wrong = chosen(2, 0);
+    wrong.verdict = Verdict::Wrong;
+    wrong.response = Response::Option(1);
+    let s = fold(&b, &[ev(at(0, 0), 1, wrong)]);
+    assert!(!s.kcs.contains_key(&kc_id(1)) && !s.kcs.contains_key(&kc_id(0)));
+}
+
+#[test]
+fn misconceptions_count_shown_and_resisted() {
+    let b = bundle();
+    let mut wrong = chosen(0, 0);
+    wrong.verdict = Verdict::Wrong;
+    wrong.response = Response::Option(1);
+    wrong.misconception = Some(misconception_id(0, 0));
+    wrong.confidence = Some(Confidence::Sure);
+    let s = fold(&b, &[ev(at(0, 0), 1, wrong)]);
+    let m = &s.misconceptions[&misconception_id(0, 0)];
+    assert!((m.alpha - m.alpha0 - 1.5).abs() < 1e-12);
+    assert_eq!(m.manifested, 1);
+    // A correct answer where both were possible: β += 1 each.
+    let s = fold(&b, &[ev(at(0, 0), 1, chosen(0, 0))]);
+    for x in 0..2 {
+        let m = &s.misconceptions[&misconception_id(0, x)];
+        assert!((m.beta - m.beta0 - 1.0).abs() < 1e-12);
+    }
+    // Prior with unknown L1: the mean of uz and ru, weight n₀ = 2.
+    let m = &s.misconceptions[&misconception_id(0, 0)];
+    assert!((m.alpha0 - 2.0 * (0.1 + 0.05) / 2.0).abs() < 1e-12);
+}
+
+#[test]
+fn misconception_turns_active_and_decays() {
+    let b = bundle();
+    let model = KnowledgeModel::default();
+    let events: Vec<Decoded> = (0..3)
+        .map(|n| {
+            let mut a = chosen(0, 0);
+            a.verdict = Verdict::Wrong;
+            a.response = Response::Option(1);
+            a.misconception = Some(misconception_id(0, 0));
+            ev(at(0, n * 60_000), u64::try_from(n).unwrap(), a)
+        })
+        .collect();
+    let s = fold(&b, &events);
+    let id = misconception_id(0, 0);
+    let now = model.misconception(&s, &id, at(0, 0)).unwrap();
+    assert_eq!(now.status, MisconceptionStatus::Active);
+    let later = model.misconception(&s, &id, at(70, 0)).unwrap();
+    assert!(later.strength < now.strength);
+}
+
+#[test]
+fn the_fold_reports_the_prediction_made_at_display_time() {
+    let b = bundle();
+    let model = KnowledgeModel::default();
+    let mut s = model.init(&Profile::default());
+    let ctx = FoldCtx::new(&b);
+    let first = ev(at(0, 0), 1, chosen(0, 0));
+    model.apply(&mut s, &first, &ctx).unwrap();
+    let a = typed(0, 1, "the");
+    let shown = Timestamp(at(5, 0).0 - i64::from(a.latency_ms));
+    let expected = model.predict(&s, &b, &a.item, 0, shown).unwrap();
+    let Ok(Applied::Answer(o)) = model.apply(&mut s, &ev(at(5, 0), 2, a), &ctx) else {
+        panic!("an answer");
+    };
+    assert!((o.predicted - expected).abs() < f64::EPSILON);
+    assert!(o.correct && !o.rapid);
+}
+
+#[test]
+fn reclassified_answer_is_refolded_with_the_new_verdict() {
+    let b = bundle();
+    let mut wrong = typed(0, 1, "a");
+    wrong.verdict = Verdict::Wrong;
+    let original = ev(at(0, 0), 1, wrong);
+    let Decoded::Known(o) = &original else {
+        unreachable!()
+    };
+    let fix = event(
+        at(3, 0),
+        2,
+        EventPayload::Reclassified(ReclassifiedEvent {
+            original: o.event_id,
+            verdict: Verdict::Correct,
+            misconception: None,
+            content_version: ContentVersion("synthetic".into()),
+        }),
+    );
+    let corrected = fold(&b, &[original.clone(), fix.clone()]);
+    let as_if_correct = fold(&b, &[ev(at(0, 0), 1, typed(0, 1, "a"))]);
+    assert_eq!(corrected.kcs, as_if_correct.kcs);
+
+    // Folded onto a state that already holds the wrong verdict: replay.
+    let model = KnowledgeModel::default();
+    let mut s = model.init(&Profile::default());
+    let ctx = FoldCtx::new(&b);
+    model.apply(&mut s, &original, &ctx).unwrap();
+    assert_eq!(
+        model.apply(&mut s, &fix, &ctx),
+        Err(NeedsReplay::Reclassified)
+    );
+}
+
+#[test]
+fn late_and_duplicate_events() {
+    let b = bundle();
+    let model = KnowledgeModel::default();
+    let mut s = model.init(&Profile::default());
+    let ctx = FoldCtx::new(&b);
+    let later = ev(at(1, 0), 2, chosen(0, 0));
+    model.apply(&mut s, &later, &ctx).unwrap();
+    let before = s.clone();
+    assert_eq!(model.apply(&mut s, &later, &ctx), Ok(Applied::Duplicate));
+    let earlier = ev(at(0, 0), 1, chosen(0, 2));
+    assert_eq!(model.apply(&mut s, &earlier, &ctx), Err(NeedsReplay::Late));
+    assert_eq!(s, before);
+}
+
+#[test]
+fn answers_outside_the_bundle_are_counted_not_guessed() {
+    let b = bundle();
+    let mut a = chosen(0, 0);
+    a.item.version = refl_core::ids::ItemVersion(9);
+    let s = fold(&b, &[ev(at(0, 0), 1, a)]);
+    assert_eq!(s.unresolved, 1);
+    assert!(s.kcs.is_empty());
+}
+
+/// Fast, sure, correct typed answers on k00 once a day: mastered, then
+/// forgotten after a long break.
+#[test]
+fn mastery_statuses_and_the_return_check() {
+    let b = bundle();
+    let model = KnowledgeModel::default();
+    let subject = refl_core::ids::SubjectId::new("en").unwrap();
+    let events: Vec<Decoded> = (0..30)
+        .map(|d| {
+            let j = [1, 3, 5][usize::try_from(d % 3).unwrap()];
+            let mut a = typed(0, j, "the");
+            a.context = AnswerContext::Review;
+            a.confidence = Some(Confidence::Sure);
+            a.latency_ms = 5_000;
+            ev(at(d, 0), u64::try_from(d).unwrap(), a)
+        })
+        .collect();
+    let s = fold(&b, &events);
+    let k: &KcState = &s.kcs[&kc_id(0)];
+    assert!(k.ever_mastered);
+    assert!(k.production.len() == 2 && k.tau > 0.0);
+    let last = at(29, 0);
+    let progress = model.progress(&s, &kc_id(0), last);
+    assert!(
+        matches!(progress, KcProgress::Mastered | KcProgress::LongTerm),
+        "{progress:?}"
+    );
+    assert_eq!(model.progress(&s, &kc_id(2), last), KcProgress::NotStarted);
+    assert_eq!(
+        model.progress(&s, &kc_id(0), at(29 + 3_650, 0)),
+        KcProgress::Forgetting
+    );
+
+    let check = |days: i64| {
+        model
+            .return_check(&s, &b, &subject, at(29 + days, 0))
+            .unwrap()
+    };
+    assert!(!check(1).due);
+    assert!(!check(13).due || check(13).mean_recall.unwrap() < 0.85);
+    assert!(check(14).due);
+    assert!(check(3_650).forgetting_share.unwrap() > 0.2);
+}
+
+#[test]
+fn return_check_needs_a_week_when_nothing_is_mastered() {
+    let b = bundle();
+    let model = KnowledgeModel::default();
+    let subject = refl_core::ids::SubjectId::new("en").unwrap();
+    let s = fold(&b, &[ev(at(0, 0), 1, chosen(0, 0))]);
+    let check = |days| model.return_check(&s, &b, &subject, at(days, 0)).unwrap();
+    assert!(check(8).mean_recall.is_none());
+    assert!(!check(13).due);
+    assert!(check(14).due);
+}
+
+#[test]
+fn level_counts_empty_lower_levels_as_covered() {
+    let b = bundle();
+    let model = KnowledgeModel::default();
+    let subject = refl_core::ids::SubjectId::new("en").unwrap();
+    let grammar = refl_core::ids::DomainId::new("grammar").unwrap();
+    // Grammar KCs sit at A1, A2, B1; pre-A1 is empty and below them.
+    let mut s = model.init(&Profile::default());
+    for i in 0..3 {
+        s.kcs.insert(
+            kc_id(i),
+            KcState {
+                mu: 10.0,
+                var: 0.01,
+                var_at: at(0, 0),
+                observations: 1,
+                card: None,
+                tau: 0.0,
+                timed: 1,
+                production: Vec::new(),
+                ever_mastered: true,
+            },
+        );
+    }
+    let l = model.level(&s, &b, &subject, &grammar, at(0, 0)).unwrap();
+    assert!((l.point - 3.0).abs() < 1e-9, "{l:?}");
+    assert!((l.low - 3.0).abs() < 1e-9 && (l.high - 3.0).abs() < 1e-9);
+
+    let fresh = model.init(&Profile::default());
+    let a = model
+        .level(&fresh, &b, &subject, &grammar, at(0, 0))
+        .unwrap();
+    let again = model
+        .level(&fresh, &b, &subject, &grammar, at(0, 0))
+        .unwrap();
+    assert_eq!(a, again, "fixed seed: deterministic");
+    // The 80% interval need not hold the mean: with nothing known most
+    // samples are exactly 0.
+    assert!(a.low <= a.high, "{a:?}");
+    assert!(a.point > 0.0 && a.point < 0.5);
+}
+
+#[test]
+fn profile_is_part_of_the_state_hash() {
+    let b = bundle();
+    let events = [ev(at(0, 0), 1, chosen(0, 0))];
+    let model = KnowledgeModel::default();
+    let zero = replay(&model, &Profile::default(), &b, &events);
+    let profile = Profile {
+        l1: Some(refl_core::model::NativeLanguage::Uz),
+        ..Profile::default()
+    };
+    let uz = replay(&model, &profile, &b, &events);
+    assert_ne!(zero.hash(), uz.hash());
+}

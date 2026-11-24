@@ -1,0 +1,21 @@
+[package]
+name = "refl-sim"
+version = "0.0.0"
+description = "Synthetic learners and logs for the learner model: fold tests, the native = WASM hash check, fold speed. The student simulator of docs/03 grows here."
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+# Default features: the same no_std core the browser runs, also when this
+# crate is built for wasm32-wasip1.
+refl-core = { path = "../../core" }
+# The generated log must be bit-identical on native and wasm32 too.
+libm = "0.2"
+uuid = { version = "1", default-features = false }
+
+[dev-dependencies]
+proptest = "1"
+serde_json = "1"
+
+[lints]
+workspace = true

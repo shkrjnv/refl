@@ -3,8 +3,8 @@
 
 default: all
 
-# fmt check, clippy, all tests, wasm32 core build, content build
-all: fmt-check lint test wasm content
+# fmt check, clippy, all tests, wasm32 core build, native = WASM fold hash, content build
+all: fmt-check lint test wasm wasm-hash content
 
 # Format the code
 fmt:
@@ -23,6 +23,21 @@ test:
 # The core must build for the browser (no_std + alloc, default features)
 wasm:
     cargo build --locked --release -p refl-core --target wasm32-unknown-unknown
+
+# Fold one generated log natively and in wasm32 (wasmtime): the learner-state hashes must match
+wasm-hash events="20000" seed="7":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --locked --release --quiet -p refl-sim --bin fold-hash --target wasm32-wasip1
+    native="$(cargo run --locked --release --quiet -p refl-sim --bin fold-hash -- {{events}} {{seed}})"
+    wasm="$(wasmtime run target/wasm32-wasip1/release/fold-hash.wasm {{events}} {{seed}})"
+    echo "native: $native"
+    echo "wasm:   $wasm"
+    test "$native" = "$wasm"
+
+# Time the learner-model fold of 100 000 generated events (native, release)
+fold-speed:
+    cargo run --locked --release --quiet -p refl-sim --bin fold-hash -- --time 100000
 
 # Check content/ and write the bundle to target/bundle.json
 content:

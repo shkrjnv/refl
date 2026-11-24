@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["core", "server", "tools/content-build"]
+members = ["core", "server", "tools/content-build", "tools/sim"]
 
 [workspace.package]
 edition = "2024"

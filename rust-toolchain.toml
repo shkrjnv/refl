@@ -3,4 +3,5 @@
 channel = "1.100.0"
 profile = "minimal"
 components = ["clippy", "rustfmt", "rust-src", "rust-analyzer"]
-targets = ["wasm32-unknown-unknown"]
+# wasm32-wasip1: the native = WASM hash check runs the fold under wasmtime.
+targets = ["wasm32-unknown-unknown", "wasm32-wasip1"]

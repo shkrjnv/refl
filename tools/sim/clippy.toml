@@ -1,0 +1,26 @@
+# Determinism guard for builds with the `std` feature (tests, tooling).
+# In the default no_std build these methods do not exist at all.
+disallowed-methods = [
+  { path = "f64::exp", reason = "use libm::exp for bit-identical native/WASM results" },
+  { path = "f64::exp_m1", reason = "use libm" },
+  { path = "f64::ln", reason = "use libm::log" },
+  { path = "f64::ln_1p", reason = "use libm" },
+  { path = "f64::log", reason = "use libm" },
+  { path = "f64::log2", reason = "use libm" },
+  { path = "f64::log10", reason = "use libm" },
+  { path = "f64::powf", reason = "use libm::pow" },
+  { path = "f64::powi", reason = "use libm::pow" },
+  { path = "f64::sqrt", reason = "use libm::sqrt" },
+  { path = "f64::cbrt", reason = "use libm" },
+  { path = "f64::hypot", reason = "use libm" },
+  { path = "f64::sin", reason = "use libm" },
+  { path = "f64::cos", reason = "use libm" },
+  { path = "f64::tan", reason = "use libm" },
+  { path = "f64::tanh", reason = "use libm" },
+  { path = "f64::atan2", reason = "use libm" },
+  { path = "f64::mul_add", reason = "use libm::fma" },
+]
+disallowed-types = [
+  { path = "std::collections::HashMap", reason = "iteration order is not deterministic; use BTreeMap" },
+  { path = "std::collections::HashSet", reason = "iteration order is not deterministic; use BTreeSet" },
+]
