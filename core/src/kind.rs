@@ -30,6 +30,12 @@ pub trait ItemKind {
     /// Whether a correct answer counts as production for mastery
     /// (`docs/03-layer2-learner-model.md`) and the KC live condition.
     fn is_production(&self) -> bool;
+    /// Chance of a correct answer by guessing on `slot`: `1/n` for a choice
+    /// among `n`, 0 for typed input (`docs/03-layer2-learner-model.md`, g).
+    fn guessing(&self, slot: u16) -> f64;
+    /// Whether the learner types the answer rather than picking it; the
+    /// rapid-guess rule adds a 2-second bound for typed input.
+    fn typed_input(&self) -> bool;
     /// The quality rule of a live item, checked by content-build.
     ///
     /// # Errors
@@ -178,6 +184,14 @@ fn input_quality(slots: &[Slot]) -> Result<(), Vec<QualityIssue>> {
     finish(issues)
 }
 
+/// `1/n` among the slot's answer and its options.
+fn choice_guessing(slots: &[Slot], slot: u16) -> f64 {
+    slots.get(usize::from(slot)).map_or(0.0, |s| {
+        let n = u32::try_from(s.options.len() + 1).unwrap_or(u32::MAX);
+        1.0 / f64::from(n)
+    })
+}
+
 fn no_rule(tag: &str) -> Result<(), Vec<QualityIssue>> {
     let message = format!("type `{tag}` has no quality rule yet and cannot be live");
     Err(vec![issue(QualityIssueKind::NoRule, message)])
@@ -243,6 +257,12 @@ impl ItemKind for ChoiceBody {
     fn quality(&self, ctx: &QualityCtx<'_>) -> Result<(), Vec<QualityIssue>> {
         choice_quality(&self.slots, ctx)
     }
+    fn guessing(&self, slot: u16) -> f64 {
+        choice_guessing(&self.slots, slot)
+    }
+    fn typed_input(&self) -> bool {
+        false
+    }
     fn check(&self, slot: u16, response: &Response, _: &CheckCtx<'_>) -> CheckOutcome {
         choice_check(&self.slots, slot, response)
     }
@@ -258,20 +278,33 @@ impl ItemKind for FindErrorBody {
     fn quality(&self, ctx: &QualityCtx<'_>) -> Result<(), Vec<QualityIssue>> {
         choice_quality(&self.slots, ctx)
     }
+    fn guessing(&self, slot: u16) -> f64 {
+        choice_guessing(&self.slots, slot)
+    }
+    fn typed_input(&self) -> bool {
+        false
+    }
     fn check(&self, slot: u16, response: &Response, _: &CheckCtx<'_>) -> CheckOutcome {
         choice_check(&self.slots, slot, response)
     }
 }
 
-/// A kind whose rule and check are defined by the stage that introduces it.
+/// A kind whose rule, check and guessing rate are defined by the stage that
+/// introduces it; until then it cannot be live, and its guessing rate is 0.
 macro_rules! not_yet_checked {
-    ($body:ident, $tag:literal, $ladder:ident, $production:literal) => {
+    ($body:ident, $tag:literal, $ladder:ident, $production:literal, $typed:literal) => {
         impl ItemKind for $body {
             fn ladder(&self) -> LadderLevel {
                 LadderLevel::$ladder
             }
             fn is_production(&self) -> bool {
                 $production
+            }
+            fn guessing(&self, _: u16) -> f64 {
+                0.0
+            }
+            fn typed_input(&self) -> bool {
+                $typed
             }
             fn quality(&self, _: &QualityCtx<'_>) -> Result<(), Vec<QualityIssue>> {
                 no_rule($tag)
@@ -283,16 +316,17 @@ macro_rules! not_yet_checked {
     };
 }
 
-not_yet_checked!(MatchingBody, "matching", Recognition, false);
+not_yet_checked!(MatchingBody, "matching", Recognition, false, false);
 not_yet_checked!(
     TrueFalseNotGivenBody,
     "true_false_not_given",
     Recognition,
+    false,
     false
 );
-not_yet_checked!(OwnSentenceBody, "own_sentence", Free, true);
-not_yet_checked!(WritingBody, "writing", Free, true);
-not_yet_checked!(ShadowingBody, "shadowing", Pronunciation, false);
+not_yet_checked!(OwnSentenceBody, "own_sentence", Free, true, true);
+not_yet_checked!(WritingBody, "writing", Free, true, true);
+not_yet_checked!(ShadowingBody, "shadowing", Pronunciation, false, false);
 
 /// An English typed-input kind. Dictation and sentence assembly are not
 /// production: the learner transcribes or orders given words rather than
@@ -305,6 +339,12 @@ macro_rules! english_input {
             }
             fn is_production(&self) -> bool {
                 $production
+            }
+            fn guessing(&self, _: u16) -> f64 {
+                0.0
+            }
+            fn typed_input(&self) -> bool {
+                true
             }
             fn quality(&self, _: &QualityCtx<'_>) -> Result<(), Vec<QualityIssue>> {
                 input_quality(&self.slots)
@@ -328,6 +368,12 @@ impl ItemKind for ItemBody {
     }
     fn is_production(&self) -> bool {
         each_body!(self, b => b.is_production())
+    }
+    fn guessing(&self, slot: u16) -> f64 {
+        each_body!(self, b => b.guessing(slot))
+    }
+    fn typed_input(&self) -> bool {
+        each_body!(self, b => b.typed_input())
     }
     fn quality(&self, ctx: &QualityCtx<'_>) -> Result<(), Vec<QualityIssue>> {
         each_body!(self, b => b.quality(ctx))
