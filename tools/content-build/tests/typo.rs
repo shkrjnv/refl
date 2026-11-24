@@ -108,6 +108,18 @@ fn real_words_are_not_typos() {
 }
 
 #[test]
+fn distance_is_bounded_by_the_accepted_word() {
+    // Not near "the" at all; and two edits on a 4-letter word are too many.
+    assert_eq!(verdict("the", "asdf"), Verdict::Unrecognized);
+    assert_eq!(verdict("word", "wxrx"), Verdict::Unrecognized);
+    // One swap on a short word, two edits on a long one.
+    assert_eq!(verdict("word", "wrod"), Verdict::Typo);
+    assert_eq!(verdict("necessary", "neccesary"), Verdict::Typo);
+    assert_eq!(verdict("necessary", "nexessarx"), Verdict::Typo);
+    assert_eq!(verdict("necessary", "nxxxssary"), Verdict::Unrecognized);
+}
+
+#[test]
 fn misspellings_are_typos() {
     for (accepted, answer) in [
         ("the", "teh"),

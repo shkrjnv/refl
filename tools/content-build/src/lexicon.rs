@@ -3,8 +3,10 @@
 //! size 60, merged, lowercased and sorted. The files come from the nixpkgs
 //! `scowl` package, so the same flake.lock gives the same lexicon.
 
+use std::collections::BTreeMap;
 use std::fmt::Write as _;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::{Mutex, PoisonError};
 
 use refl_core::lexicon::{Lexicon, LexiconRef};
 use sha2::{Digest, Sha256};
@@ -17,6 +19,19 @@ pub const SCOWL_LISTS: [&str; 2] = ["wamerican.60", "wbritish.60"];
 /// # Errors
 /// A list cannot be read.
 pub fn load_scowl(dir: &Path) -> std::io::Result<Lexicon> {
+    // One process builds many bundles (the tests build dozens); the lists
+    // do not change meanwhile, so each directory is read once.
+    static CACHE: Mutex<BTreeMap<PathBuf, Lexicon>> = Mutex::new(BTreeMap::new());
+    let mut cache = CACHE.lock().unwrap_or_else(PoisonError::into_inner);
+    if let Some(lexicon) = cache.get(dir) {
+        return Ok(lexicon.clone());
+    }
+    let lexicon = read_scowl(dir)?;
+    cache.insert(dir.to_path_buf(), lexicon.clone());
+    Ok(lexicon)
+}
+
+fn read_scowl(dir: &Path) -> std::io::Result<Lexicon> {
     let mut words = Vec::new();
     for name in SCOWL_LISTS {
         let path = dir.join(name);
