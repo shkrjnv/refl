@@ -16,7 +16,7 @@ use refl_server::MIGRATOR;
 use refl_server::content::{Imported, activate, import_bundle};
 use refl_server::events::{InsertError, Inserted, insert_event, learner_events};
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-use sqlx::{Executor, PgPool, Row};
+use sqlx::{Connection, Executor, PgPool, Row};
 use uuid::Uuid;
 
 struct Cluster {
@@ -139,6 +139,16 @@ fn lesson_started() -> serde_json::Value {
 
 const NOW: Timestamp = Timestamp(1_700_000_000_500);
 
+/// Inserts one event in its own transaction, committed on success.
+async fn insert(db: &PgPool, json: &str) -> Result<Inserted, InsertError> {
+    let mut tx = db.begin().await.unwrap();
+    let inserted = insert_event(&mut tx, json, NOW).await;
+    if inserted.is_ok() {
+        tx.commit().await.unwrap();
+    }
+    inserted
+}
+
 /// Events read back from the log; all of them must be known to this core.
 async fn known_events(db: &PgPool) -> Vec<Event> {
     learner_events(db, LEARNER)
@@ -204,7 +214,7 @@ async fn migrated(c: &Cluster, name: &str) -> PgPool {
 
 async fn log_is_append_only(c: &Cluster) {
     let db = migrated(c, "append_only").await;
-    insert_event(&db, &event(event_id(1), &lesson_started()), NOW)
+    insert(&db, &event(event_id(1), &lesson_started()))
         .await
         .unwrap();
     for stmt in [
@@ -239,27 +249,29 @@ async fn duplicate_event_id_is_ignored(c: &Cluster) {
     let db = migrated(c, "idempotent").await;
     let e = event(event_id(1), &lesson_started());
     assert!(matches!(
-        insert_event(&db, &e, NOW).await.unwrap(),
+        insert(&db, &e).await.unwrap(),
         Inserted::New { .. }
     ));
-    assert_eq!(
-        insert_event(&db, &e, NOW).await.unwrap(),
-        Inserted::Duplicate
-    );
+    assert_eq!(insert(&db, &e).await.unwrap(), Inserted::Duplicate);
     let events = known_events(&db).await;
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].server_ts, Some(NOW));
     db.close().await;
 }
 
-async fn new_seq(db: impl sqlx::PgExecutor<'_>, n: u128) -> i64 {
-    match insert_event(db, &event(event_id(n), &lesson_started()), NOW)
-        .await
-        .unwrap()
-    {
+fn seq_of(inserted: Inserted) -> i64 {
+    match inserted {
         Inserted::New { server_seq } => server_seq,
-        Inserted::Duplicate => panic!("event {n} is a duplicate"),
+        Inserted::Duplicate => panic!("expected a new event, got a duplicate"),
     }
+}
+
+async fn new_seq(db: &PgPool, n: u128) -> i64 {
+    seq_of(
+        insert(db, &event(event_id(n), &lesson_started()))
+            .await
+            .unwrap(),
+    )
 }
 
 /// Receipt order is strictly increasing per insert, also for the
@@ -270,14 +282,17 @@ async fn server_seq_increases(c: &Cluster) {
     // Inserted out of event_id order: server_seq follows receipt, not event_id.
     let first = new_seq(&db, 5).await;
     let dup = event(event_id(5), &lesson_started());
-    assert_eq!(
-        insert_event(&db, &dup, NOW).await.unwrap(),
-        Inserted::Duplicate
-    );
+    assert_eq!(insert(&db, &dup).await.unwrap(), Inserted::Duplicate);
     let second = new_seq(&db, 2).await;
     let mut conn = db.acquire().await.unwrap();
     conn.execute("SET ROLE refl_app").await.unwrap();
-    let third = new_seq(&mut *conn, 9).await;
+    let mut tx = conn.begin().await.unwrap();
+    let third = seq_of(
+        insert_event(&mut tx, &event(event_id(9), &lesson_started()), NOW)
+            .await
+            .unwrap(),
+    );
+    tx.commit().await.unwrap();
     conn.execute("RESET ROLE").await.unwrap();
     drop(conn);
     assert!(first < second && second < third, "{first} {second} {third}");
@@ -296,6 +311,63 @@ async fn server_seq_increases(c: &Cluster) {
             (event_id(9), third)
         ]
     );
+    db.close().await;
+}
+
+/// Two concurrent transactions for one learner never commit with inverted
+/// `server_seq`: the second waits for the first's learner lock before it
+/// gets a number. Without the lock, B could take a larger number and commit
+/// while A is still open, and a client syncing in between would move its
+/// cursor past A's event for good. Another learner does not wait.
+async fn learner_lock_orders_commits(c: &Cluster) {
+    let db = migrated(c, "learner_lock").await;
+    let other = Uuid::from_u128(0x0193_0000_0000_7000_8000_0000_0000_0005);
+    user(&db, other, "AAAA0005", false).await;
+
+    let mut a = db.begin().await.unwrap();
+    let seq_a = seq_of(
+        insert_event(&mut a, &event(event_id(1), &lesson_started()), NOW)
+            .await
+            .unwrap(),
+    );
+    let pool = db.clone();
+    let b = tokio::spawn(async move {
+        let mut b = pool.begin().await.unwrap();
+        let seq_b = seq_of(
+            insert_event(&mut b, &event(event_id(2), &lesson_started()), NOW)
+                .await
+                .unwrap(),
+        );
+        b.commit().await.unwrap();
+        seq_b
+    });
+    // While A is open, B cannot get past the lock, however long it waits.
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    assert!(!b.is_finished(), "B inserted while A held the learner lock");
+    // Another learner's insert is not blocked by A.
+    let mut theirs: serde_json::Value =
+        serde_json::from_str(&event(event_id(3), &lesson_started())).unwrap();
+    theirs["learner_id"] = other.to_string().into();
+    tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        insert(&db, &theirs.to_string()),
+    )
+    .await
+    .expect("another learner waited for A's lock")
+    .unwrap();
+    // B can only commit after A, and its number is larger.
+    let visible: i64 = sqlx::query_scalar("SELECT count(*) FROM events WHERE learner_id = $1")
+        .bind(LEARNER)
+        .fetch_one(&db)
+        .await
+        .unwrap();
+    assert_eq!(
+        visible, 0,
+        "nothing of LEARNER is committed while A is open"
+    );
+    a.commit().await.unwrap();
+    let seq_b = b.await.unwrap();
+    assert!(seq_a < seq_b, "{seq_a} {seq_b}");
     db.close().await;
 }
 
@@ -349,7 +421,7 @@ async fn invalid_events_are_rejected(c: &Cluster) {
         &serde_json::json!({ "type": "lesson_started", "lesson": "Not A Slug" }),
     );
     assert!(matches!(
-        insert_event(&db, &bad_payload, NOW).await,
+        insert(&db, &bad_payload).await,
         Err(InsertError::Invalid(_))
     ));
     db.close().await;
@@ -374,7 +446,7 @@ async fn unknown_events_are_rejected(c: &Cluster) {
         serde_json::from_str(&event(event_id(3), &lesson_started())).unwrap();
     future["schema_version"] = 2.into();
     for json in [new_type, new_response, future.to_string()] {
-        let err = insert_event(&db, &json, NOW).await.unwrap_err();
+        let err = insert(&db, &json).await.unwrap_err();
         assert!(matches!(err, InsertError::Unknown), "{json}: {err}");
         assert_eq!(
             err.to_string(),
@@ -395,7 +467,7 @@ async fn server_ts_must_be_empty(c: &Cluster) {
         serde_json::from_str(&event(event_id(2), &lesson_started())).unwrap();
     with_server_ts["server_ts"] = 1.into();
     assert!(matches!(
-        insert_event(&db, &with_server_ts.to_string(), NOW).await,
+        insert(&db, &with_server_ts.to_string()).await,
         Err(InsertError::ServerTsSet)
     ));
     let n: i64 = sqlx::query_scalar("SELECT count(*) FROM events")
@@ -412,22 +484,20 @@ async fn duplicate_derived_event_is_rejected(c: &Cluster) {
         "type": "milestone_reached",
         "milestone": { "kind": "level", "key": "B1" },
     });
-    insert_event(&db, &event(event_id(1), &milestone), NOW)
-        .await
-        .unwrap();
+    insert(&db, &event(event_id(1), &milestone)).await.unwrap();
     assert!(matches!(
-        insert_event(&db, &event(event_id(2), &milestone), NOW).await,
+        insert(&db, &event(event_id(2), &milestone)).await,
         Err(InsertError::DerivedDuplicate)
     ));
     let derived_unlock = serde_json::json!({
         "type": "unlock_granted", "kind": "theme", "key": "blocks",
         "source": { "kind": "achievement", "achievement": "first-step" },
     });
-    insert_event(&db, &event(event_id(3), &derived_unlock), NOW)
+    insert(&db, &event(event_id(3), &derived_unlock))
         .await
         .unwrap();
     assert!(matches!(
-        insert_event(&db, &event(event_id(4), &derived_unlock), NOW).await,
+        insert(&db, &event(event_id(4), &derived_unlock)).await,
         Err(InsertError::DerivedDuplicate)
     ));
     // Admin grants and revokes are not unique: re-grant after revoke works.
@@ -440,21 +510,17 @@ async fn duplicate_derived_event_is_rejected(c: &Cluster) {
     });
     for (n, p) in [(5, &admin_grant), (6, &revoke), (7, &admin_grant)] {
         assert!(matches!(
-            insert_event(&db, &event(event_id(n), p), NOW)
-                .await
-                .unwrap(),
+            insert(&db, &event(event_id(n), p)).await.unwrap(),
             Inserted::New { .. }
         ));
     }
     // Each achievement tier is its own derived event; a repeated tier is not.
     let tier = |t: u8| serde_json::json!({ "type": "achievement_earned", "achievement": "streak", "tier": t });
     for (n, t) in [(8, 1), (9, 2)] {
-        insert_event(&db, &event(event_id(n), &tier(t)), NOW)
-            .await
-            .unwrap();
+        insert(&db, &event(event_id(n), &tier(t))).await.unwrap();
     }
     assert!(matches!(
-        insert_event(&db, &event(event_id(10), &tier(2)), NOW).await,
+        insert(&db, &event(event_id(10), &tier(2))).await,
         Err(InsertError::DerivedDuplicate)
     ));
     let events = known_events(&db).await;
@@ -466,13 +532,13 @@ async fn erasure_removes_one_learner(c: &Cluster) {
     let db = migrated(c, "erasure").await;
     let other = Uuid::from_u128(0x0193_0000_0000_7000_8000_0000_0000_0003);
     user(&db, other, "AAAA0003", false).await;
-    insert_event(&db, &event(event_id(1), &lesson_started()), NOW)
+    insert(&db, &event(event_id(1), &lesson_started()))
         .await
         .unwrap();
     let mut theirs: serde_json::Value =
         serde_json::from_str(&event(event_id(2), &lesson_started())).unwrap();
     theirs["learner_id"] = other.to_string().into();
-    insert_event(&db, &theirs.to_string(), NOW).await.unwrap();
+    insert(&db, &theirs.to_string()).await.unwrap();
     sqlx::query(
         "INSERT INTO model_snapshots (learner_id, model_version, parameters, parameters_hash, \
          state, last_event_id) VALUES ($1, 'v1', '{}', 'h', '\\x00', $2)",
@@ -612,6 +678,7 @@ fn database() {
         unknown_events_are_rejected(&cluster).await;
         server_ts_must_be_empty(&cluster).await;
         server_seq_increases(&cluster).await;
+        learner_lock_orders_commits(&cluster).await;
         server_seq_migration_keeps_log_rules(&cluster).await;
         duplicate_derived_event_is_rejected(&cluster).await;
         erasure_removes_one_learner(&cluster).await;

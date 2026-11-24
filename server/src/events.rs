@@ -8,7 +8,7 @@ use refl_core::event::DecodeError;
 use refl_core::value::Timestamp;
 use refl_core::{Decoded, decode_event};
 use serde_json::Value;
-use sqlx::PgExecutor;
+use sqlx::{PgExecutor, Postgres, Transaction};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,14 +48,31 @@ impl fmt::Display for InsertError {
 
 impl std::error::Error for InsertError {}
 
+/// Advisory lock key of one learner's log: the two halves of the UUID
+/// folded into 64 bits. Only the event log takes advisory locks, so keys of
+/// different learners can only meet by a 64-bit collision, which costs a
+/// wait, never correctness.
+fn learner_lock_key(learner: Uuid) -> i64 {
+    let (hi, lo) = learner.as_u64_pair();
+    (hi ^ lo).cast_signed()
+}
+
 /// Validates `json` with the core and appends it to the log with
 /// `server_ts = now`. A repeated `event_id` is ignored; a second derived event
 /// with the same uniqueness key and an event unknown to this core are rejected.
 ///
+/// The transaction first takes the learner's advisory lock, held until it
+/// ends. `server_seq` is assigned at insert, not at commit; with the lock,
+/// one learner's transactions run one at a time, so they commit in
+/// `server_seq` order and a sync cursor never skips an event
+/// (`docs/13-sync-versions.md`, «Протокол синхронизации»). Every insert into
+/// the log, from sync batches, derived events or `reclassified`, goes
+/// through here.
+///
 /// # Errors
-/// See [`InsertError`].
+/// See [`InsertError`]. After an error the transaction must be rolled back.
 pub async fn insert_event(
-    db: impl PgExecutor<'_>,
+    tx: &mut Transaction<'_, Postgres>,
     json: &str,
     now: Timestamp,
 ) -> Result<Inserted, InsertError> {
@@ -75,6 +92,11 @@ pub async fn insert_event(
         .and_then(Value::as_u64)
         .and_then(|v| i16::try_from(v).ok())
         .ok_or(InsertError::Invalid(DecodeError::MissingSchemaVersion))?;
+    sqlx::query("SELECT pg_advisory_xact_lock($1)")
+        .bind(learner_lock_key(event.learner_id.0))
+        .execute(&mut **tx)
+        .await
+        .map_err(InsertError::Db)?;
     let derived = event.payload.derived_key();
     let result = sqlx::query_scalar::<_, i64>(
         "INSERT INTO events (event_id, learner_id, session_id, schema_version, client_ts, \
@@ -92,7 +114,7 @@ pub async fn insert_event(
     .bind(&raw["payload"])
     .bind(derived.as_ref().map(|d| d.kind))
     .bind(derived.as_ref().map(|d| d.key.as_str()))
-    .fetch_optional(db)
+    .fetch_optional(&mut **tx)
     .await;
     match result {
         Ok(Some(server_seq)) => Ok(Inserted::New { server_seq }),
