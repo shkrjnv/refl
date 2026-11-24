@@ -61,15 +61,30 @@ fn verdict() -> impl Strategy<Value = Verdict> {
     ]
 }
 
+fn item_ref() -> impl Strategy<Value = ItemRef> {
+    (
+        slug(ItemId::new),
+        any::<u32>(),
+        proptest::option::of(any::<u64>()),
+    )
+        .prop_map(|(id, v, seed)| ItemRef {
+            id,
+            version: ItemVersion(v),
+            seed,
+        })
+}
+
 fn payload() -> impl Strategy<Value = EventPayload> {
     let answer = (
-        (slug(ItemId::new), any::<u32>(), any::<u16>()),
+        (item_ref(), any::<u16>(), any::<u8>(), any::<bool>()),
         prop_oneof![
             Just(AnswerContext::Lesson),
             Just(AnswerContext::Review),
             Just(AnswerContext::Placement),
             Just(AnswerContext::Practice),
-            Just(AnswerContext::Mock)
+            Just(AnswerContext::Mock),
+            Just(AnswerContext::Audit),
+            Just(AnswerContext::ReturnCheck)
         ],
         prop_oneof![
             any::<u16>().prop_map(Response::Option),
@@ -86,7 +101,7 @@ fn payload() -> impl Strategy<Value = EventPayload> {
     )
         .prop_map(
             |(
-                (id, v, slot),
+                (item, slot, scaffold, revealed_deps),
                 context,
                 response,
                 verdict,
@@ -96,11 +111,10 @@ fn payload() -> impl Strategy<Value = EventPayload> {
                 (hints, attempt),
             )| {
                 EventPayload::Answer(AnswerEvent {
-                    item: ItemRef {
-                        id,
-                        version: ItemVersion(v),
-                    },
+                    item,
                     slot,
+                    scaffold,
+                    revealed_deps,
                     context,
                     response,
                     verdict,
@@ -645,4 +659,29 @@ fn derived_keys_cover_only_server_derived_events() {
         None
     );
     assert_eq!(key(EventPayload::ThemeSelected { theme: pkg() }), None);
+}
+
+#[test]
+fn new_answer_fields_default_on_input() {
+    let json = sample_with_payload(
+        1,
+        &answer_payload(&serde_json::json!({ "kind": "text", "value": "an apple" })),
+    );
+    let EventPayload::Answer(a) = known(&json).payload else {
+        panic!("not an answer");
+    };
+    assert_eq!((a.item.seed, a.scaffold, a.revealed_deps), (None, 0, false));
+    let written = serde_json::to_value(&a).unwrap();
+    assert_eq!(
+        written["item"],
+        serde_json::json!({ "id": "articles.a-an.1", "version": 1 })
+    );
+    assert_eq!(written["scaffold"], 0);
+    assert_eq!(written["revealed_deps"], false);
+    for (context, tag) in [
+        (AnswerContext::Audit, "audit"),
+        (AnswerContext::ReturnCheck, "return_check"),
+    ] {
+        assert_eq!(serde_json::to_value(context).unwrap(), tag);
+    }
 }

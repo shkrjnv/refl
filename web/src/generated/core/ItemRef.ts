@@ -3,6 +3,11 @@ import type { ItemId } from "./ItemId";
 import type { ItemVersion } from "./ItemVersion";
 
 /**
- * Exactly what was shown: an item at a specific version.
+ * Exactly what was shown: an item at a specific version, and for a
+ * generated item the instance (`docs/10-subjects.md`, «Генераторы задач»).
  */
-export type ItemRef = { id: ItemId, version: ItemVersion, };
+export type ItemRef = { id: ItemId, version: ItemVersion, 
+/**
+ * Generator instance; `None` for ordinary items.
+ */
+seed?: bigint, };

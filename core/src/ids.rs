@@ -113,12 +113,17 @@ slug_id!(
 #[serde(transparent)]
 pub struct ItemVersion(pub u32);
 
-/// Exactly what was shown: an item at a specific version.
+/// Exactly what was shown: an item at a specific version, and for a
+/// generated item the instance (`docs/10-subjects.md`, «Генераторы задач»).
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ItemRef {
     pub id: ItemId,
     pub version: ItemVersion,
+    /// Generator instance; `None` for ordinary items.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub seed: Option<u64>,
 }
 
 /// Version of a content build (see `reclassified` in `docs/02-layer1-content.md`).

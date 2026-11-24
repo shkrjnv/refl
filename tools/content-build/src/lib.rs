@@ -110,6 +110,7 @@ pub fn build(opts: &Options) -> std::io::Result<Output> {
             let r = ItemRef {
                 id: item.id.clone(),
                 version: item.version,
+                seed: None,
             };
             for sk in item.slots.iter().flat_map(|s| &s.kcs) {
                 let entry = items_by_kc.entry(sk.kc.clone()).or_default();

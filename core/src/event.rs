@@ -154,14 +154,19 @@ impl EventPayload {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename_all = "lowercase"))]
-#[serde(rename_all = "lowercase")]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename_all = "snake_case"))]
+#[serde(rename_all = "snake_case")]
 pub enum AnswerContext {
     Lesson,
     Review,
     Placement,
     Practice,
     Mock,
+    /// Audit item, chosen not by value (`docs/11-quality.md`, «К4»).
+    Audit,
+    /// Check after a break (`docs/04-placement-planner.md`); like `Audit`,
+    /// chosen not by value, so it can calibrate forgetting.
+    ReturnCheck,
 }
 
 /// Raw response exactly as given.
@@ -199,6 +204,14 @@ pub enum Confidence {
 pub struct AnswerEvent {
     pub item: ItemRef,
     pub slot: u16,
+    /// Steps shown already solved (faded worked example); 0: none
+    /// (`docs/10-subjects.md`, «Многошаговые решения»).
+    #[serde(default)]
+    pub scaffold: u8,
+    /// The step was solved from the revealed correct result of a step it
+    /// depends on.
+    #[serde(default)]
+    pub revealed_deps: bool,
     pub context: AnswerContext,
     pub response: Response,
     /// Check result at answer time; later corrections come as `reclassified`.

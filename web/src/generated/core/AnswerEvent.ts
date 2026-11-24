@@ -6,7 +6,17 @@ import type { MisconceptionId } from "./MisconceptionId";
 import type { Response } from "./Response";
 import type { Verdict } from "./Verdict";
 
-export type AnswerEvent = { item: ItemRef, slot: number, context: AnswerContext, response: Response, 
+export type AnswerEvent = { item: ItemRef, slot: number, 
+/**
+ * Steps shown already solved (faded worked example); 0: none
+ * (`docs/10-subjects.md`, «Многошаговые решения»).
+ */
+scaffold: number, 
+/**
+ * The step was solved from the revealed correct result of a step it
+ * depends on.
+ */
+revealed_deps: boolean, context: AnswerContext, response: Response, 
 /**
  * Check result at answer time; later corrections come as `reclassified`.
  */
