@@ -13,7 +13,7 @@ use std::process::Command;
 use refl_core::value::Timestamp;
 use refl_core::{Decoded, Event};
 use refl_server::MIGRATOR;
-use refl_server::content::{Imported, activate, import_bundle, import_lexicon};
+use refl_server::content::{ImportError, Imported, activate, import_bundle, import_lexicon};
 use refl_server::events::{InsertError, Inserted, insert_event, learner_events};
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use sqlx::{Connection, Executor, PgPool, Row};
@@ -186,10 +186,10 @@ async fn migrations_apply_and_revert(c: &Cluster) {
     ] {
         assert!(all.iter().any(|x| x == t), "missing table {t}: {all:?}");
     }
-    // A snapshot always says which content version it was computed with.
+    // A snapshot always says which fold version it was computed with.
     let nullable: String = sqlx::query_scalar(
         "SELECT is_nullable::text FROM information_schema.columns \
-         WHERE table_name = 'model_snapshots' AND column_name = 'content_version'",
+         WHERE table_name = 'model_snapshots' AND column_name = 'fold_version'",
     )
     .fetch_one(&db)
     .await
@@ -549,7 +549,7 @@ async fn erasure_removes_one_learner(c: &Cluster) {
     theirs["learner_id"] = other.to_string().into();
     insert(&db, &theirs.to_string()).await.unwrap();
     sqlx::query(
-        "INSERT INTO model_snapshots (learner_id, model_version, content_version, parameters, \
+        "INSERT INTO model_snapshots (learner_id, model_version, fold_version, parameters, \
          parameters_hash, state, last_event_id) VALUES ($1, 'v1', 'c1', '{}', 'h', '\\x00', $2)",
     )
     .bind(LEARNER)
@@ -714,6 +714,85 @@ async fn content_bundle_imports_idempotently(c: &Cluster) {
     db.close().await;
 }
 
+/// A published item version stays: a bundle that drops or changes one is
+/// rejected, however the file of versions came about
+/// (`docs/02-layer1-content.md`, «Публикация»).
+async fn published_item_versions_are_kept(c: &Cluster) {
+    let db = migrated(c, "published").await;
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../content");
+    let out = content_build::build(&content_build::Options::new(root)).unwrap();
+    let first = out.bundle.unwrap_or_else(|| panic!("{}", out.report));
+    let lexicon = out.lexicon.unwrap();
+    let mut tx = db.begin().await.unwrap();
+    import_lexicon(&mut tx, &lexicon).await.unwrap();
+    assert_eq!(import_bundle(&mut tx, &first).await.unwrap(), Imported::New);
+    tx.commit().await.unwrap();
+    // The fold version is stored with the content version.
+    let stored: String =
+        sqlx::query_scalar("SELECT fold_version FROM content_versions WHERE version = $1")
+            .bind(&first.content_version.0)
+            .fetch_one(&db)
+            .await
+            .unwrap();
+    assert_eq!(stored, refl_core::model::fold_version(&first));
+
+    let named = |name: &str, f: &dyn Fn(&mut refl_core::bundle::Bundle)| {
+        let mut b = first.clone();
+        // A content version is 64 hex digits.
+        b.content_version = refl_core::ids::ContentVersion(name.repeat(64));
+        f(&mut b);
+        b
+    };
+    let try_import = |b: refl_core::bundle::Bundle| {
+        let db = db.clone();
+        async move {
+            let mut tx = db.begin().await.unwrap();
+            let r = import_bundle(&mut tx, &b).await;
+            tx.rollback().await.unwrap();
+            r
+        }
+    };
+
+    let lost = named("a", &|b| {
+        b.content.item_versions.remove(0);
+    });
+    let lost_name = {
+        let e = &first.content.item_versions[0];
+        format!("{}@{}", e.item, e.version.0)
+    };
+    match try_import(lost).await {
+        Err(ImportError::PublishedVersionsMissing(v)) => {
+            assert_eq!(v, std::slice::from_ref(&lost_name));
+        }
+        other => panic!("expected a missing version, got {other:?}"),
+    }
+
+    let changed = named("b", &|b| {
+        b.content.item_versions[0].projection.expected_time += 1;
+    });
+    match try_import(changed).await {
+        Err(ImportError::PublishedProjectionChanged(v)) => assert_eq!(v, [lost_name]),
+        other => panic!("expected a changed projection, got {other:?}"),
+    }
+
+    // Adding a task and a task version is allowed; the fold version does
+    // not move, so no snapshot is invalidated.
+    let grown = named("c", &|b| {
+        let mut e = b.content.item_versions[0].clone();
+        e.version = refl_core::ids::ItemVersion(e.version.0 + 1);
+        b.content.item_versions.push(e);
+    });
+    assert_eq!(
+        refl_core::model::fold_version(&grown),
+        refl_core::model::fold_version(&first)
+    );
+    match try_import(grown).await {
+        Ok(Imported::New) => {}
+        other => panic!("expected a new version, got {other:?}"),
+    }
+    db.close().await;
+}
+
 #[test]
 fn database() {
     let cluster = Cluster::start();
@@ -735,5 +814,6 @@ fn database() {
         erasure_removes_one_learner(&cluster).await;
         privacy_defaults_depend_on_minor(&cluster).await;
         content_bundle_imports_idempotently(&cluster).await;
+        published_item_versions_are_kept(&cluster).await;
     });
 }

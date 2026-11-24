@@ -56,8 +56,9 @@ fn main() -> ExitCode {
         );
     }
     println!(
-        "events={events} model={} hash={}",
+        "events={events} model={} fold={} hash={}",
         model.version(),
+        refl_core::model::fold_version(&bundle),
         state.hash()
     );
     ExitCode::SUCCESS

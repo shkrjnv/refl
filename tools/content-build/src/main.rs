@@ -91,6 +91,7 @@ fn main() -> ExitCode {
     }
     let lex = &bundle.content.lexicon;
     println!("content version {}", bundle.content_version.0);
+    println!("fold version {}", refl_core::model::fold_version(&bundle));
     println!(
         "lexicon {}: {} words, {} bytes",
         lex.version, lex.words, lex.bytes

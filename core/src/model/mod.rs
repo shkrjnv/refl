@@ -6,6 +6,7 @@
 //! the same log; [`KnowledgeModel`] is version 1.
 
 pub mod derived;
+pub mod fold_version;
 pub mod fsrs;
 pub mod math;
 mod state;
@@ -23,6 +24,7 @@ use crate::ids::{EventId, ItemRef, MisconceptionId, SubjectId};
 use crate::item::LadderLevel;
 use crate::value::{Finite, Timestamp};
 
+pub use fold_version::fold_version;
 pub use state::{KcState, MisconceptionState, RapidStats, State};
 pub use v1::{Belief, KnowledgeModel, Params};
 

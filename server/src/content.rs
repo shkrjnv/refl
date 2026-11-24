@@ -2,12 +2,14 @@
 //! версии»): per-entity tables keyed by content version, idempotent by
 //! version, exactly one active version.
 
-use std::fmt::Write as _;
+use std::collections::BTreeMap;
+use std::fmt::{self, Write as _};
 
 use refl_core::bundle::{Bundle, BundleContent, KcStatus};
 use refl_core::content::ExplanationTarget;
 use refl_core::item::KcRole;
 use refl_core::lexicon::Lexicon;
+use refl_core::model::fold_version;
 use serde::Serialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -69,29 +71,124 @@ pub async fn import_lexicon(
     })
 }
 
+/// Why a bundle was not imported.
+#[derive(Debug)]
+pub enum ImportError {
+    Db(sqlx::Error),
+    /// The bundle lacks the projection of an item version stored by an
+    /// earlier import, as `item@version`.
+    PublishedVersionsMissing(Vec<String>),
+    /// The bundle changes the projection of an item version stored by an
+    /// earlier import, as `item@version`.
+    PublishedProjectionChanged(Vec<String>),
+}
+
+impl fmt::Display for ImportError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Db(e) => e.fmt(f),
+            Self::PublishedVersionsMissing(v) => write!(
+                f,
+                "the bundle lacks published item versions: {}",
+                v.join(", ")
+            ),
+            Self::PublishedProjectionChanged(v) => write!(
+                f,
+                "the bundle changes published item versions: {}",
+                v.join(", ")
+            ),
+        }
+    }
+}
+
+impl std::error::Error for ImportError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Db(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
+impl From<sqlx::Error> for ImportError {
+    fn from(e: sqlx::Error) -> Self {
+        Self::Db(e)
+    }
+}
+
+/// A published item version never disappears or changes (`docs/02-layer1-content.md`,
+/// «Публикация»): every projection stored by an earlier import must be in
+/// the bundle, unchanged. This is the guard that outlives the lock file.
+async fn check_published(
+    conn: &mut PgConnection,
+    v: &str,
+    c: &BundleContent,
+) -> Result<(), ImportError> {
+    let stored: Vec<(String, i32, Value)> = sqlx::query_as(
+        "SELECT DISTINCT item_id, version, projection FROM content_item_versions \
+         WHERE content_version <> $1 ORDER BY item_id, version",
+    )
+    .bind(v)
+    .fetch_all(&mut *conn)
+    .await?;
+    let in_bundle: BTreeMap<(&str, i64), Value> = c
+        .item_versions
+        .iter()
+        .map(|e| {
+            (
+                (e.item.as_str(), i64::from(e.version.0)),
+                json(&e.projection),
+            )
+        })
+        .collect();
+    let (mut missing, mut changed) = (Vec::new(), Vec::new());
+    for (item, version, projection) in stored {
+        let name = format!("{item}@{version}");
+        match in_bundle.get(&(item.as_str(), i64::from(version))) {
+            None => missing.push(name),
+            Some(p) if *p != projection => changed.push(name),
+            Some(_) => {}
+        }
+    }
+    missing.dedup();
+    changed.dedup();
+    if !missing.is_empty() {
+        Err(ImportError::PublishedVersionsMissing(missing))
+    } else if !changed.is_empty() {
+        Err(ImportError::PublishedProjectionChanged(changed))
+    } else {
+        Ok(())
+    }
+}
+
 /// Imports `bundle` in one transaction. Does not change the active version.
 ///
 /// # Errors
-/// Database errors; the transaction is rolled back. Fails if the lexicon the bundle references was not imported.
+/// [`ImportError::PublishedVersionsMissing`] or
+/// [`ImportError::PublishedProjectionChanged`] if the bundle drops or changes
+/// an item version an earlier import stored. Database errors; the transaction
+/// is rolled back. Fails if the lexicon the bundle references was not imported.
 ///
 /// # Panics
 /// Never: bundle types always serialize.
 pub async fn import_bundle(
     tx: &mut Transaction<'_, Postgres>,
     bundle: &Bundle,
-) -> Result<Imported, sqlx::Error> {
+) -> Result<Imported, ImportError> {
     let v = bundle.content_version.0.as_str();
     let c = &bundle.content;
+    check_published(&mut *tx, v, c).await?;
     let inserted = sqlx::query(
         "INSERT INTO content_versions \
-         (version, format_version, normalization_version, tokens, lexicon_version) \
-         VALUES ($1, $2, $3, $4, $5) ON CONFLICT (version) DO NOTHING",
+         (version, format_version, normalization_version, tokens, lexicon_version, fold_version) \
+         VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (version) DO NOTHING",
     )
     .bind(v)
     .bind(i64::from(bundle.format_version))
     .bind(i64::from(c.normalization_version))
     .bind(json(&c.tokens))
     .bind(&c.lexicon.version)
+    .bind(fold_version(bundle))
     .execute(&mut **tx)
     .await?;
     if inserted.rows_affected() == 0 {
