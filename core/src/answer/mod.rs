@@ -6,3 +6,4 @@
 pub mod dfa;
 pub mod normalize;
 pub mod template;
+pub mod typo;

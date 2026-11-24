@@ -16,6 +16,7 @@ use refl_core::item::{
     TransformationBody, TranslationBody, TrueFalseNotGivenBody, WritingBody,
 };
 use refl_core::kind::{CheckCtx, CheckOutcome, Compiled, ItemKind, QualityCtx, QualityIssueKind};
+use refl_core::lexicon::Lexicon;
 use refl_core::value::Localized;
 
 fn mis(s: &str) -> MisconceptionId {
@@ -241,7 +242,9 @@ fn text(s: &str) -> Response {
 fn typed_input_runs_accepted_then_expected_errors_then_unrecognized() {
     let check = EnglishCheck::default();
     let (slots, tokens) = compile(&slot(), NormalizeOptions::from(check));
+    let lex = lexicon();
     let ctx = CheckCtx {
+        lexicon: &lex,
         compiled: Compiled {
             slots: &slots,
             tokens: &tokens,
@@ -279,7 +282,9 @@ fn typed_input_honours_its_english_check() {
         ..EnglishCheck::default()
     };
     let (slots, tokens) = compile(&slot(), NormalizeOptions::from(check));
+    let lex = lexicon();
     let ctx = CheckCtx {
+        lexicon: &lex,
         compiled: Compiled {
             slots: &slots,
             tokens: &tokens,
@@ -303,7 +308,9 @@ fn typed_input_honours_its_english_check() {
 #[test]
 fn choice_compares_the_canonical_option_index() {
     let (slots, tokens) = compile(&slot(), NormalizeOptions::default());
+    let lex = lexicon();
     let ctx = CheckCtx {
+        lexicon: &lex,
         compiled: Compiled {
             slots: &slots,
             tokens: &tokens,
@@ -337,7 +344,9 @@ fn choice_compares_the_canonical_option_index() {
 #[test]
 fn kinds_without_a_check_say_so() {
     let (slots, tokens) = compile(&slot(), NormalizeOptions::default());
+    let lex = lexicon();
     let ctx = CheckCtx {
+        lexicon: &lex,
         compiled: Compiled {
             slots: &slots,
             tokens: &tokens,
@@ -411,4 +420,48 @@ fn choice_rule_checks_distractors_in_normalized_space() {
         }),
     };
     assert_eq!(ok.quality(&ctx), Ok(()));
+}
+
+/// A small lexicon: every word of the slot plus neighbours that are real
+/// words one edit away.
+fn lexicon() -> Lexicon {
+    Lexicon::from_words(["a", "an", "cat", "cot", "one", "the", "then", "than"].map(String::from))
+}
+
+#[test]
+fn typed_input_classifies_typos_against_accepted_answers() {
+    let check = EnglishCheck::default();
+    let (slots, tokens) = compile(&slot(), NormalizeOptions::from(check));
+    let lex = lexicon();
+    let ctx = CheckCtx {
+        lexicon: &lex,
+        compiled: Compiled {
+            slots: &slots,
+            tokens: &tokens,
+        },
+    };
+    let body = ItemBody::GapFill(GapFillBody {
+        stimulus: stimulus(),
+        slots: vec![slot()],
+        check,
+    });
+    let run = |s: &str| body.check(0, &text(s), &ctx);
+    let typo = checked(Verdict::Typo, None);
+    let unrecognized = checked(Verdict::Unrecognized, None);
+    assert_eq!(run("a catt"), typo);
+    assert_eq!(run("one ct."), typo);
+    // Every differing word is a typo: both words here.
+    assert_eq!(run("oen catt"), typo);
+    // A real word one edit away is not a typo, nor is a lexicon word in
+    // place of the article.
+    assert_eq!(run("a cot"), unrecognized);
+    assert_eq!(run("an cat"), unrecognized);
+    // Digits never make a typo; a different word count is not one either.
+    assert_eq!(run("a ca7"), unrecognized);
+    assert_eq!(run("a catt catt"), unrecognized);
+    assert_eq!(run("catt"), unrecognized);
+    // Three edits are too many.
+    assert_eq!(run("a cattle"), unrecognized);
+    // Expected errors still win over alignment.
+    assert_eq!(run("the cat"), checked(Verdict::Wrong, Some("en.m.the")));
 }

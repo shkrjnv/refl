@@ -12,6 +12,7 @@ use alloc::vec::Vec;
 
 use crate::answer::dfa::TokenTable;
 use crate::answer::normalize::{NormalizeOptions, normalize};
+use crate::answer::typo::is_typo;
 use crate::bundle::SlotAutomata;
 use crate::event::{Response, Verdict};
 use crate::ids::MisconceptionId;
@@ -20,6 +21,7 @@ use crate::item::{
     MatchingBody, OwnSentenceBody, SentenceAssemblyBody, ShadowingBody, Slot, TransformationBody,
     TranslationBody, TrueFalseNotGivenBody, WritingBody, each_body,
 };
+use crate::lexicon::Lexicon;
 
 /// What a kind is and how it is checked.
 pub trait ItemKind {
@@ -56,6 +58,8 @@ pub struct QualityCtx<'a> {
 #[derive(Debug, Clone, Copy)]
 pub struct CheckCtx<'a> {
     pub compiled: Compiled<'a>,
+    /// The bundle's lexicon, for the typo rule.
+    pub lexicon: &'a Lexicon,
 }
 
 /// Why a live item breaks its kind's quality rule
@@ -196,10 +200,10 @@ fn choice_check(slots: &[Slot], slot: u16, response: &Response) -> CheckOutcome 
 }
 
 /// The typed-input pipeline of `docs/02-layer1-content.md`, «Проверка ответов
-/// на ввод», steps 1–3 and 5: normalize with the item's settings, accepted
-/// answers, expected errors (first match wins), otherwise unrecognized.
-/// Step 4, alignment with typo classification, arrives with the stage-1
-/// checking pipeline and its word list (docs/02, open decision 9).
+/// на ввод»: normalize with the item's settings, accepted answers, expected
+/// errors (first match wins), alignment for typos, otherwise unrecognized.
+/// Other step-4 differences (form, missing word, order) stay unrecognized
+/// until docs/02 open decision 10.
 fn input_check(
     check: EnglishCheck,
     slot: u16,
@@ -211,9 +215,8 @@ fn input_check(
     else {
         return CheckOutcome::unrecognized();
     };
-    let tokens = compiled
-        .tokens
-        .ids(&normalize(text, NormalizeOptions::from(check)));
+    let words = normalize(text, NormalizeOptions::from(check));
+    let tokens = compiled.tokens.ids(&words);
     if automata.accepted.accepts(&tokens) {
         return CheckOutcome::verdict(Verdict::Correct, None);
     }
@@ -223,6 +226,9 @@ fn input_check(
         .find(|w| w.dfa.accepts(&tokens))
     {
         Some(w) => CheckOutcome::verdict(Verdict::Wrong, Some(w.misconception.clone())),
+        None if is_typo(&words, &automata.accepted, compiled.tokens, ctx.lexicon) => {
+            CheckOutcome::verdict(Verdict::Typo, None)
+        }
         None => CheckOutcome::unrecognized(),
     }
 }
