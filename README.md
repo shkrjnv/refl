@@ -215,8 +215,9 @@ Alternatives `( | )`, optional `[ ]`, nesting up to 4, no repetition: the langua
 - accepted and error patterns do not overlap, checked by an exact automaton product with the shortest witness in the report;
 - topic status (live / draft) is computed: live only with an explanation in ru and en, at least 10 tasks, 3 families, 3 production tasks and difficulty spread over two adjacent levels.
 - every `contrasts` pair of live topics has a live task whose wrong answer is right for the other topic (`confuses_with`), so confusing the two can be measured.
+- task versions are locked: `content/item-versions.lock` holds, for every published (task id, version), the *model projection* of that version (kind, per-slot topics with roles, number of choices and diagnosed misconceptions, difficulty, expected time, family). content-build only appends to it; changing the projection of a published version without a version bump, or losing an entry, fails the build (`projection-changed`, `lock-corrupt`; CI runs `--locked`).
 
-The result is a deterministic bundle; the content version is the SHA-256 of its contents. If an author later adds an accepted answer, old events do not change: the server writes `reclassified` and the model is recomputed.
+The result is a deterministic bundle; the content version is the SHA-256 of its contents. The bundle carries the projections of all published task versions, so the fold finds the task of an old event even after the task's version was bumped; full task bodies are current-version only. If an author later adds an accepted answer, old events do not change: the server writes `reclassified` and the model is recomputed.
 
 **Content cost** is reduced by three things ([docs/02](docs/02-layer1-content.md)): tools (`scaffold` for topics and misconceptions in uz / ru / en, interactive `test-item`, a "what is missing before live" report), order (topics with the highest importance and the most dependants first) and a "draft → automatic checks → review" flow where the author only reads what has already passed checks. In mathematics, generators produce most of the tasks.
 
@@ -315,7 +316,7 @@ All learning logic lives in one Rust core. The server calls it natively, the PWA
 | What | How |
 | --- | --- |
 | event log | append-only, updates and deletes rejected by triggers; the application role can only append; each row gets a `server_seq` receipt number for the sync cursor, and inserts take a per-learner lock so a cursor never skips an event; events from a newer client are rejected, not stored; every integer in an event fits in 2⁵³ − 1 so the JavaScript client reads it exactly |
-| model snapshots | fold speed-up, tied to model and weights version |
+| model snapshots | fold speed-up, tied to model and weights version and to the content version they were computed with; another content version means a full refold (on the device too) |
 | users, login, roles | learner, mentor, author, admin; child flag; login methods in a separate table |
 | social graph and privacy | teams, friends, blocks, reports, public codes, `profile_visibility` |
 | notifications | channels (Telegram, push, email), settings per (kind, channel) pair, outbox |
