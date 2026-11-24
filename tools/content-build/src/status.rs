@@ -15,6 +15,7 @@ use refl_core::item::{Item, ItemStatus, KcRole};
 use refl_core::kind::ItemKind;
 use refl_core::value::Lang;
 
+use crate::check;
 use crate::load::Content;
 use crate::report::{DraftKc, Report};
 
@@ -105,7 +106,30 @@ fn review_gaps(c: &Content, kc: &KcId, items: &[&Item]) -> Vec<String> {
     gaps
 }
 
+/// The KC's title must exist and be reviewed in ru and en.
+fn title_gaps(c: &Content, kc: &KcId) -> Vec<String> {
+    let Some(entry) = c.kcs.iter().map(|k| &k.value).find(|k| &k.id == kc) else {
+        return Vec::new();
+    };
+    [Lang::Ru, Lang::En]
+        .into_iter()
+        .filter_map(|lang| {
+            let name = lang_name(lang);
+            if entry.title.get(lang).is_none() {
+                Some(format!("no title in {name}"))
+            } else if !entry.review.is_shown(lang) {
+                Some(format!("title in {name} not reviewed"))
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
 pub fn compute(c: &Content, report: &mut Report) -> BTreeMap<KcId, KcStatus> {
+    // A contrast nobody measures blocks both ends, whatever their status
+    // (docs/02, «Проверки при сборке контента»).
+    let uncrossed = check::uncrossed_contrasts(c);
     let mut first = BTreeMap::new();
     for k in &c.kcs {
         first.entry(&k.value.id).or_insert(&k.file);
@@ -134,7 +158,20 @@ pub fn compute(c: &Content, report: &mut Report) -> BTreeMap<KcId, KcStatus> {
                 })
             })
             .collect();
+        missing.extend(title_gaps(c, kc));
         missing.extend(review_gaps(c, kc, &items));
+        for &(from, to) in &uncrossed {
+            let other = if from == kc {
+                to
+            } else if to == kc {
+                from
+            } else {
+                continue;
+            };
+            missing.push(format!(
+                "contrast with `{other}` has no task marked `confuses_with`"
+            ));
+        }
         let families: BTreeSet<_> = items.iter().map(|i| &i.family).collect();
         let production = items.iter().filter(|i| i.body.is_production()).count();
         let levels: BTreeSet<u8> = items.iter().map(|i| i.difficulty.get()).collect();

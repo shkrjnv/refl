@@ -145,15 +145,129 @@ fn unreviewed_texts_keep_a_kc_draft() {
 }
 
 #[test]
-fn draft_items_and_items_on_draft_kcs_are_not_eligible() {
+fn draft_unreviewed_items_and_items_on_draft_kcs_are_not_eligible() {
     let out = run(&fixtures().join("eligibility"));
     assert!(out.report.diagnostics.is_empty(), "{}", out.report);
     let bundle = out.bundle.expect("bundle");
     for entry in &bundle.content.items {
         let id = entry.item.id.as_str();
-        let expected = !matches!(id, "it.draft" | "it.on-draft-kc");
+        let expected = !matches!(
+            id,
+            "it.draft" | "it.on-draft-kc" | "it.half-reviewed" | "it.unreviewed"
+        );
         assert_eq!(entry.session_eligible, expected, "{id}");
     }
+}
+
+/// A `contrasts` edge nobody measures blocks both ends (docs/02), whatever
+/// else they have; the build still passes.
+#[test]
+fn an_uncrossed_contrast_blocks_both_kcs() {
+    let out = run(&fixtures().join("contrast-blocker"));
+    assert!(out.report.diagnostics.is_empty(), "{}", out.report);
+    assert_eq!(out.report.live, Vec::<String>::new());
+    for (kc, other) in [("en.k.a", "en.k.b"), ("en.k.b", "en.k.a")] {
+        let missing = &out
+            .report
+            .draft
+            .iter()
+            .find(|d| d.kc == kc)
+            .unwrap()
+            .missing;
+        assert_eq!(
+            missing,
+            &[format!(
+                "contrast with `{other}` has no task marked `confuses_with`"
+            )]
+        );
+    }
+}
+
+#[test]
+fn an_unreviewed_title_keeps_a_kc_draft() {
+    let out = run(&fixtures().join("title-unreviewed"));
+    assert!(out.report.diagnostics.is_empty(), "{}", out.report);
+    let missing = &out
+        .report
+        .draft
+        .iter()
+        .find(|d| d.kc == "en.k.a")
+        .unwrap()
+        .missing;
+    assert_eq!(missing, &["title in en not reviewed".to_owned()]);
+}
+
+/// The review queue (`report --review`): by language, `path:line — what`,
+/// and every task as a learner sees it.
+#[test]
+fn the_review_queue_lists_drafts_by_language_with_a_line() {
+    let root = fixtures().join("eligibility");
+    let (out, content) = content_build::build_with_content(&Options::new(&root)).unwrap();
+    assert!(out.bundle.is_some());
+    let files = content_build::review::review_files(&root, &content);
+    let sections: Vec<&str> = files
+        .queue
+        .lines()
+        .filter(|l| l.starts_with("== "))
+        .collect();
+    assert_eq!(sections, ["== uz", "== ru", "== en"]);
+    // The unreviewed task is listed in ru and en (it has texts there), once
+    // per language, as `path:line — …` with a real line of the file.
+    let ru = files
+        .queue
+        .split("== ru")
+        .nth(1)
+        .unwrap()
+        .split("== en")
+        .next()
+        .unwrap();
+    let entry = ru
+        .lines()
+        .find(|l| l.contains("task `it.unreviewed`"))
+        .unwrap_or_else(|| panic!("{ru}"));
+    let (place, what) = entry.split_once(" — ").unwrap();
+    let (path, line) = place.rsplit_once(':').unwrap();
+    assert!(path.ends_with("content.ncl"), "{path}");
+    assert!(line.parse::<usize>().unwrap() >= 1);
+    assert!(what.starts_with("task `it.unreviewed` v1: why and hint"));
+    // A reviewed task is not in the queue.
+    assert!(!ru.contains("it.gap`"), "{ru}");
+    // The tasks file has a block per language with the review status.
+    assert!(files.tasks.contains("## it.unreviewed v1 · gapfill"));
+    assert!(files.tasks.contains("### ru [draft]"));
+    assert!(files.tasks.contains("### ru [reviewed by test]"));
+    assert!(files.tasks.contains("- Answer: a cat"));
+}
+
+/// The line is found from the text, also when the text came from a template.
+#[test]
+fn the_queue_finds_the_nearest_line_of_templated_text() {
+    let root = repo().join("content");
+    let (_, content) = content_build::build_with_content(&Options::new(&root)).unwrap();
+    let files = content_build::review::review_files(&root, &content);
+    // `*apple* здесь упоминается впервые…` is built from a template in items.ncl.
+    let line = files
+        .queue
+        .lines()
+        .find(|l| l.contains("task `art.fm.choice.dog`") && l.contains("items.ncl"))
+        .unwrap();
+    let source = std::fs::read_to_string(root.join("articles/items.ncl")).unwrap();
+    let n: usize = line
+        .split(" — ")
+        .next()
+        .unwrap()
+        .rsplit(':')
+        .next()
+        .unwrap()
+        .parse()
+        .unwrap();
+    assert!(
+        source.lines().nth(n - 1).unwrap().contains("впервые")
+            || source.lines().nth(n - 1).unwrap().contains("birinchi")
+            || source.lines().nth(n - 1).unwrap().contains("first time"),
+        "line {n}: {}",
+        source.lines().nth(n - 1).unwrap()
+    );
 }
 
 #[test]

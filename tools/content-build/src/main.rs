@@ -9,13 +9,17 @@
 //!
 //! Prints the report. Exit status: 0 on success, 1 if the content has errors,
 //! 2 on usage or I/O problems.
+//!
+//! `content-build report [--missing] [--review] [--out <dir>] <content-dir>`
+//! prints what is missing before live, and writes the review queue and the
+//! tasks as a learner sees them to `<dir>` (default `target/review`).
 
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use content_build::{Options, build, to_bytes};
+use content_build::{Options, build, build_with_content, to_bytes};
 
-const USAGE: &str = "usage: content-build <content-dir> [--out <bundle.json>] [--locked] [--audio-root <dir>] [--nickel <path>] [--scowl <dir>]";
+const USAGE: &str = "usage: content-build <content-dir> [--out <bundle.json>] [--locked] [--audio-root <dir>] [--nickel <path>] [--scowl <dir>]\n       content-build report [--missing] [--review] [--out <dir>] <content-dir>";
 
 fn parse_args() -> Result<(Options, Option<PathBuf>), String> {
     let mut args = std::env::args_os().skip(1);
@@ -57,7 +61,118 @@ fn parse_args() -> Result<(Options, Option<PathBuf>), String> {
     Ok((opts, out))
 }
 
+/// `content-build report [--missing] [--review] [--out <dir>] <content-dir>`.
+///
+/// `--missing` prints what keeps each draft KC from live, most valuable
+/// first. `--review` writes `queue.txt` and `tasks.md` to `--out` (default
+/// `target/review`): only after the build checks pass. Neither writes the
+/// lock file.
+fn report_command(args: impl Iterator<Item = std::ffi::OsString>) -> ExitCode {
+    let (mut missing, mut review) = (false, false);
+    let (mut content, mut out) = (None, PathBuf::from("target/review"));
+    let mut args = args;
+    while let Some(arg) = args.next() {
+        match arg.to_str() {
+            Some("--missing") => missing = true,
+            Some("--review") => review = true,
+            Some("--out") => match args.next() {
+                Some(dir) => out = PathBuf::from(dir),
+                None => return usage_error("--out needs a value"),
+            },
+            Some(s) if s.starts_with('-') => return usage_error(&format!("unknown option {s}")),
+            _ if content.is_none() => content = Some(PathBuf::from(arg)),
+            _ => return usage_error("more than one content directory"),
+        }
+    }
+    let Some(content) = content else {
+        return usage_error("missing content directory");
+    };
+    if !missing && !review {
+        return usage_error("report needs --missing or --review");
+    }
+    let opts = Options::new(&content);
+    let (output, loaded) = match build_with_content(&opts) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("content-build: {e}");
+            return ExitCode::from(2);
+        }
+    };
+    let Some(bundle) = output.bundle else {
+        eprintln!("{}", output.report);
+        eprintln!("content-build: fix the errors above first; the report covers checked content");
+        return ExitCode::from(1);
+    };
+    if missing {
+        print!("{}", missing_report(&output.report, &bundle));
+    }
+    if review {
+        let files = content_build::review::review_files(&content, &loaded);
+        let written = std::fs::create_dir_all(&out)
+            .and_then(|()| std::fs::write(out.join("queue.txt"), &files.queue))
+            .and_then(|()| std::fs::write(out.join("tasks.md"), &files.tasks));
+        if let Err(e) = written {
+            eprintln!("content-build: cannot write {}: {e}", out.display());
+            return ExitCode::from(2);
+        }
+        println!(
+            "review queue written to {}",
+            out.join("queue.txt").display()
+        );
+        println!("tasks written to {}", out.join("tasks.md").display());
+    }
+    ExitCode::SUCCESS
+}
+
+/// Draft KCs with what is missing, by priority: importance × (1 + the
+/// number of KCs that require it), the order in which writing pays off first.
+fn missing_report(
+    report: &content_build::report::Report,
+    bundle: &refl_core::bundle::Bundle,
+) -> String {
+    use std::fmt::Write as _;
+    let priority = |kc: &str| -> f64 {
+        let Some(entry) = bundle.content.kcs.iter().find(|k| k.kc.id.as_str() == kc) else {
+            return 0.0;
+        };
+        let waiting = bundle
+            .content
+            .requires_closure
+            .values()
+            .filter(|required| required.iter().any(|r| r.kc.as_str() == kc))
+            .count();
+        #[allow(clippy::cast_precision_loss)] // a handful of KCs
+        let waiting = waiting as f64;
+        entry.kc.importance.get() * (1.0 + waiting)
+    };
+    let mut draft: Vec<_> = report.draft.iter().collect();
+    draft.sort_by(|a, b| {
+        priority(&b.kc)
+            .total_cmp(&priority(&a.kc))
+            .then(a.kc.cmp(&b.kc))
+    });
+    let mut out = String::new();
+    for d in draft {
+        let _ = writeln!(out, "{} (priority {:.2})", d.kc, priority(&d.kc));
+        for m in &d.missing {
+            let _ = writeln!(out, "  - {m}");
+        }
+    }
+    out
+}
+
+fn usage_error(msg: &str) -> ExitCode {
+    eprintln!("content-build: {msg}");
+    eprintln!("{USAGE}");
+    ExitCode::from(2)
+}
+
 fn main() -> ExitCode {
+    let mut argv = std::env::args_os().skip(1).peekable();
+    if argv.peek().is_some_and(|a| a == "report") {
+        argv.next();
+        return report_command(argv);
+    }
     let (opts, out) = match parse_args() {
         Ok(v) => v,
         Err(msg) => {

@@ -21,7 +21,7 @@ use crate::projection::{ItemProjection, ItemVersionEntry};
 use crate::subject::Subject;
 
 /// Layout version of [`Bundle`].
-pub const BUNDLE_FORMAT_VERSION: u32 = 7;
+pub const BUNDLE_FORMAT_VERSION: u32 = 8;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Bundle {

@@ -1,6 +1,6 @@
 # Passes: the k.a–k.b contrast is crossed by an item on k.b whose error
 # pattern is the k.a answer (the edge is symmetric, so this direction
-# counts). The k.a–k.c contrast needs nothing: k.c is draft.
+# counts). k.c has no contrast: it is draft for its own reasons.
 let b = import "../lib/base.ncl" in
 let a = b.live_kc "en.k.a" in
 let bb = b.live_kc "en.k.b" in
@@ -11,7 +11,6 @@ let bb = b.live_kc "en.k.b" in
   ],
   edges = b.edges @ [
     { kind = "contrasts", from = "en.k.a", to = "en.k.b" },
-    { kind = "contrasts", from = "en.k.a", to = "en.k.c" },
   ],
   misconceptions = b.misconceptions,
   instructions = b.instructions,

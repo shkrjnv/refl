@@ -9,6 +9,7 @@ import type { InstructionId } from "./InstructionId";
 import type { ItemId } from "./ItemId";
 import type { ItemStatus } from "./ItemStatus";
 import type { ItemVersion } from "./ItemVersion";
+import type { LangReviews } from "./LangReviews";
 import type { MatchingBody } from "./MatchingBody";
 import type { OwnSentenceBody } from "./OwnSentenceBody";
 import type { SentenceAssemblyBody } from "./SentenceAssemblyBody";
@@ -37,4 +38,10 @@ expected_time: number, topic?: TopicId, status: ItemStatus, source?: string, lic
 /**
  * Set when this version changes difficulty: stats of older versions are not carried over.
  */
-breaks_calibration: boolean, } & ({ "type": "choice" } & ChoiceBody | { "type": "find_error" } & FindErrorBody | { "type": "matching" } & MatchingBody | { "type": "true_false_not_given" } & TrueFalseNotGivenBody | { "type": "gap_fill" } & GapFillBody | { "type": "transformation" } & TransformationBody | { "type": "sentence_assembly" } & SentenceAssemblyBody | { "type": "translation" } & TranslationBody | { "type": "dictation" } & DictationBody | { "type": "own_sentence" } & OwnSentenceBody | { "type": "writing" } & WritingBody | { "type": "shadowing" } & ShadowingBody);
+breaks_calibration: boolean, 
+/**
+ * Review of the `why` and `hint` texts of all slots, per language; no
+ * record means draft. Not part of the model projection: it opens the
+ * item for sessions, it does not change what the fold reads.
+ */
+review: LangReviews, } & ({ "type": "choice" } & ChoiceBody | { "type": "find_error" } & FindErrorBody | { "type": "matching" } & MatchingBody | { "type": "true_false_not_given" } & TrueFalseNotGivenBody | { "type": "gap_fill" } & GapFillBody | { "type": "transformation" } & TransformationBody | { "type": "sentence_assembly" } & SentenceAssemblyBody | { "type": "translation" } & TranslationBody | { "type": "dictation" } & DictationBody | { "type": "own_sentence" } & OwnSentenceBody | { "type": "writing" } & WritingBody | { "type": "shadowing" } & ShadowingBody);

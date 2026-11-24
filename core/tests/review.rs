@@ -100,3 +100,53 @@ fn an_instruction_is_shown_per_language() {
     };
     assert_eq!(unreviewed.text_for(Lang::Ru), None);
 }
+
+#[test]
+fn a_kc_title_follows_the_chain_and_skips_drafts() {
+    use refl_core::content::{Kc, localized_for};
+    use refl_core::ids::{DomainId, SubjectId};
+    use refl_core::subject::LevelKey;
+    use refl_core::value::UnitInterval;
+
+    let title = Localized {
+        uz: Some("uz".into()),
+        ru: Some("ru".into()),
+        en: Some("en".into()),
+    };
+    let kc = Kc {
+        id: KcId::new("en.gram.x").unwrap(),
+        subject: SubjectId::new("en").unwrap(),
+        domain: DomainId::new("grammar").unwrap(),
+        title: title.clone(),
+        review: LangReviews {
+            uz: Some(review(ReviewStatus::Draft, None)),
+            ru: None,
+            en: Some(reviewed()),
+        },
+        level: LevelKey::new("A1").unwrap(),
+        importance: UnitInterval::new(0.5).unwrap(),
+        rule: String::new(),
+        tags: Vec::new(),
+    };
+    // uz is draft and ru has no record, so every interface falls to en.
+    for lang in [Lang::Uz, Lang::Ru, Lang::En] {
+        assert_eq!(kc.title_for(lang), Some((Lang::En, "en")), "{lang:?}");
+    }
+    // Nothing reviewed, nothing shown.
+    let none = LangReviews::default();
+    assert_eq!(localized_for(&title, &none, Lang::Ru), None);
+    // A language without text is skipped even if its record is reviewed.
+    let only_ru = Localized {
+        ru: Some("ru".into()),
+        ..Localized::default()
+    };
+    let both = LangReviews {
+        ru: Some(reviewed()),
+        en: Some(reviewed()),
+        ..LangReviews::default()
+    };
+    assert_eq!(
+        localized_for(&only_ru, &both, Lang::En),
+        Some((Lang::Ru, "ru"))
+    );
+}

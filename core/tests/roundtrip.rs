@@ -1,7 +1,9 @@
 //! Serialization round trips and byte-level determinism for the log and content types.
 
 use proptest::prelude::*;
-use refl_core::content::{Edge, EdgeKind, Kc, L1Prior, L1Set, Misconception, MisconceptionOrigin};
+use refl_core::content::{
+    Edge, EdgeKind, Kc, L1Prior, L1Set, LangReviews, Misconception, MisconceptionOrigin,
+};
 use refl_core::event::{
     AnswerContext, AnswerEvent, Confidence, CriterionScore, EventPayload, HalfBands,
     MentorOverrideEvent, OverrideKind, OverrideReason, PlanAction, PlanCandidate, PlanFactor,
@@ -561,6 +563,7 @@ fn item() -> impl Strategy<Value = Item> {
                 source,
                 license,
                 breaks_calibration,
+                review: LangReviews::default(),
                 body,
             },
         )
@@ -609,6 +612,7 @@ fn kc() -> impl Strategy<Value = Kc> {
                 subject,
                 domain,
                 title,
+                review: LangReviews::default(),
                 level,
                 importance,
                 rule,
@@ -629,6 +633,7 @@ fn misconception() -> impl Strategy<Value = Misconception> {
             |(id, title, affects, (uz, ru, puz, pru), remedy)| Misconception {
                 id,
                 title,
+                review: LangReviews::default(),
                 affects,
                 origin: MisconceptionOrigin::L1Transfer,
                 l1: L1Set { uz, ru },

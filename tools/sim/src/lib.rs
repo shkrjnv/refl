@@ -20,7 +20,7 @@ use refl_core::bundle::{
 };
 use refl_core::content::{
     Edge, EdgeKind, Explanation, ExplanationDepth, ExplanationTarget, Kc, L1Prior, L1Set,
-    Misconception, MisconceptionOrigin, Review, ReviewStatus,
+    LangReviews, Misconception, MisconceptionOrigin, Review, ReviewStatus,
 };
 use refl_core::event::{
     AnswerContext, AnswerEvent, CURRENT_SCHEMA_VERSION, Confidence, Decoded, Event, EventPayload,
@@ -123,6 +123,7 @@ pub fn synthetic_bundle(spec: BundleSpec) -> Bundle {
             subject: subject_id.clone(),
             domain: domain.clone(),
             title: Localized::default(),
+            review: LangReviews::default(),
             level: subject.scale.levels[usize::from(rank)].key.clone(),
             importance: UnitInterval::new(importance).expect("unit"),
             rule: String::new(),
@@ -161,6 +162,7 @@ pub fn synthetic_bundle(spec: BundleSpec) -> Bundle {
             misconceptions.push(Misconception {
                 id: misconception_id(i, x),
                 title: Localized::default(),
+                review: LangReviews::default(),
                 affects: vec![kc_id(i)],
                 origin: MisconceptionOrigin::L1Transfer,
                 l1: L1Set { uz: true, ru: true },
@@ -265,6 +267,7 @@ pub fn synthetic_bundle(spec: BundleSpec) -> Bundle {
                 source: None,
                 license: None,
                 breaks_calibration: false,
+                review: LangReviews::default(),
                 body,
             };
             let tokens = TokenTable::default();

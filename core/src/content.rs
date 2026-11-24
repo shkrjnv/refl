@@ -19,6 +19,9 @@ pub struct Kc {
     /// One of the subject's domains.
     pub domain: DomainId,
     pub title: Localized,
+    /// Review of the title per language; no record means draft.
+    #[serde(default)]
+    pub review: LangReviews,
     /// Key in the subject's scale: the level where the rule is usually learned.
     pub level: LevelKey,
     /// Construction frequency × goal weight; planner input.
@@ -86,6 +89,9 @@ pub struct L1Prior {
 pub struct Misconception {
     pub id: MisconceptionId,
     pub title: Localized,
+    /// Review of the title per language; no record means draft.
+    #[serde(default)]
+    pub review: LangReviews,
     pub affects: Vec<KcId>,
     pub origin: MisconceptionOrigin,
     pub l1: L1Set,
@@ -241,13 +247,36 @@ pub struct Instruction {
     pub review: LangReviews,
 }
 
+/// The text a learner sees: the first language of the chain that has a text
+/// and a reviewed record. `None` if no language qualifies.
+pub fn localized_for<'a>(
+    text: &'a Localized,
+    review: &LangReviews,
+    interface: Lang,
+) -> Option<(Lang, &'a str)> {
+    language_chain(interface).iter().find_map(|&lang| {
+        let t = text.get(lang)?;
+        review.is_shown(lang).then_some((lang, t))
+    })
+}
+
 impl Instruction {
-    /// The text a learner sees: the first language of the chain with a text
-    /// and a reviewed record. `None` if no language qualifies.
+    /// The text a learner sees; see [`localized_for`].
     pub fn text_for(&self, interface: Lang) -> Option<(Lang, &str)> {
-        language_chain(interface).iter().find_map(|&lang| {
-            let text = self.text.get(lang)?;
-            self.review.is_shown(lang).then_some((lang, text))
-        })
+        localized_for(&self.text, &self.review, interface)
+    }
+}
+
+impl Kc {
+    /// The title a learner sees; see [`localized_for`].
+    pub fn title_for(&self, interface: Lang) -> Option<(Lang, &str)> {
+        localized_for(&self.title, &self.review, interface)
+    }
+}
+
+impl Misconception {
+    /// The title a learner sees; see [`localized_for`].
+    pub fn title_for(&self, interface: Lang) -> Option<(Lang, &str)> {
+        localized_for(&self.title, &self.review, interface)
     }
 }

@@ -5,8 +5,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use refl_core::bundle::KcStatus;
-use refl_core::content::{EdgeKind, ExplanationDepth, ExplanationTarget, Review, ReviewStatus};
+use refl_core::content::{
+    EdgeKind, ExplanationDepth, ExplanationTarget, LangReviews, Review, ReviewStatus,
+};
 use refl_core::ids::{InstructionId, KcId, MisconceptionId};
 use refl_core::item::{ItemStatus, KcRole};
 use refl_core::kind::{self, ItemKind, QualityCtx, QualityIssueKind};
@@ -177,12 +178,13 @@ pub fn references(c: &Content, ids: &Ids, diags: &mut Vec<Diagnostic>) {
     }
 }
 
-/// Every `contrasts` edge between live KCs has a live item where one end is
-/// a primary KC of a slot and an option or error pattern is marked
-/// `confuses_with` the other end, so that confusing the pair is measured
+/// The `contrasts` edges with no live item where one end is a primary KC of
+/// a slot and an option or error pattern is marked `confuses_with` the other
+/// end, so that confusing the pair cannot be measured
 /// (`docs/03-layer2-learner-model.md`, «Расширенная диагностика»). Edges are
-/// symmetric in meaning, so either direction counts.
-pub fn contrasts(c: &Content, status: &BTreeMap<KcId, KcStatus>, diags: &mut Vec<Diagnostic>) {
+/// symmetric in meaning, so either direction counts. Not an error: a blocker
+/// of both KCs (`status`).
+pub fn uncrossed_contrasts(c: &Content) -> Vec<(&KcId, &KcId)> {
     let mut crossed: BTreeSet<(&KcId, &KcId)> = BTreeSet::new();
     let live_items = c
         .items
@@ -205,24 +207,13 @@ pub fn contrasts(c: &Content, status: &BTreeMap<KcId, KcStatus>, diags: &mut Vec
             }
         }
     }
-    let live = |kc: &KcId| status.get(kc) == Some(&KcStatus::Live);
-    for e in &c.edges {
-        let edge = &e.value;
-        if edge.kind != EdgeKind::Contrasts || !live(&edge.from) || !live(&edge.to) {
-            continue;
-        }
-        if !crossed.contains(&(&edge.from, &edge.to)) && !crossed.contains(&(&edge.to, &edge.from))
-        {
-            diags.push(diag(
-                Code::ContrastWithoutConfusion,
-                &e.file,
-                format!("edge `{}` contrasts `{}`", edge.from, edge.to),
-                "no live item tests one end with a distractor or error pattern marked \
-                 `confuses_with` the other"
-                    .to_owned(),
-            ));
-        }
-    }
+    c.edges
+        .iter()
+        .map(|e| &e.value)
+        .filter(|e| e.kind == EdgeKind::Contrasts)
+        .filter(|e| !crossed.contains(&(&e.from, &e.to)) && !crossed.contains(&(&e.to, &e.from)))
+        .map(|e| (&e.from, &e.to))
+        .collect()
 }
 
 /// Live items: every slot has a primary KC, and the item keeps its kind's
@@ -396,16 +387,36 @@ pub fn reviewers(c: &Content, diags: &mut Vec<Diagnostic>) {
             ));
         }
     }
-    for ins in &c.instructions {
+    let mut per_language = |file: &Path, what: String, reviews: &LangReviews| {
         for lang in [Lang::Uz, Lang::Ru, Lang::En] {
-            if ins.value.review.get(lang).is_some_and(nameless) {
+            if reviews.get(lang).is_some_and(nameless) {
                 diags.push(diag(
                     Code::ReviewedWithoutReviewer,
-                    &ins.file,
-                    format!("instruction `{}`", ins.value.id),
+                    file,
+                    what.clone(),
                     format!("review of {lang:?} is `reviewed` but `by` is missing"),
                 ));
             }
         }
+    };
+    for ins in &c.instructions {
+        per_language(
+            &ins.file,
+            format!("instruction `{}`", ins.value.id),
+            &ins.value.review,
+        );
+    }
+    for k in &c.kcs {
+        per_language(&k.file, format!("KC `{}`", k.value.id), &k.value.review);
+    }
+    for m in &c.misconceptions {
+        per_language(
+            &m.file,
+            format!("misconception `{}`", m.value.id),
+            &m.value.review,
+        );
+    }
+    for i in &c.items {
+        per_language(&i.file, format!("item `{}`", i.value.id), &i.value.review);
     }
 }

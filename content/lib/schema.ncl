@@ -5,6 +5,10 @@ let OneOf = fun values => std.contract.from_predicate (fun v => std.array.elem v
 let Unit = std.contract.from_predicate (fun v => std.is_number v && v >= 0 && v <= 1) in
 let Localized = { uz | String | optional, ru | String | optional, en | String | optional } in
 let Lang = OneOf ["uz", "ru", "en"] in
+# Review per language; a language without a record is draft (docs/02,
+# «Вычитка и показ»). `reviewed` needs `by`: the name of the reviewer.
+let ReviewRecord = { status | OneOf ["draft", "reviewed"], by | String | optional } in
+let LangReviews = { uz | ReviewRecord | optional, ru | ReviewRecord | optional, en | ReviewRecord | optional } in
 
 {
   Subject = {
@@ -25,6 +29,7 @@ let Lang = OneOf ["uz", "ru", "en"] in
     # From the subject's list of domains.
     domain | String,
     title | Localized,
+    review | LangReviews | optional,
     # A level key of the subject's scale.
     level | String,
     importance | Unit,
@@ -39,19 +44,17 @@ let Lang = OneOf ["uz", "ru", "en"] in
   Misconception = {
     id | String,
     title | Localized,
+    review | LangReviews | optional,
     affects | Array String,
     origin | OneOf ["l1-transfer", "overgeneralization", "form-confusion", "spelling-based"],
     l1 | { uz | Bool, ru | Bool },
     prior | { uz | Unit, ru | Unit },
     remedy | String,
   },
-  Review = { status | OneOf ["draft", "reviewed"], by | String | optional },
-  # Review per language; a language without a record is draft (docs/02,
-  # «Вычитка и показ»). `reviewed` needs `by`: the name of the reviewer.
   Instruction = {
     id | String,
     text | Localized,
-    review | { uz | Review | optional, ru | Review | optional, en | Review | optional } | optional,
+    review | LangReviews | optional,
   },
   Example = { text | String, audio | String | optional },
   Explanation = {
@@ -88,6 +91,8 @@ let Lang = OneOf ["uz", "ru", "en"] in
     source | String | optional,
     license | String | optional,
     breaks_calibration | Bool | optional,
+    # Review of the `why` and `hint` texts of all slots, per language.
+    review | LangReviews | optional,
   },
   ItemBody = {
     stimulus | { text | String, audio | String | optional, image | String | optional },

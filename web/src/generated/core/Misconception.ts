@@ -2,6 +2,7 @@
 import type { KcId } from "./KcId";
 import type { L1Prior } from "./L1Prior";
 import type { L1Set } from "./L1Set";
+import type { LangReviews } from "./LangReviews";
 import type { Localized } from "./Localized";
 import type { MisconceptionId } from "./MisconceptionId";
 import type { MisconceptionOrigin } from "./MisconceptionOrigin";
@@ -11,7 +12,11 @@ import type { MisconceptionOrigin } from "./MisconceptionOrigin";
  * is found by key: target = this misconception, depth = short, language by
  * the chain interface -> ru -> en.
  */
-export type Misconception = { id: MisconceptionId, title: Localized, affects: Array<KcId>, origin: MisconceptionOrigin, l1: L1Set, prior: L1Prior, 
+export type Misconception = { id: MisconceptionId, title: Localized, 
+/**
+ * Review of the title per language; no record means draft.
+ */
+review: LangReviews, affects: Array<KcId>, origin: MisconceptionOrigin, l1: L1Set, prior: L1Prior, 
 /**
  * Topic that treats the cause; usually a prerequisite.
  */

@@ -1,6 +1,12 @@
 # Builders for the unit's items: every family states only its sentences,
 # answers and diagnoses (docs/02, «Задание: общая часть», «Семьи заданий»).
 # Files in lib/ are imported, not loaded as content.
+
+# Review of the `why` and `hint` of every task of the unit, in one place:
+# empty, so every language is draft and no task goes into a session
+# (docs/02, «Вычитка и показ»). After a person has read a language, name them:
+#   { ru = { status = "reviewed", by = "<name>" }, en = { ... } }
+let task_review = {} in
 {
   kc = {
     countability = "en.gram.noun.countability",
@@ -43,6 +49,7 @@
       difficulty = r.difficulty,
       expected_time = r.expected_time,
       status = "live",
+      review = task_review,
       stimulus = { text = r.stimulus },
       slots = [r.slot],
     },

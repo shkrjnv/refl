@@ -5,11 +5,11 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 
-use crate::content::AudioRef;
+use crate::content::{AudioRef, LangReviews, localized_for};
 use crate::ids::{
     FamilyId, InstructionId, ItemId, ItemVersion, KcId, MisconceptionId, SubjectId, TopicId,
 };
-use crate::value::{Localized, ValueError};
+use crate::value::{Lang, Localized, ValueError};
 
 /// The `type` tag of an [`ItemBody`] variant, for filtering (lesson bank
 /// queries). It carries no behaviour: that lives in each kind's
@@ -430,7 +430,34 @@ pub struct Item {
     /// Set when this version changes difficulty: stats of older versions are not carried over.
     #[serde(default)]
     pub breaks_calibration: bool,
+    /// Review of the `why` and `hint` texts of all slots, per language; no
+    /// record means draft. Not part of the model projection: it opens the
+    /// item for sessions, it does not change what the fold reads.
+    #[serde(default)]
+    pub review: LangReviews,
     #[serde(flatten)]
     #[cfg_attr(feature = "ts", ts(flatten))]
     pub body: ItemBody,
+}
+
+impl Item {
+    /// Whether the `why` and `hint` are reviewed in ru and en: the item may
+    /// go into a session (`docs/02-layer1-content.md`, «Вычитка и показ»).
+    pub fn is_reviewed(&self) -> bool {
+        self.review.is_shown(Lang::Ru) && self.review.is_shown(Lang::En)
+    }
+
+    /// The `why` of a slot a learner sees; see [`localized_for`].
+    pub fn why_for(&self, slot: usize, interface: Lang) -> Option<(Lang, &str)> {
+        localized_for(&self.body.slots().get(slot)?.why, &self.review, interface)
+    }
+
+    /// The `hint` of a slot a learner sees; see [`localized_for`].
+    pub fn hint_for(&self, slot: usize, interface: Lang) -> Option<(Lang, &str)> {
+        localized_for(
+            self.body.slots().get(slot)?.hint.as_ref()?,
+            &self.review,
+            interface,
+        )
+    }
 }

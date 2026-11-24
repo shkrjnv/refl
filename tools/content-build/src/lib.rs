@@ -9,6 +9,7 @@ pub mod lexicon;
 pub mod load;
 pub mod lock;
 pub mod report;
+pub mod review;
 pub mod status;
 pub mod subjects;
 pub mod templates;
@@ -84,6 +85,18 @@ pub struct Output {
 /// # Panics
 /// Never: bundle types always serialize.
 pub fn build(opts: &Options) -> std::io::Result<Output> {
+    build_with_content(opts).map(|(output, _)| output)
+}
+
+/// [`build`], and the loaded content with the file of every entity: the
+/// review queue needs both (`report --review`).
+///
+/// # Errors
+/// As [`build`].
+///
+/// # Panics
+/// Never: bundle types always serialize.
+pub fn build_with_content(opts: &Options) -> std::io::Result<(Output, load::Content)> {
     let (content, mut diags) = load::load(&opts.content, &opts.nickel).map_err(|e| {
         std::io::Error::new(
             e.kind(),
@@ -111,14 +124,14 @@ pub fn build(opts: &Options) -> std::io::Result<Output> {
         ..Report::default()
     };
     let status = status::compute(&content, &mut report);
-    check::contrasts(&content, &status, &mut report.diagnostics);
     if report.has_errors() {
-        return Ok(Output {
+        let output = Output {
             report,
             bundle: None,
             lexicon: None,
             lock_update: None,
-        });
+        };
+        return Ok((output, content));
     }
 
     let kcs = kc_entries(&content, &status);
@@ -147,7 +160,7 @@ pub fn build(opts: &Options) -> std::io::Result<Output> {
         let _ = write!(s, "{b:02x}");
         s
     }));
-    Ok(Output {
+    let output = Output {
         report,
         bundle: Some(Bundle {
             format_version: BUNDLE_FORMAT_VERSION,
@@ -156,7 +169,8 @@ pub fn build(opts: &Options) -> std::io::Result<Output> {
         }),
         lexicon: Some(lexicon),
         lock_update,
-    })
+    };
+    Ok((output, content))
 }
 
 /// The lock after this build and, unless `opts.locked`, its new text when it
@@ -216,7 +230,9 @@ fn item_entries(
             .flat_map(|s| &s.kcs)
             .filter(|k| k.role == KcRole::Primary)
             .all(|k| status.get(&k.kc) == Some(&KcStatus::Live));
-        let session_eligible = item.status == ItemStatus::Live && primary_live;
+        // Live, live primary KCs, and `why` and `hint` reviewed in ru and en.
+        let session_eligible =
+            item.status == ItemStatus::Live && primary_live && item.is_reviewed();
         if session_eligible {
             let r = ItemRef {
                 id: item.id.clone(),

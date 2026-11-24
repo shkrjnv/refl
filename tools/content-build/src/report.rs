@@ -51,9 +51,6 @@ pub enum Code {
     InvalidScale,
     /// A slot KC or a spelling KC of another subject.
     KcOutsideSubject,
-    /// A `contrasts` edge between live KCs has no live item marked
-    /// `confuses_with` across it.
-    ContrastWithoutConfusion,
     /// The model projection of a published item version differs from its
     /// entry in the lock file, and the version was not bumped.
     ProjectionChanged,
@@ -69,7 +66,7 @@ pub enum Code {
 
 impl Code {
     /// Every check; tests require a negative fixture named after each one.
-    pub const ALL: [Self; 31] = [
+    pub const ALL: [Self; 30] = [
         Self::Nickel,
         Self::Schema,
         Self::DuplicateId,
@@ -96,7 +93,6 @@ impl Code {
         Self::RequiresAcrossSubjects,
         Self::InvalidScale,
         Self::KcOutsideSubject,
-        Self::ContrastWithoutConfusion,
         Self::ProjectionChanged,
         Self::LockCorrupt,
         Self::LockOutdated,
@@ -131,7 +127,6 @@ impl Code {
             Self::RequiresAcrossSubjects => "requires-across-subjects",
             Self::InvalidScale => "invalid-scale",
             Self::KcOutsideSubject => "kc-outside-subject",
-            Self::ContrastWithoutConfusion => "contrast-without-confusion",
             Self::ProjectionChanged => "projection-changed",
             Self::LockCorrupt => "lock-corrupt",
             Self::LockOutdated => "lock-outdated",

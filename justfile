@@ -39,6 +39,14 @@ wasm-hash events="20000" seed="7":
 fold-speed:
     cargo run --locked --release --quiet -p refl-sim --bin fold-hash -- --time 100000
 
+# Review queue (by language, path:line) and all tasks as a learner sees them, in target/review/
+review:
+    cargo run --locked --quiet -p content-build -- report --review --out target/review content
+
+# What keeps each draft KC from live, most valuable first
+missing:
+    cargo run --locked --quiet -p content-build -- report --missing content
+
 # Check content/ and write the bundle to target/bundle.json
 content:
     cargo run --locked --quiet -p content-build -- content --out target/bundle.json

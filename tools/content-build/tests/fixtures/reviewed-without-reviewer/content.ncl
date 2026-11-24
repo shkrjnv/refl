@@ -13,6 +13,8 @@ let b = import "../lib/base.ncl" in
       review = { ru = { status = "reviewed" } },
     },
   ],
+  # Every record that carries a review is checked: here a task, too.
+  items = [std.record.update "review" { en = { status = "reviewed" } } (b.gap {})],
   explanations = b.explanations @ [
     {
       id = "e.k.a.en",
