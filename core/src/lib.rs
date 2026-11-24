@@ -22,6 +22,8 @@ pub mod item;
 pub mod kind;
 pub mod lesson;
 pub mod lexicon;
+pub mod model;
+pub mod rng;
 pub mod subject;
 pub mod unlock;
 pub mod value;

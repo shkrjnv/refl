@@ -1027,9 +1027,11 @@ dependencies = [
 name = "refl-core"
 version = "0.0.0"
 dependencies = [
+ "libm",
  "proptest",
  "serde",
  "serde_json",
+ "sha2",
  "ts-rs",
  "unicode-normalization",
  "uuid",
@@ -1046,6 +1048,17 @@ dependencies = [
  "sha2",
  "sqlx",
  "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "refl-sim"
+version = "0.0.0"
+dependencies = [
+ "libm",
+ "proptest",
+ "refl-core",
+ "serde_json",
  "uuid",
 ]
 
