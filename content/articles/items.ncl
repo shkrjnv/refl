@@ -1,11 +1,11 @@
 # Topic «Articles»: items. Each family is one construction with different
 # sentences (docs/02, «Семьи заданий»); a function builds its members.
 let s = import "../lib/schema.ncl" in
-let first = "gram.article.first-mention" in
-let second = "gram.article.second-mention" in
-let countability = "gram.noun.countability" in
-let omission = "mis.article.omission-l1" in
-let the_for_new = "mis.article.the-for-new" in
+let first = "en.gram.article.first-mention" in
+let second = "en.gram.article.second-mention" in
+let countability = "en.gram.noun.countability" in
+let omission = "en.mis.article.omission-l1" in
+let the_for_new = "en.mis.article.the-for-new" in
 let slot_kcs = fun primary =>
   [
     { kc = primary, role = "primary" },
@@ -20,7 +20,8 @@ let choice = fun noun =>
   {
     id = "art.fm.choice.%{noun}",
     version = 1,
-    family = "art.fm.choice",
+    subject = "en",
+    family = "en.art.fm.choice",
     type = "choice",
     instruction = "instr.choose-option",
     stimulus.text = "I have ___ %{noun}.",
@@ -52,7 +53,8 @@ let gap = fun family_id level frame noun =>
   {
     id = "%{family_id}.%{noun}",
     version = 1,
-    family = family_id,
+    subject = "en",
+    family = "en.%{family_id}",
     type = "gap_fill",
     instruction = "instr.gap-fill-base",
     stimulus.text = frame noun,
@@ -84,7 +86,8 @@ let second_gap = fun noun =>
   {
     id = "art.sm.gap.%{noun}",
     version = 1,
-    family = "art.sm.gap",
+    subject = "en",
+    family = "en.art.sm.gap",
     type = "gap_fill",
     instruction = "instr.gap-fill-base",
     stimulus.text = "I have a %{noun} and a bird. ___ (%{noun}) is black.",

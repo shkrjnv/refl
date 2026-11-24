@@ -67,6 +67,7 @@ pub fn build(opts: &Options) -> std::io::Result<Output> {
     let ids = check::duplicates(&content, &mut diags);
     check::references(&content, &ids, &mut diags);
     subjects::check(&content, &mut diags);
+    subjects::prefixes(&content, &mut diags);
     check::misconception_feedback(&content, &mut diags);
     check::instruction_text(&content, &mut diags);
     let requires = graph::Requires::new(&content, &ids);

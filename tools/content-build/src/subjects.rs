@@ -1,11 +1,14 @@
 //! Subject checks (`docs/10-subjects.md`, «Предмет», «Шкала уровней»;
 //! `docs/02-layer1-content.md`, «Проверки при сборке контента»): every KC
 //! names an existing subject, a level key of its scale and one of its
-//! domains; level keys and domains are unique within a subject.
+//! domains; level keys and domains are unique within a subject. Ids of KCs,
+//! misconceptions and item families start with their subject's slug, and
+//! `requires` never crosses subjects (`supports` may).
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use refl_core::ids::SubjectId;
+use refl_core::content::EdgeKind;
+use refl_core::ids::{KcId, SubjectId};
 use refl_core::subject::Subject;
 
 use crate::check::diag;
@@ -55,6 +58,85 @@ pub fn check(c: &Content, diags: &mut Vec<Diagnostic>) {
         if !s.domains.contains(&kc.domain) {
             let message = format!("domain `{}` is not a domain of `{}`", kc.domain, s.id);
             diags.push(diag(Code::UnknownDomain, &k.file, subject, message));
+        }
+    }
+}
+
+/// `id` is `<subject>.<rest>`.
+fn has_prefix(id: &str, subject: &SubjectId) -> bool {
+    id.strip_prefix(subject.as_str())
+        .is_some_and(|rest| rest.starts_with('.'))
+}
+
+fn prefix_error(id: &dyn std::fmt::Display, subject: &SubjectId, whose: &str) -> String {
+    format!("id `{id}` must start with `{subject}.`, the subject of {whose}")
+}
+
+/// Subject prefixes of KC, misconception and family ids; `requires` edges
+/// within one subject. References that do not resolve are reported elsewhere.
+pub fn prefixes(c: &Content, diags: &mut Vec<Diagnostic>) {
+    let subjects = by_id(c);
+    let kc_subject: BTreeMap<&KcId, &SubjectId> = c
+        .kcs
+        .iter()
+        .map(|k| (&k.value.id, &k.value.subject))
+        .collect();
+    for k in &c.kcs {
+        let kc = &k.value;
+        if subjects.contains_key(&kc.subject) && !has_prefix(kc.id.as_str(), &kc.subject) {
+            let message = prefix_error(&kc.id, &kc.subject, "the KC");
+            diags.push(diag(
+                Code::SubjectPrefix,
+                &k.file,
+                format!("KC `{}`", kc.id),
+                message,
+            ));
+        }
+    }
+    for m in &c.misconceptions {
+        let mis = &m.value;
+        let of_kcs: BTreeSet<&SubjectId> = mis
+            .affects
+            .iter()
+            .chain([&mis.remedy])
+            .filter_map(|kc| kc_subject.get(kc).copied())
+            .collect();
+        for s in of_kcs {
+            if !has_prefix(mis.id.as_str(), s) {
+                let message = prefix_error(&mis.id, s, "the KCs it affects");
+                let subject = format!("misconception `{}`", mis.id);
+                diags.push(diag(Code::SubjectPrefix, &m.file, subject, message));
+            }
+        }
+    }
+    for it in &c.items {
+        let item = &it.value;
+        let subject = format!("item `{}`", item.id);
+        if !subjects.contains_key(&item.subject) {
+            let message = format!("unknown subject `{}`", item.subject);
+            diags.push(diag(Code::UnknownReference, &it.file, subject, message));
+        } else if !has_prefix(item.family.as_str(), &item.subject) {
+            let message = prefix_error(&item.family, &item.subject, "the item");
+            diags.push(diag(Code::SubjectPrefix, &it.file, subject, message));
+        }
+    }
+    for e in &c.edges {
+        let edge = &e.value;
+        let (Some(from), Some(to)) = (kc_subject.get(&edge.from), kc_subject.get(&edge.to)) else {
+            continue;
+        };
+        if edge.kind == EdgeKind::Requires && from != to {
+            let message = format!(
+                "`requires` crosses subjects (`{from}` → `{to}`): one subject must not block \
+                 another; use `supports`"
+            );
+            let subject = format!("edge `{}` requires `{}`", edge.from, edge.to);
+            diags.push(diag(
+                Code::RequiresAcrossSubjects,
+                &e.file,
+                subject,
+                message,
+            ));
         }
     }
 }

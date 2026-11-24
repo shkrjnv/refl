@@ -10,8 +10,8 @@ let b = import "../lib/base.ncl" in
     b.gap {},
     b.choice {
       options = [
-        { text = "the", misconception = "m.two", confuses_with = "k.b" },
-        { text = "—", misconception = "m.one" },
+        { text = "the", misconception = "en.m.two", confuses_with = "en.k.b" },
+        { text = "—", misconception = "en.m.one" },
         { text = "an", misconception = null },
       ],
     },

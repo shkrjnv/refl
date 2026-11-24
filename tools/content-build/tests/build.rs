@@ -67,7 +67,8 @@ fn each_check_catches_its_own_defect() {
 fn unknown_reference_covers_confusions() {
     let out = run(&fixtures().join("unknown-reference"));
     let report = out.report.to_string();
-    for kc in ["k.missing", "k.missing-gap", "k.missing-choice"] {
+    assert!(report.contains("unknown subject `xx`"), "{report}");
+    for kc in ["en.k.missing", "en.k.missing-gap", "en.k.missing-choice"] {
         assert!(
             report.contains(&format!("unknown KC `{kc}`")),
             "{kc}:\n{report}"
@@ -101,9 +102,9 @@ fn contrast_crossed_by_a_confusion_passes() {
             .find(|k| k.kc.id.as_str() == id)
             .map(|k| k.status)
     };
-    assert_eq!(status("k.a"), Some(KcStatus::Live));
-    assert_eq!(status("k.b"), Some(KcStatus::Live));
-    assert_eq!(status("k.c"), Some(KcStatus::Draft));
+    assert_eq!(status("en.k.a"), Some(KcStatus::Live));
+    assert_eq!(status("en.k.b"), Some(KcStatus::Live));
+    assert_eq!(status("en.k.c"), Some(KcStatus::Draft));
 }
 
 #[test]
@@ -119,9 +120,15 @@ fn example_content_builds_with_computed_status() {
             .find(|k| k.kc.id.as_str() == id)
             .map(|k| k.status)
     };
-    assert_eq!(status("gram.article.first-mention"), Some(KcStatus::Live));
-    assert_eq!(status("gram.article.second-mention"), Some(KcStatus::Draft));
-    assert_eq!(status("gram.noun.countability"), Some(KcStatus::Draft));
+    assert_eq!(
+        status("en.gram.article.first-mention"),
+        Some(KcStatus::Live)
+    );
+    assert_eq!(
+        status("en.gram.article.second-mention"),
+        Some(KcStatus::Draft)
+    );
+    assert_eq!(status("en.gram.noun.countability"), Some(KcStatus::Draft));
     // Draft items are not eligible; neither are items whose primary KC is draft.
     for entry in &bundle.content.items {
         let primary_draft = entry.item.id.as_str().starts_with("art.sm.");
@@ -129,11 +136,11 @@ fn example_content_builds_with_computed_status() {
     }
     assert_eq!(
         bundle.content.requires_closure
-            [&refl_core::ids::KcId::new("gram.article.second-mention").unwrap()]
+            [&refl_core::ids::KcId::new("en.gram.article.second-mention").unwrap()]
             .iter()
             .map(refl_core::ids::KcId::as_str)
             .collect::<Vec<_>>(),
-        ["gram.article.first-mention", "gram.noun.countability"]
+        ["en.gram.article.first-mention", "en.gram.noun.countability"]
     );
 }
 
@@ -144,4 +151,33 @@ fn bundle_is_byte_identical_across_builds() {
     assert_eq!(to_bytes(&a), to_bytes(&b));
     let parsed: refl_core::bundle::Bundle = serde_json::from_slice(&to_bytes(&a)).unwrap();
     assert_eq!(to_bytes(&parsed), to_bytes(&a), "bundle round-trips");
+}
+
+#[test]
+fn subject_prefix_covers_kcs_misconceptions_and_families() {
+    let out = run(&fixtures().join("subject-prefix"));
+    let subjects: Vec<&str> = out
+        .report
+        .diagnostics
+        .iter()
+        .filter(|d| d.code == Code::SubjectPrefix)
+        .filter_map(|d| d.subject.as_deref())
+        .collect();
+    assert_eq!(
+        subjects,
+        ["KC `k.z`", "misconception `m.z`", "item `it.z`"],
+        "{}",
+        out.report
+    );
+}
+
+#[test]
+fn only_requires_may_not_cross_subjects() {
+    let out = run(&fixtures().join("requires-across-subjects"));
+    let d = &out.report.diagnostics;
+    assert_eq!(d.len(), 1, "{}", out.report);
+    assert_eq!(
+        d[0].subject.as_deref(),
+        Some("edge `en.k.a` requires `math.k.x`")
+    );
 }

@@ -6,7 +6,9 @@ use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 
 use crate::content::AudioRef;
-use crate::ids::{FamilyId, InstructionId, ItemId, ItemVersion, KcId, MisconceptionId, TopicId};
+use crate::ids::{
+    FamilyId, InstructionId, ItemId, ItemVersion, KcId, MisconceptionId, SubjectId, TopicId,
+};
 use crate::value::{Localized, ValueError};
 
 /// Item types along the ladder recognition → guided production → free production.
@@ -247,6 +249,8 @@ pub struct Slot {
 pub struct Item {
     pub id: ItemId,
     pub version: ItemVersion,
+    /// Matches the prefix of `family` (checked by content-build).
+    pub subject: SubjectId,
     pub family: FamilyId,
     #[serde(rename = "type")]
     #[cfg_attr(feature = "ts", ts(rename = "type"))]

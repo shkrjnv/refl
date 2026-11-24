@@ -2,7 +2,7 @@
 let b = import "../lib/base.ncl" in
 {
   subjects = b.subjects,
-  kcs = std.array.map (fun k => if k.id == "k.a" then k & { domain | force = "phonology" } else k) b.kcs,
+  kcs = std.array.map (fun k => if k.id == "en.k.a" then k & { domain | force = "phonology" } else k) b.kcs,
   edges = b.edges,
   misconceptions = b.misconceptions,
   instructions = b.instructions,

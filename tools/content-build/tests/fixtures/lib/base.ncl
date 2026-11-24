@@ -17,7 +17,7 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
   ],
   kcs = [
     {
-      id = "k.a",
+      id = "en.k.a",
       subject = "en",
       domain = "grammar",
       title = { en = "A" },
@@ -26,7 +26,7 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
       rule = "a",
     },
     {
-      id = "k.b",
+      id = "en.k.b",
       subject = "en",
       domain = "grammar",
       title = { en = "B" },
@@ -35,25 +35,25 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
       rule = "b",
     },
   ],
-  edges = [{ kind = "requires", from = "k.b", to = "k.a" }],
+  edges = [{ kind = "requires", from = "en.k.b", to = "en.k.a" }],
   misconceptions = [
     {
-      id = "m.one",
+      id = "en.m.one",
       title = { en = "one" },
-      affects = ["k.a"],
+      affects = ["en.k.a"],
       origin = "l1-transfer",
       l1 = { uz = true, ru = true },
       prior = { uz = 0.5, ru = 0.5 },
-      remedy = "k.a",
+      remedy = "en.k.a",
     },
     {
-      id = "m.two",
+      id = "en.m.two",
       title = { en = "two" },
-      affects = ["k.a"],
+      affects = ["en.k.a"],
       origin = "overgeneralization",
       l1 = { uz = false, ru = false },
       prior = { uz = 0.5, ru = 0.5 },
-      remedy = "k.a",
+      remedy = "en.k.a",
     },
   ],
   instructions = [
@@ -63,7 +63,7 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
   explanations = [
     {
       id = "e.m.one.ru",
-      target = { kind = "misconception", id = "m.one" },
+      target = { kind = "misconception", id = "en.m.one" },
       depth = "short",
       lang = "ru",
       body = "один",
@@ -71,7 +71,7 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
     },
     {
       id = "e.m.two.ru",
-      target = { kind = "misconception", id = "m.two" },
+      target = { kind = "misconception", id = "en.m.two" },
       depth = "short",
       lang = "ru",
       body = "два",
@@ -79,7 +79,7 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
     },
     {
       id = "e.m.one",
-      target = { kind = "misconception", id = "m.one" },
+      target = { kind = "misconception", id = "en.m.one" },
       depth = "short",
       lang = "en",
       body = "one",
@@ -87,7 +87,7 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
     },
     {
       id = "e.m.two",
-      target = { kind = "misconception", id = "m.two" },
+      target = { kind = "misconception", id = "en.m.two" },
       depth = "short",
       lang = "en",
       body = "two",
@@ -100,16 +100,16 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
     let a =
       {
         id | default = "it.gap",
-        family | default = "f.gap",
+        family | default = "en.f.gap",
         difficulty | default = 1,
         type | default = "gap_fill",
         status | default = "live",
-        slot_kcs | default = primary_kc "k.a",
+        slot_kcs | default = primary_kc "en.k.a",
         answer | default = "a cat",
         accepted | default = ["(a|one) cat"],
         wrong | default = [
-          { pattern = "cat", misconception = "m.one" },
-          { pattern = "the cat", misconception = "m.two" },
+          { pattern = "cat", misconception = "en.m.one" },
+          { pattern = "the cat", misconception = "en.m.two" },
         ],
         audio | default = null,
       }
@@ -118,6 +118,7 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
     {
       id = a.id,
       version = 1,
+      subject = "en",
       family = a.family,
       type = a.type,
       instruction = "i.gap",
@@ -156,7 +157,7 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
           (fun i =>
             gap {
               id = "it.%{kc}.%{std.to_string i}",
-              family = "f.%{kc}.%{std.to_string (i % 3)}",
+              family = "en.f.%{kc}.%{std.to_string (i % 3)}",
               difficulty = 1 + i % 2,
               slot_kcs = primary_kc kc,
             }
@@ -170,8 +171,8 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
       {
         id | default = "it.choice",
         options | default = [
-        { text = "the", misconception = "m.two" },
-        { text = "—", misconception = "m.one" },
+        { text = "the", misconception = "en.m.two" },
+        { text = "—", misconception = "en.m.one" },
         { text = "an", misconception = null },
         ],
       }
@@ -180,11 +181,12 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
     {
       id = a.id,
       version = 1,
-      family = "f.choice",
+      subject = "en",
+      family = "en.f.choice",
       type = "choice",
       instruction = "i.choice",
       stimulus.text = "I have ___ cat.",
-      slots = [{ kcs = primary_kc "k.a", answer = "a", accepted = ["a"], options = a.options, why = why_text }],
+      slots = [{ kcs = primary_kc "en.k.a", answer = "a", accepted = ["a"], options = a.options, why = why_text }],
       difficulty = 1,
       expected_time = 10,
       status = "live",

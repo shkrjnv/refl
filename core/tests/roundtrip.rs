@@ -489,6 +489,7 @@ fn item() -> impl Strategy<Value = Item> {
             )| Item {
                 id,
                 version: ItemVersion(v),
+                subject: SubjectId::new("en").unwrap(),
                 family,
                 item_type,
                 instruction,

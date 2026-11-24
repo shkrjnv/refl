@@ -6,5 +6,5 @@ let b = import "../lib/base.ncl" in
   misconceptions = b.misconceptions,
   instructions = b.instructions,
   explanations = b.explanations,
-  items = [b.gap { slot_kcs = [{ kc = "k.a", role = "secondary" }] }],
+  items = [b.gap { slot_kcs = [{ kc = "en.k.a", role = "secondary" }] }],
 }

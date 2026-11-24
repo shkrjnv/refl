@@ -662,7 +662,7 @@ async fn content_bundle_imports_idempotently(c: &Cluster) {
     // A misconception's micro-explanation resolves by key.
     let feedback: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM content_explanations WHERE target_kind = 'misconception' \
-         AND target_id = 'mis.article.omission-l1' AND depth = 'short' AND lang = 'ru'",
+         AND target_id = 'en.mis.article.omission-l1' AND depth = 'short' AND lang = 'ru'",
     )
     .fetch_one(&db)
     .await

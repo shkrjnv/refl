@@ -9,13 +9,18 @@ import type { ItemType } from "./ItemType";
 import type { ItemVersion } from "./ItemVersion";
 import type { Slot } from "./Slot";
 import type { Stimulus } from "./Stimulus";
+import type { SubjectId } from "./SubjectId";
 import type { TopicId } from "./TopicId";
 
 /**
  * An item at one version. Version bumps when stimulus, options, the correct
  * answer or KC links change; not for new accepted answers or error patterns.
  */
-export type Item = { id: ItemId, version: ItemVersion, family: FamilyId, type: ItemType, instruction: InstructionId, stimulus: Stimulus, slots: Array<Slot>, difficulty: AuthorDifficulty, 
+export type Item = { id: ItemId, version: ItemVersion, 
+/**
+ * Matches the prefix of `family` (checked by content-build).
+ */
+subject: SubjectId, family: FamilyId, type: ItemType, instruction: InstructionId, stimulus: Stimulus, slots: Array<Slot>, difficulty: AuthorDifficulty, 
 /**
  * Seconds; for automaticity and session planning.
  */

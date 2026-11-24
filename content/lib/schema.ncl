@@ -67,6 +67,7 @@ let Lang = OneOf ["uz", "ru", "en"] in
   Item = {
     id | String,
     version | Number,
+    subject | String,
     family | String,
     type | OneOf ["choice", "find_error", "matching", "true_false_not_given", "gap_fill", "transformation", "sentence_assembly", "translation", "dictation", "own_sentence", "writing", "shadowing"],
     instruction | String,

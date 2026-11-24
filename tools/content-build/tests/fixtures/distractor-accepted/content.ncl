@@ -6,5 +6,5 @@ let b = import "../lib/base.ncl" in
   misconceptions = b.misconceptions,
   instructions = b.instructions,
   explanations = b.explanations,
-  items = [b.choice { options = [{ text = "the", misconception = "m.two" }, { text = "A", misconception = "m.one" }] }],
+  items = [b.choice { options = [{ text = "the", misconception = "en.m.two" }, { text = "A", misconception = "en.m.one" }] }],
 }

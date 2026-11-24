@@ -6,5 +6,5 @@ let b = import "../lib/base.ncl" in
   misconceptions = b.misconceptions,
   instructions = b.instructions,
   explanations = b.explanations,
-  items = [b.gap { wrong = [{ pattern = "cat", misconception = "m.one" }] }],
+  items = [b.gap { wrong = [{ pattern = "cat", misconception = "en.m.one" }] }],
 }

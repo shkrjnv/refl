@@ -43,6 +43,10 @@ pub enum Code {
     UnknownLevel,
     /// A KC's domain is not in its subject's list.
     UnknownDomain,
+    /// A KC, misconception or family id lacks its subject prefix.
+    SubjectPrefix,
+    /// A `requires` edge joins KCs of different subjects.
+    RequiresAcrossSubjects,
     /// A `contrasts` edge between live KCs has no live item marked
     /// `confuses_with` across it.
     ContrastWithoutConfusion,
@@ -50,7 +54,7 @@ pub enum Code {
 
 impl Code {
     /// Every check; tests require a negative fixture named after each one.
-    pub const ALL: [Self; 23] = [
+    pub const ALL: [Self; 25] = [
         Self::Nickel,
         Self::Schema,
         Self::DuplicateId,
@@ -73,6 +77,8 @@ impl Code {
         Self::MissingAudio,
         Self::UnknownLevel,
         Self::UnknownDomain,
+        Self::SubjectPrefix,
+        Self::RequiresAcrossSubjects,
         Self::ContrastWithoutConfusion,
     ];
 
@@ -100,6 +106,8 @@ impl Code {
             Self::MissingAudio => "missing-audio",
             Self::UnknownLevel => "unknown-level",
             Self::UnknownDomain => "unknown-domain",
+            Self::SubjectPrefix => "subject-prefix",
+            Self::RequiresAcrossSubjects => "requires-across-subjects",
             Self::ContrastWithoutConfusion => "contrast-without-confusion",
         }
     }

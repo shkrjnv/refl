@@ -3,7 +3,7 @@ let s = import "../lib/schema.ncl" in
 {
   kcs = [
     {
-      id = "gram.noun.countability",
+      id = "en.gram.noun.countability",
       subject = "en",
       domain = "grammar",
       title = {
@@ -17,7 +17,7 @@ let s = import "../lib/schema.ncl" in
       tags = ["l1-hard-uz", "l1-hard-ru"],
     },
     {
-      id = "gram.article.first-mention",
+      id = "en.gram.article.first-mention",
       subject = "en",
       domain = "grammar",
       title = {
@@ -31,7 +31,7 @@ let s = import "../lib/schema.ncl" in
       tags = ["l1-hard-uz", "l1-hard-ru"],
     },
     {
-      id = "gram.article.second-mention",
+      id = "en.gram.article.second-mention",
       subject = "en",
       domain = "grammar",
       title = {
@@ -46,8 +46,8 @@ let s = import "../lib/schema.ncl" in
     },
   ],
   edges = [
-    { kind = "requires", from = "gram.article.first-mention", to = "gram.noun.countability" },
-    { kind = "requires", from = "gram.article.second-mention", to = "gram.article.first-mention" },
-    { kind = "contrasts", from = "gram.article.first-mention", to = "gram.article.second-mention" },
+    { kind = "requires", from = "en.gram.article.first-mention", to = "en.gram.noun.countability" },
+    { kind = "requires", from = "en.gram.article.second-mention", to = "en.gram.article.first-mention" },
+    { kind = "contrasts", from = "en.gram.article.first-mention", to = "en.gram.article.second-mention" },
   ],
 } | s.File
