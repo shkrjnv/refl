@@ -1,0 +1,15 @@
+Copyright (c) 2026 the refl author (github.com/shkrjnv). All rights reserved.
+
+The learning content in this directory and its subdirectories (knowledge
+components, item families and items, answer patterns, misconceptions,
+explanations, instructions, lessons, and any audio or images referenced by
+them) is NOT covered by the GNU Affero General Public License in the
+repository root.
+
+You may view this content as part of the public repository. Any other use,
+including copying, modification, redistribution, or use in another product
+or service, requires prior written permission from the copyright holder.
+
+The schema files in content/lib/ are part of the software and are licensed
+under the GNU Affero General Public License v3.0 only, like the rest of the
+repository.
