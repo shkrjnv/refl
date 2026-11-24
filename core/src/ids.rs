@@ -7,7 +7,7 @@ use core::fmt;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::value::ValueError;
+use crate::value::{Seed, ValueError};
 
 fn is_valid_slug(s: &str) -> bool {
     let is_sep = |b: u8| b == b'.' || b == b'-';
@@ -123,7 +123,7 @@ pub struct ItemRef {
     /// Generator instance; `None` for ordinary items.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "ts", ts(optional))]
-    pub seed: Option<u64>,
+    pub seed: Option<Seed>,
 }
 
 /// Version of a content build (see `reclassified` in `docs/02-layer1-content.md`).

@@ -50,6 +50,28 @@ fn read_tree(dir: &Path) -> BTreeMap<PathBuf, String> {
     out
 }
 
+/// No integer in an event may exceed 2^53 - 1, the largest JavaScript holds
+/// exactly (`docs/02-layer1-content.md`, «Событие и лог»). ts-rs writes
+/// `bigint` for 64-bit integers, so `Event` and every type it reaches must
+/// be free of it.
+#[test]
+fn event_types_have_no_bigint() {
+    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("ts-event-types");
+    let _ = fs::remove_dir_all(&dir);
+    Event::export_all(&Config::new().with_out_dir(&dir)).unwrap();
+    let types = read_tree(&dir);
+    assert!(types.len() > 10, "Event exported too few types: {types:?}");
+    let bigint: Vec<_> = types
+        .iter()
+        .filter(|(_, text)| text.contains("bigint"))
+        .map(|(path, _)| path)
+        .collect();
+    assert!(
+        bigint.is_empty(),
+        "event types with bigint fields: {bigint:?}; use Seed or another 53-bit type"
+    );
+}
+
 #[test]
 fn ts_bindings_are_up_to_date() {
     let fresh = Path::new(env!("CARGO_TARGET_TMPDIR")).join("ts-bindings");

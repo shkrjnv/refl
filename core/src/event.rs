@@ -19,7 +19,7 @@ use crate::ids::{
 use crate::unlock::{
     AchievementTier, CosmeticSlot, Milestone, ShowcaseKind, UnlockKind, UnlockSource,
 };
-use crate::value::{Timestamp, UnitInterval, ValueError};
+use crate::value::{MAX_SAFE_INTEGER, Seed, Timestamp, UnitInterval, ValueError};
 
 /// Schema version written into every new event.
 pub const CURRENT_SCHEMA_VERSION: u16 = 1;
@@ -318,7 +318,7 @@ pub struct PlanIssuedEvent {
     /// Probability with which `chosen` was picked.
     pub propensity: UnitInterval,
     /// Seed of the core PRNG that made the choice.
-    pub seed: u64,
+    pub seed: Seed,
 }
 
 /// What a mentor changed.
@@ -535,14 +535,14 @@ pub fn encode_event(event: &Event) -> String {
 ///
 /// # Errors
 /// Invalid JSON, an invalid envelope, invalid field values of a known type,
-/// or a missing or zero `schema_version`.
+/// or a missing, zero or unsafe (above 2^53 - 1) `schema_version`.
 pub fn decode_event(json: &str) -> Result<Decoded, DecodeError> {
     let mut value: Value = serde_json::from_str(json)?;
     let schema_version = value
         .get("schema_version")
         .and_then(Value::as_u64)
         .ok_or(DecodeError::MissingSchemaVersion)?;
-    if schema_version == 0 {
+    if schema_version == 0 || schema_version > MAX_SAFE_INTEGER {
         return Err(DecodeError::UnknownSchemaVersion(schema_version));
     }
     let envelope = Envelope::deserialize(&value)?;

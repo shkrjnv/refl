@@ -20,7 +20,7 @@ use refl_core::item::{
 use refl_core::unlock::{
     AchievementTier, CosmeticSlot, Milestone, ShowcaseKind, UnlockKind, UnlockSource,
 };
-use refl_core::value::{Cefr, Localized, Timestamp, UnitInterval};
+use refl_core::value::{Cefr, Localized, MAX_SAFE_INTEGER, Seed, Timestamp, UnitInterval};
 use refl_core::{
     CURRENT_SCHEMA_VERSION, DecodeError, Decoded, Event, UnknownEvent, decode_event, encode_event,
 };
@@ -65,11 +65,21 @@ fn verdict() -> impl Strategy<Value = Verdict> {
     ]
 }
 
+/// The whole 53-bit range, edges included.
+fn seed() -> impl Strategy<Value = Seed> {
+    prop_oneof![Just(MAX_SAFE_INTEGER), 0..=MAX_SAFE_INTEGER].prop_map(|s| Seed::new(s).unwrap())
+}
+
+fn timestamp() -> impl Strategy<Value = Timestamp> {
+    let max = i64::try_from(MAX_SAFE_INTEGER).unwrap();
+    prop_oneof![Just(-max), Just(max), -max..=max].prop_map(Timestamp)
+}
+
 fn item_ref() -> impl Strategy<Value = ItemRef> {
     (
         slug(ItemId::new),
         any::<u32>(),
-        proptest::option::of(any::<u64>()),
+        proptest::option::of(seed()),
     )
         .prop_map(|(id, v, seed)| ItemRef {
             id,
@@ -190,7 +200,7 @@ fn quality_payload() -> impl Strategy<Value = EventPayload> {
         (text(), text()),
         prop_oneof![Just(PlanScope::Session), Just(PlanScope::NextItem)],
         proptest::collection::vec(candidate, 0..4),
-        (any::<u16>(), unit(), any::<u64>()),
+        (any::<u16>(), unit(), seed()),
     )
         .prop_map(
             |((planner_version, model_version), scope, candidates, (chosen, propensity, seed))| {
@@ -340,19 +350,21 @@ fn event() -> impl Strategy<Value = Event> {
         uuid_v7(),
         any::<u128>(),
         proptest::option::of(any::<u128>()),
-        any::<i64>(),
-        proptest::option::of(any::<i64>()),
+        timestamp(),
+        proptest::option::of(timestamp()),
         payload(),
     )
-        .prop_map(|(event_id, learner, session, c, s, payload)| Event {
-            schema_version: CURRENT_SCHEMA_VERSION,
-            event_id,
-            learner_id: LearnerId(Uuid::from_u128(learner)),
-            session_id: session.map(|u| SessionId(Uuid::from_u128(u))),
-            client_ts: Timestamp(c),
-            server_ts: s.map(Timestamp),
-            payload,
-        })
+        .prop_map(
+            |(event_id, learner, session, client_ts, server_ts, payload)| Event {
+                schema_version: CURRENT_SCHEMA_VERSION,
+                event_id,
+                learner_id: LearnerId(Uuid::from_u128(learner)),
+                session_id: session.map(|u| SessionId(Uuid::from_u128(u))),
+                client_ts,
+                server_ts,
+                payload,
+            },
+        )
 }
 
 fn slot() -> impl Strategy<Value = Slot> {
@@ -653,7 +665,7 @@ fn newer_events_decode_as_unknown_with_raw_preserved() {
     // A future schema version is unknown whatever its payload looks like.
     let future = sample_with_payload(2, &serde_json::json!({ "anything": [] }));
     assert_unknown(&future, 2);
-    assert_unknown(&sample_event_json(u64::MAX, V7), u64::MAX);
+    assert_unknown(&sample_event_json(MAX_SAFE_INTEGER, V7), MAX_SAFE_INTEGER);
 }
 
 #[test]
@@ -969,5 +981,35 @@ fn reward_events_wire_shape_and_tier_default() {
             ),
             "{bad_tier}"
         );
+    }
+}
+
+#[test]
+fn integers_beyond_2_pow_53_are_rejected() {
+    let limit = MAX_SAFE_INTEGER;
+    assert_eq!(Seed::new(limit).map(Seed::get), Some(limit));
+    assert!(Seed::new(limit + 1).is_none());
+    let with_seed = |s: u64| {
+        let mut p = answer_payload(&serde_json::json!({ "kind": "option", "value": 1 }));
+        p["item"]["seed"] = s.into();
+        sample_with_payload(1, &p)
+    };
+    let EventPayload::Answer(a) = known(&with_seed(limit)).payload else {
+        panic!("not an answer");
+    };
+    assert_eq!(a.item.seed, Seed::new(limit));
+    let json_err = |json: &str| matches!(decode_event(json), Err(DecodeError::Json(_)));
+    assert!(json_err(&with_seed(limit + 1)));
+    assert!(json_err(&with_seed(u64::MAX)));
+    for ts in [i128::from(limit) + 1, -i128::from(limit) - 1] {
+        let mut v: serde_json::Value = serde_json::from_str(&sample_event_json(1, V7)).unwrap();
+        v["client_ts"] = serde_json::Value::Number(ts.to_string().parse().unwrap());
+        assert!(json_err(&v.to_string()), "{ts}");
+    }
+    for version in [limit + 1, u64::MAX] {
+        assert!(matches!(
+            decode_event(&sample_event_json(version, V7)),
+            Err(DecodeError::UnknownSchemaVersion(v)) if v == version
+        ));
     }
 }
