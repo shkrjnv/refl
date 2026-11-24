@@ -39,6 +39,37 @@ impl From<UnitInterval> for f64 {
 /// without losing precision (`docs/02-layer1-content.md`, «Событие и лог»).
 pub const MAX_SAFE_INTEGER: u64 = (1 << 53) - 1;
 
+/// A finite number: NaN and infinities are rejected, so an event never
+/// serializes a float as `null`.
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(type = "number"))]
+#[serde(try_from = "f64", into = "f64")]
+pub struct Finite(f64);
+
+impl Finite {
+    /// Returns `None` for NaN and infinities.
+    pub fn new(v: f64) -> Option<Self> {
+        v.is_finite().then_some(Self(v))
+    }
+
+    pub fn get(self) -> f64 {
+        self.0
+    }
+}
+
+impl TryFrom<f64> for Finite {
+    type Error = ValueError;
+    fn try_from(v: f64) -> Result<Self, ValueError> {
+        Self::new(v).ok_or(ValueError::NotFinite)
+    }
+}
+
+impl From<Finite> for f64 {
+    fn from(v: Finite) -> f64 {
+        v.0
+    }
+}
+
 /// Milliseconds since the Unix epoch, UTC. Always passed in, never read from a
 /// clock. Decoding rejects values beyond [`MAX_SAFE_INTEGER`] in magnitude.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -163,6 +194,9 @@ pub enum ValueError {
     HalfBandsOutOfRange,
     TierOutOfRange,
     UnsafeInteger,
+    NotFinite,
+    ChosenOutOfRange,
+    ShowcaseTooLarge,
 }
 
 impl fmt::Display for ValueError {
@@ -177,6 +211,9 @@ impl fmt::Display for ValueError {
             Self::HalfBandsOutOfRange => "half bands must be 0..=18 (IELTS band × 2)",
             Self::TierOutOfRange => "achievement tier must be 1..=6",
             Self::UnsafeInteger => "integer must be within 2^53 - 1 (Number.MAX_SAFE_INTEGER)",
+            Self::NotFinite => "number must be finite",
+            Self::ChosenOutOfRange => "chosen must index one of the candidates",
+            Self::ShowcaseTooLarge => "a showcase holds at most 5 cards",
         })
     }
 }

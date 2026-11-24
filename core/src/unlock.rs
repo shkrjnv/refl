@@ -2,6 +2,7 @@
 //! milestones that drive it (`docs/07-themes-achievements-frames.md`,
 //! «Модель разблокировок»; `docs/06-companions.md`, «Вехи, главы и эпизоды»).
 
+use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 
 use crate::ids::{AchievementId, KcId, UserId};
@@ -133,4 +134,37 @@ pub enum CosmeticSlot {
 pub enum ShowcaseKind {
     /// Topic cards; keys are topic KC ids (`docs/07-themes-achievements-frames.md`, «Карточки»).
     Cards,
+}
+
+/// Keys of a showcase: topic KC ids of up to [`ShowcaseKeys::MAX`] cards
+/// (`docs/07-themes-achievements-frames.md`, «Карточки»).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[serde(try_from = "Vec<KcId>", into = "Vec<KcId>")]
+pub struct ShowcaseKeys(Vec<KcId>);
+
+impl ShowcaseKeys {
+    pub const MAX: usize = 5;
+
+    /// Returns `None` for more than [`Self::MAX`] keys.
+    pub fn new(keys: Vec<KcId>) -> Option<Self> {
+        (keys.len() <= Self::MAX).then_some(Self(keys))
+    }
+
+    pub fn as_slice(&self) -> &[KcId] {
+        &self.0
+    }
+}
+
+impl TryFrom<Vec<KcId>> for ShowcaseKeys {
+    type Error = ValueError;
+    fn try_from(keys: Vec<KcId>) -> Result<Self, ValueError> {
+        Self::new(keys).ok_or(ValueError::ShowcaseTooLarge)
+    }
+}
+
+impl From<ShowcaseKeys> for Vec<KcId> {
+    fn from(k: ShowcaseKeys) -> Vec<KcId> {
+        k.0
+    }
 }

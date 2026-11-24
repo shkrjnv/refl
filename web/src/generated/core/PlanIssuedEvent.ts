@@ -7,6 +7,7 @@ import type { UnitInterval } from "./UnitInterval";
 /**
  * Every plan and every next-item choice, so that decisions can be checked
  * and replayed (`docs/11-quality.md`, «Лог решений», «Микрорандомизация»).
+ * Decoding rejects a `chosen` that indexes no candidate.
  */
 export type PlanIssuedEvent = { planner_version: string, model_version: string, scope: PlanScope, 
 /**

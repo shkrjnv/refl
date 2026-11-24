@@ -17,9 +17,9 @@ use crate::ids::{
     MisconceptionId, PackageKey, SessionId, UserId,
 };
 use crate::unlock::{
-    AchievementTier, CosmeticSlot, Milestone, ShowcaseKind, UnlockKind, UnlockSource,
+    AchievementTier, CosmeticSlot, Milestone, ShowcaseKeys, ShowcaseKind, UnlockKind, UnlockSource,
 };
-use crate::value::{MAX_SAFE_INTEGER, Seed, Timestamp, UnitInterval, ValueError};
+use crate::value::{Finite, MAX_SAFE_INTEGER, Seed, Timestamp, UnitInterval, ValueError};
 
 /// Schema version written into every new event.
 ///
@@ -116,7 +116,7 @@ pub enum EventPayload {
     /// What the public profile shows, e.g. up to five topic cards.
     ShowcaseSet {
         kind: ShowcaseKind,
-        keys: Vec<KcId>,
+        keys: ShowcaseKeys,
     },
     /// A planner decision; the learner-model fold skips it
     /// (`docs/11-quality.md`, «Лог решений»).
@@ -301,22 +301,24 @@ pub enum PlanAction {
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct PlanFactor {
     pub name: String,
-    pub value: f64,
+    pub value: Finite,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct PlanCandidate {
     pub action: PlanAction,
-    pub value_per_minute: f64,
+    pub value_per_minute: Finite,
     /// The value broken down into its multipliers.
     pub factors: Vec<PlanFactor>,
 }
 
 /// Every plan and every next-item choice, so that decisions can be checked
 /// and replayed (`docs/11-quality.md`, «Лог решений», «Микрорандомизация»).
+/// Decoding rejects a `chosen` that indexes no candidate.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[serde(try_from = "PlanIssuedUnchecked")]
 pub struct PlanIssuedEvent {
     pub planner_version: String,
     pub model_version: String,
@@ -332,6 +334,38 @@ pub struct PlanIssuedEvent {
     /// Codes of plan validator violations (`docs/11-quality.md`, «К3»); empty
     /// when the plan is valid.
     pub violations: Vec<String>,
+}
+
+/// [`PlanIssuedEvent`] as it arrives, before the `chosen` check.
+#[derive(Deserialize)]
+struct PlanIssuedUnchecked {
+    planner_version: String,
+    model_version: String,
+    scope: PlanScope,
+    candidates: Vec<PlanCandidate>,
+    chosen: u16,
+    propensity: UnitInterval,
+    seed: Seed,
+    violations: Vec<String>,
+}
+
+impl TryFrom<PlanIssuedUnchecked> for PlanIssuedEvent {
+    type Error = ValueError;
+    fn try_from(p: PlanIssuedUnchecked) -> Result<Self, ValueError> {
+        if usize::from(p.chosen) >= p.candidates.len() {
+            return Err(ValueError::ChosenOutOfRange);
+        }
+        Ok(Self {
+            planner_version: p.planner_version,
+            model_version: p.model_version,
+            scope: p.scope,
+            candidates: p.candidates,
+            chosen: p.chosen,
+            propensity: p.propensity,
+            seed: p.seed,
+            violations: p.violations,
+        })
+    }
 }
 
 /// What a mentor changed.

@@ -18,9 +18,9 @@ use refl_core::item::{
     ItemType, KcRole, Slot, SlotKc, Stimulus,
 };
 use refl_core::unlock::{
-    AchievementTier, CosmeticSlot, Milestone, ShowcaseKind, UnlockKind, UnlockSource,
+    AchievementTier, CosmeticSlot, Milestone, ShowcaseKeys, ShowcaseKind, UnlockKind, UnlockSource,
 };
-use refl_core::value::{Cefr, Localized, MAX_SAFE_INTEGER, Seed, Timestamp, UnitInterval};
+use refl_core::value::{Cefr, Finite, Localized, MAX_SAFE_INTEGER, Seed, Timestamp, UnitInterval};
 use refl_core::{
     CURRENT_SCHEMA_VERSION, DecodeError, Decoded, Event, UnknownEvent, decode_event, encode_event,
 };
@@ -63,6 +63,17 @@ fn verdict() -> impl Strategy<Value = Verdict> {
         Just(Verdict::Wrong),
         Just(Verdict::Unrecognized)
     ]
+}
+
+/// Any finite float, including zeros, subnormals and the extremes.
+fn finite() -> impl Strategy<Value = Finite> {
+    prop_oneof![
+        Just(f64::MAX),
+        Just(f64::MIN),
+        Just(-0.0),
+        any::<f64>().prop_filter("finite", |v| v.is_finite())
+    ]
+    .prop_map(|v| Finite::new(v).unwrap())
 }
 
 /// The whole 53-bit range, edges included.
@@ -185,9 +196,9 @@ fn quality_payload() -> impl Strategy<Value = EventPayload> {
     ];
     let candidate = (
         action,
-        any::<f64>(),
+        finite(),
         proptest::collection::vec(
-            (text(), any::<f64>()).prop_map(|(name, value)| PlanFactor { name, value }),
+            (text(), finite()).prop_map(|(name, value)| PlanFactor { name, value }),
             0..4,
         ),
     )
@@ -350,7 +361,7 @@ fn reward_payload() -> impl Strategy<Value = EventPayload> {
         proptest::collection::vec(slug(KcId::new), 0..6).prop_map(|keys| {
             EventPayload::ShowcaseSet {
                 kind: ShowcaseKind::Cards,
-                keys,
+                keys: ShowcaseKeys::new(keys).unwrap(),
             }
         }),
     ]
@@ -835,7 +846,7 @@ fn derived_keys_cover_only_server_derived_events() {
     assert_eq!(
         key(EventPayload::ShowcaseSet {
             kind: ShowcaseKind::Cards,
-            keys: vec![KcId::new("topic.articles").unwrap()]
+            keys: ShowcaseKeys::new(vec![KcId::new("topic.articles").unwrap()]).unwrap()
         }),
         None
     );
@@ -1035,4 +1046,60 @@ fn integers_beyond_2_pow_53_are_rejected() {
             Err(DecodeError::UnknownSchemaVersion(v)) if v == version
         ));
     }
+}
+
+fn plan_with(chosen: u64, value_per_minute: &serde_json::Value) -> String {
+    sample_with_payload(
+        1,
+        &serde_json::json!({
+            "type": "plan_issued", "planner_version": "p1", "model_version": "m1",
+            "scope": "session", "chosen": chosen, "propensity": 1.0, "seed": 1,
+            "violations": [],
+            "candidates": [
+                { "action": { "kind": "review", "kc": "a" }, "value_per_minute": value_per_minute,
+                  "factors": [{ "name": "f", "value": 2.0 }] },
+                { "action": { "kind": "learn", "kc": "b" }, "value_per_minute": 1.0, "factors": [] },
+            ],
+        }),
+    )
+}
+
+#[test]
+fn plan_issued_is_validated_on_decode() {
+    let json_err = |json: &str| matches!(decode_event(json), Err(DecodeError::Json(_)));
+    let v = serde_json::json!(0.5);
+    for ok in [0, 1] {
+        known(&plan_with(ok, &v));
+    }
+    // chosen must index a candidate; an empty list has none.
+    assert!(json_err(&plan_with(2, &v)));
+    let mut empty: serde_json::Value = serde_json::from_str(&plan_with(0, &v)).unwrap();
+    empty["payload"]["candidates"] = serde_json::json!([]);
+    assert!(json_err(&empty.to_string()));
+    // NaN and infinities serialize as null or overflow; neither decodes.
+    assert!(json_err(&plan_with(0, &serde_json::Value::Null)));
+    assert!(json_err(&plan_with(0, &v).replace("0.5", "1e400")));
+    assert!(json_err(&plan_with(0, &v).replace("2.0", "null")));
+    for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        assert!(Finite::new(bad).is_none());
+        assert!(serde_json::from_str::<Finite>(&serde_json::to_string(&bad).unwrap()).is_err());
+    }
+}
+
+#[test]
+fn showcase_holds_at_most_five_cards() {
+    let showcase = |n: usize| {
+        let keys: Vec<String> = (0..n).map(|i| format!("topic.t{i}")).collect();
+        sample_with_payload(
+            1,
+            &serde_json::json!({ "type": "showcase_set", "kind": "cards", "keys": keys }),
+        )
+    };
+    for n in [0, 5] {
+        known(&showcase(n));
+    }
+    assert!(matches!(
+        decode_event(&showcase(6)),
+        Err(DecodeError::Json(_))
+    ));
 }
