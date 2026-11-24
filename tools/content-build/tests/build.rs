@@ -115,6 +115,18 @@ fn contrast_crossed_by_a_confusion_passes() {
 }
 
 #[test]
+fn draft_items_and_items_on_draft_kcs_are_not_eligible() {
+    let out = run(&fixtures().join("eligibility"));
+    assert!(out.report.diagnostics.is_empty(), "{}", out.report);
+    let bundle = out.bundle.expect("bundle");
+    for entry in &bundle.content.items {
+        let id = entry.item.id.as_str();
+        let expected = !matches!(id, "it.draft" | "it.on-draft-kc");
+        assert_eq!(entry.session_eligible, expected, "{id}");
+    }
+}
+
+#[test]
 fn example_content_builds_with_computed_status() {
     let out = run(&repo().join("content"));
     assert!(!out.report.has_errors(), "{}", out.report);
@@ -127,19 +139,19 @@ fn example_content_builds_with_computed_status() {
             .find(|k| k.kc.id.as_str() == id)
             .map(|k| k.status)
     };
-    assert_eq!(
-        status("en.gram.article.first-mention"),
-        Some(KcStatus::Live)
-    );
-    assert_eq!(
-        status("en.gram.article.second-mention"),
-        Some(KcStatus::Draft)
-    );
-    assert_eq!(status("en.gram.noun.countability"), Some(KcStatus::Draft));
-    // Draft items are not eligible; neither are items whose primary KC is draft.
+    // The Articles unit of the prototype is live (docs/15, «Состав темы»).
+    for kc in [
+        "en.gram.noun.countability",
+        "en.gram.article.a-an-sound",
+        "en.gram.article.first-mention",
+        "en.gram.article.second-mention",
+        "en.gram.article.zero-general",
+    ] {
+        assert_eq!(status(kc), Some(KcStatus::Live), "{kc}");
+    }
+    // Every item is live with live primary KCs, so every item is eligible.
     for entry in &bundle.content.items {
-        let primary_draft = entry.item.id.as_str().starts_with("art.sm.");
-        assert_eq!(entry.session_eligible, !primary_draft, "{}", entry.item.id);
+        assert!(entry.session_eligible, "{}", entry.item.id);
     }
     assert_eq!(
         bundle.content.requires_closure
