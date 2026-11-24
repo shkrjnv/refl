@@ -1055,10 +1055,12 @@ dependencies = [
 name = "refl-sim"
 version = "0.0.0"
 dependencies = [
+ "content-build",
  "libm",
  "proptest",
  "refl-core",
  "serde_json",
+ "sha2",
  "uuid",
 ]
 

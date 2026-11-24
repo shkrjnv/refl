@@ -10,12 +10,14 @@
 // so a panic is a bug in this crate, not a condition for callers.
 #![allow(clippy::missing_panics_doc)]
 
+pub mod cohort;
+
 use std::collections::BTreeMap;
 
 use refl_core::answer::dfa::{Dfa, TokenTable};
 use refl_core::answer::normalize::NORMALIZATION_VERSION;
 use refl_core::bundle::{
-    BUNDLE_FORMAT_VERSION, Bundle, BundleContent, ItemEntry, KcEntry, KcStatus, Required,
+    BUNDLE_FORMAT_VERSION, Bundle, BundleContent, ItemEntry, KcEntry, KcItems, KcStatus, Required,
     SlotAutomata,
 };
 use refl_core::content::{
@@ -89,11 +91,13 @@ pub struct BundleSpec {
 }
 
 /// Grammar KCs `en.gram.kNN` in chains of four (`k(i)` requires `k(i−1)`
-/// unless `i % 4 == 0`) with an extra edge to `k(i−2)` when `i % 5 == 0`;
-/// level rank `1 + i % 3` (A1–B1), all live. Per KC: two misconceptions, a
-/// short explanation, and items alternating choice (three options: two
-/// diagnosed, one noise) and gap fill (two expected errors); every fifth
-/// item also needs the previous KC as secondary. Plus the spelling KC.
+/// unless `i % 4 == 0`) with an extra edge to `k(i−2)` when `i % 5 == 0`,
+/// and `k(i)` contrasting with `k(i−1)` when `i % 4 == 2`; level rank
+/// `1 + i % 3` (A1–B1), all live. Per KC: two misconceptions, a short
+/// explanation, and items alternating choice (three options: two diagnosed,
+/// one noise) and gap fill (two expected errors); every fifth item also
+/// needs the previous KC as secondary. Plus the spelling KC. Every item is
+/// session-eligible and indexed by KC.
 #[allow(clippy::too_many_lines)] // one literal bundle
 pub fn synthetic_bundle(spec: BundleSpec) -> Bundle {
     let subject_id = SubjectId::new(SUBJECT).expect("valid subject");
@@ -155,6 +159,13 @@ pub fn synthetic_bundle(spec: BundleSpec) -> Bundle {
         }
         if i % 5 == 0 && i >= 2 {
             requires(i - 2);
+        }
+        if i % 4 == 2 {
+            edges.push(Edge {
+                kind: EdgeKind::Contrasts,
+                from: kc_id(i),
+                to: kc_id(i - 1),
+            });
         }
         for x in 0..2 {
             #[allow(clippy::cast_precision_loss)] // small
@@ -298,7 +309,7 @@ pub fn synthetic_bundle(spec: BundleSpec) -> Bundle {
         })
         .collect();
     let requires_closure = closure(&kcs, &edges);
-    Bundle {
+    let mut bundle = Bundle {
         format_version: BUNDLE_FORMAT_VERSION,
         content_version: ContentVersion("synthetic".into()),
         content: BundleContent {
@@ -321,7 +332,75 @@ pub fn synthetic_bundle(spec: BundleSpec) -> Bundle {
             items_by_kc: BTreeMap::new(),
             tokens: TokenTable::default(),
         },
+    };
+    // Synthetic texts are empty and never reviewed.
+    reindex(&mut bundle, TextReview::Ignored);
+    bundle
+}
+
+/// Whether session eligibility needs the item's texts reviewed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TextReview {
+    /// As content-build decides: `why` and `hint` reviewed in ru and en.
+    Required,
+    /// Test fixtures only: unreviewed items count as reviewed.
+    Ignored,
+}
+
+/// Session eligibility and the KC index of the items, as content-build
+/// computes them from KC statuses (`docs/02-layer1-content.md`, «Вычитка и
+/// показ»), except that `review` can be ignored for a test fixture.
+pub fn reindex(bundle: &mut Bundle, review: TextReview) {
+    let status: BTreeMap<KcId, KcStatus> = bundle
+        .content
+        .kcs
+        .iter()
+        .map(|e| (e.kc.id.clone(), e.status))
+        .collect();
+    let mut by_kc: BTreeMap<KcId, KcItems> = BTreeMap::new();
+    for entry in &mut bundle.content.items {
+        let item = &entry.item;
+        let slots = item.body.slots();
+        let primary_live = slots
+            .iter()
+            .flat_map(|s| &s.kcs)
+            .filter(|k| k.role == KcRole::Primary)
+            .all(|k| status.get(&k.kc) == Some(&KcStatus::Live));
+        let reviewed = review == TextReview::Ignored || item.is_reviewed();
+        entry.session_eligible = item.status == ItemStatus::Live && primary_live && reviewed;
+        if entry.session_eligible {
+            let r = ItemRef {
+                id: item.id.clone(),
+                version: item.version,
+                seed: None,
+            };
+            for sk in slots.iter().flat_map(|s| &s.kcs) {
+                let refs = by_kc.entry(sk.kc.clone()).or_default();
+                match sk.role {
+                    KcRole::Primary => refs.primary.push(r.clone()),
+                    KcRole::Secondary => refs.secondary.push(r.clone()),
+                }
+            }
+        }
     }
+    for refs in by_kc.values_mut() {
+        for list in [&mut refs.primary, &mut refs.secondary] {
+            list.sort();
+            list.dedup();
+        }
+    }
+    bundle.content.items_by_kc = by_kc;
+}
+
+/// The bundle of `content/` for simulations: every KC live, review ignored.
+/// The Articles unit is draft until a person reviews its texts (docs/15),
+/// so only a test fixture may treat it as live.
+pub fn live_fixture(mut bundle: Bundle) -> Bundle {
+    for e in &mut bundle.content.kcs {
+        e.status = KcStatus::Live;
+    }
+    reindex(&mut bundle, TextReview::Ignored);
+    bundle
 }
 
 /// Breadth-first shortest distances over `requires`, as content-build does.
@@ -381,6 +460,17 @@ pub fn event(at: Timestamp, tail: u64, payload: EventPayload) -> Decoded {
         server_ts: None,
         payload,
     })
+}
+
+/// Milliseconds of the latest known event of a log; [`T0`] for none.
+pub fn event_time(log: &[Decoded]) -> i64 {
+    log.iter()
+        .filter_map(|e| match e {
+            Decoded::Known(e) => Some(e.client_ts.0),
+            Decoded::Unknown(_) => None,
+        })
+        .max()
+        .unwrap_or(T0.0)
 }
 
 /// An event from a newer core: a payload type this core does not know.

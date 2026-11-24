@@ -114,8 +114,10 @@
               doInstallCargoArtifacts = false;
             }
           );
-          # The learner-model fold is bit-identical native and in WASM: one
-          # generated log, folded by both builds, gives one state hash (docs/03).
+          # The learner-model fold and the session builder are bit-identical
+          # native and in WASM: one generated log, folded by both builds, gives
+          # one state hash (docs/03); three sessions planned on it give one
+          # hash of every plan_issued and the last plan (docs/04).
           core-wasm-hash = craneLib.mkCargoDerivation (
             commonArgs
             // {
@@ -124,10 +126,15 @@
               nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ pkgs.wasmtime ];
               buildPhaseCargoCommand = ''
                 export HOME=$TMPDIR
-                cargo build --locked --release -p refl-sim --bin fold-hash --target wasm32-wasip1
-                cargo build --locked --release -p refl-sim --bin fold-hash
+                cargo build --locked --release -p refl-sim --bin fold-hash --bin plan-hash --target wasm32-wasip1
+                cargo build --locked --release -p refl-sim --bin fold-hash --bin plan-hash
                 native="$(target/release/fold-hash 20000 7)"
                 wasm="$(wasmtime run target/wasm32-wasip1/release/fold-hash.wasm 20000 7)"
+                echo "native: $native"
+                echo "wasm:   $wasm"
+                test "$native" = "$wasm"
+                native="$(target/release/plan-hash)"
+                wasm="$(wasmtime run target/wasm32-wasip1/release/plan-hash.wasm)"
                 echo "native: $native"
                 echo "wasm:   $wasm"
                 test "$native" = "$wasm"
