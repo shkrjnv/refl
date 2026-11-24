@@ -16,7 +16,9 @@ use crate::ids::{
     AchievementId, ContentVersion, EventId, ExplanationId, ItemRef, KcId, LearnerId, LessonId,
     MisconceptionId, PackageKey, SessionId, UserId,
 };
-use crate::unlock::{Milestone, UnlockKind, UnlockSource};
+use crate::unlock::{
+    AchievementTier, CosmeticSlot, Milestone, ShowcaseKind, UnlockKind, UnlockSource,
+};
 use crate::value::{Timestamp, UnitInterval, ValueError};
 
 /// Schema version written into every new event.
@@ -67,9 +69,11 @@ pub enum EventPayload {
     MilestoneReached {
         milestone: Milestone,
     },
-    /// Derived by the server; unique per (learner, achievement).
+    /// Derived by the server; unique per (learner, achievement, tier).
     AchievementEarned {
         achievement: AchievementId,
+        #[serde(default)]
+        tier: AchievementTier,
     },
     /// Whether an earned achievement is shown in the public profile.
     AchievementVisibilitySet {
@@ -94,6 +98,16 @@ pub enum EventPayload {
     CompanionSelected {
         companion: PackageKey,
     },
+    /// Only an unlocked or base cosmetic can be selected.
+    CosmeticSelected {
+        slot: CosmeticSlot,
+        key: PackageKey,
+    },
+    /// What the public profile shows, e.g. up to five topic cards.
+    ShowcaseSet {
+        kind: ShowcaseKind,
+        keys: Vec<KcId>,
+    },
     /// A planner decision; the learner-model fold skips it
     /// (`docs/11-quality.md`, «Лог решений»).
     PlanIssued(PlanIssuedEvent),
@@ -110,6 +124,7 @@ pub enum EventPayload {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DerivedKey {
     pub kind: &'static str,
+    /// For an achievement, `id:tier` (e.g. `streak:3`): each tier is its own event.
     pub key: String,
 }
 
@@ -129,6 +144,8 @@ impl EventPayload {
             Self::UnlockRevoked { .. } => "unlock_revoked",
             Self::ThemeSelected { .. } => "theme_selected",
             Self::CompanionSelected { .. } => "companion_selected",
+            Self::CosmeticSelected { .. } => "cosmetic_selected",
+            Self::ShowcaseSet { .. } => "showcase_set",
             Self::PlanIssued(_) => "plan_issued",
             Self::MentorOverride(_) => "mentor_override",
             Self::WritingScored(_) => "writing_scored",
@@ -147,9 +164,9 @@ impl EventPayload {
                     key: key.into(),
                 })
             }
-            Self::AchievementEarned { achievement } => Some(DerivedKey {
+            Self::AchievementEarned { achievement, tier } => Some(DerivedKey {
                 kind: "achievement",
-                key: achievement.as_str().into(),
+                key: alloc::format!("{achievement}:{}", tier.get()),
             }),
             Self::UnlockGranted {
                 kind,
@@ -404,6 +421,8 @@ pub const EVENT_TYPES: &[&str] = &[
     "unlock_revoked",
     "theme_selected",
     "companion_selected",
+    "cosmetic_selected",
+    "showcase_set",
     "plan_issued",
     "mentor_override",
     "writing_scored",

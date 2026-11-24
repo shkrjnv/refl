@@ -353,8 +353,19 @@ async fn duplicate_derived_event_is_rejected(c: &Cluster) {
             Inserted::New
         );
     }
+    // Each achievement tier is its own derived event; a repeated tier is not.
+    let tier = |t: u8| serde_json::json!({ "type": "achievement_earned", "achievement": "streak", "tier": t });
+    for (n, t) in [(8, 1), (9, 2)] {
+        insert_event(&db, &event(event_id(n), &tier(t)), NOW)
+            .await
+            .unwrap();
+    }
+    assert!(matches!(
+        insert_event(&db, &event(event_id(10), &tier(2)), NOW).await,
+        Err(InsertError::DerivedDuplicate)
+    ));
     let events = known_events(&db).await;
-    assert_eq!(events.len(), 5);
+    assert_eq!(events.len(), 7);
     db.close().await;
 }
 

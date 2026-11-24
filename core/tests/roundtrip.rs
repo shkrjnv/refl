@@ -17,7 +17,9 @@ use refl_core::item::{
     AnswerPattern, AuthorDifficulty, ChoiceOption, Contractions, ExpectedWrong, Item, ItemStatus,
     ItemType, KcRole, Slot, SlotKc, Stimulus,
 };
-use refl_core::unlock::{Milestone, UnlockKind, UnlockSource};
+use refl_core::unlock::{
+    AchievementTier, CosmeticSlot, Milestone, ShowcaseKind, UnlockKind, UnlockSource,
+};
 use refl_core::value::{Cefr, Localized, Timestamp, UnitInterval};
 use refl_core::{
     CURRENT_SCHEMA_VERSION, DecodeError, Decoded, Event, UnknownEvent, decode_event, encode_event,
@@ -268,8 +270,26 @@ fn milestone() -> impl Strategy<Value = Milestone> {
 fn unlock_kind() -> impl Strategy<Value = UnlockKind> {
     prop_oneof![
         Just(UnlockKind::Theme),
+        Just(UnlockKind::Companion),
+        Just(UnlockKind::Avatar),
         Just(UnlockKind::Frame),
-        Just(UnlockKind::Companion)
+        Just(UnlockKind::Background),
+        Just(UnlockKind::Title),
+        Just(UnlockKind::Effect)
+    ]
+}
+
+fn tier() -> impl Strategy<Value = AchievementTier> {
+    (1u8..=6).prop_map(|t| AchievementTier::new(t).unwrap())
+}
+
+fn cosmetic_slot() -> impl Strategy<Value = CosmeticSlot> {
+    prop_oneof![
+        Just(CosmeticSlot::Avatar),
+        Just(CosmeticSlot::Frame),
+        Just(CosmeticSlot::Background),
+        Just(CosmeticSlot::Title),
+        Just(CosmeticSlot::Effect)
     ]
 }
 
@@ -277,15 +297,16 @@ fn unlock_kind() -> impl Strategy<Value = UnlockKind> {
 fn reward_payload() -> impl Strategy<Value = EventPayload> {
     let source = prop_oneof![
         milestone().prop_map(|milestone| UnlockSource::Milestone { milestone }),
-        slug(AchievementId::new).prop_map(|achievement| UnlockSource::Achievement { achievement }),
+        (slug(AchievementId::new), tier())
+            .prop_map(|(achievement, tier)| UnlockSource::Achievement { achievement, tier }),
         any::<u128>().prop_map(|u| UnlockSource::Admin {
             by: UserId(Uuid::from_u128(u))
         }),
     ];
     prop_oneof![
         milestone().prop_map(|milestone| EventPayload::MilestoneReached { milestone }),
-        slug(AchievementId::new)
-            .prop_map(|achievement| EventPayload::AchievementEarned { achievement }),
+        (slug(AchievementId::new), tier())
+            .prop_map(|(achievement, tier)| EventPayload::AchievementEarned { achievement, tier }),
         (slug(AchievementId::new), any::<bool>()).prop_map(|(achievement, visible)| {
             EventPayload::AchievementVisibilitySet {
                 achievement,
@@ -303,6 +324,14 @@ fn reward_payload() -> impl Strategy<Value = EventPayload> {
         }),
         slug(PackageKey::new).prop_map(|theme| EventPayload::ThemeSelected { theme }),
         slug(PackageKey::new).prop_map(|companion| EventPayload::CompanionSelected { companion }),
+        (cosmetic_slot(), slug(PackageKey::new))
+            .prop_map(|(slot, key)| EventPayload::CosmeticSelected { slot, key }),
+        proptest::collection::vec(slug(KcId::new), 0..6).prop_map(|keys| {
+            EventPayload::ShowcaseSet {
+                kind: ShowcaseKind::Cards,
+                keys,
+            }
+        }),
     ]
 }
 
@@ -729,13 +758,22 @@ fn derived_keys_cover_only_server_derived_events() {
         }),
         Some(("topic", "topic.articles".to_owned()))
     );
-    assert_eq!(
-        key(EventPayload::AchievementEarned { achievement: ach() }),
-        Some(("achievement", "first-step".to_owned()))
-    );
+    // Each tier is its own derived event.
+    for (t, k) in [(1, "first-step:1"), (4, "first-step:4")] {
+        assert_eq!(
+            key(EventPayload::AchievementEarned {
+                achievement: ach(),
+                tier: AchievementTier::new(t).unwrap(),
+            }),
+            Some(("achievement", k.to_owned()))
+        );
+    }
     for source in [
         UnlockSource::Milestone { milestone: b1 },
-        UnlockSource::Achievement { achievement: ach() },
+        UnlockSource::Achievement {
+            achievement: ach(),
+            tier: AchievementTier::I,
+        },
     ] {
         assert_eq!(
             key(EventPayload::UnlockGranted {
@@ -764,6 +802,20 @@ fn derived_keys_cover_only_server_derived_events() {
         None
     );
     assert_eq!(key(EventPayload::ThemeSelected { theme: pkg() }), None);
+    assert_eq!(
+        key(EventPayload::CosmeticSelected {
+            slot: CosmeticSlot::Frame,
+            key: pkg()
+        }),
+        None
+    );
+    assert_eq!(
+        key(EventPayload::ShowcaseSet {
+            kind: ShowcaseKind::Cards,
+            keys: vec![KcId::new("topic.articles").unwrap()]
+        }),
+        None
+    );
 }
 
 #[test]
@@ -865,4 +917,57 @@ fn quality_events_wire_shape() {
     out_of_range["propensity"] = 1.0.into();
     out_of_range["scope"] = "lesson".into();
     assert!(decode_event(&sample_with_payload(1, &out_of_range)).is_err());
+}
+
+#[test]
+fn reward_events_wire_shape_and_tier_default() {
+    // Without a tier, an achievement and an achievement source are tier I.
+    let earned = known(&sample_with_payload(
+        1,
+        &serde_json::json!({ "type": "achievement_earned", "achievement": "first-step" }),
+    ));
+    assert_eq!(
+        earned.payload,
+        EventPayload::AchievementEarned {
+            achievement: AchievementId::new("first-step").unwrap(),
+            tier: AchievementTier::I,
+        }
+    );
+    let granted = known(&sample_with_payload(
+        1,
+        &serde_json::json!({
+            "type": "unlock_granted", "kind": "title", "key": "scholar",
+            "source": { "kind": "achievement", "achievement": "first-step" },
+        }),
+    ));
+    let EventPayload::UnlockGranted {
+        source: UnlockSource::Achievement { tier, .. },
+        ..
+    } = granted.payload
+    else {
+        panic!("not an achievement unlock");
+    };
+    assert_eq!(tier, AchievementTier::I);
+    for payload in [
+        serde_json::json!({ "type": "achievement_earned", "achievement": "streak", "tier": 6 }),
+        serde_json::json!({ "type": "cosmetic_selected", "slot": "background", "key": "aurora" }),
+        serde_json::json!({ "type": "showcase_set", "kind": "cards", "keys": ["topic.articles"] }),
+        serde_json::json!({
+            "type": "unlock_granted", "kind": "effect", "key": "sparkle",
+            "source": { "kind": "achievement", "achievement": "streak", "tier": 2 },
+        }),
+    ] {
+        let e = known(&sample_with_payload(1, &payload));
+        assert_eq!(serde_json::to_value(&e.payload).unwrap(), payload);
+    }
+    for bad_tier in [0, 7] {
+        let payload = serde_json::json!({ "type": "achievement_earned", "achievement": "streak", "tier": bad_tier });
+        assert!(
+            matches!(
+                decode_event(&sample_with_payload(1, &payload)),
+                Err(DecodeError::Json(_))
+            ),
+            "{bad_tier}"
+        );
+    }
 }

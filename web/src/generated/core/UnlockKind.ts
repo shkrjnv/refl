@@ -3,4 +3,4 @@
 /**
  * What can be unlocked.
  */
-export type UnlockKind = "theme" | "frame" | "companion";
+export type UnlockKind = "theme" | "companion" | "avatar" | "frame" | "background" | "title" | "effect";
