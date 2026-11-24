@@ -196,7 +196,7 @@ Nov 24, 2026 · @Hara
 | Событие | Поля |
 | --- | --- |
 | `milestone_reached` | веха: level (уровень CEFR) или topic (id KC темы) |
-| `achievement_earned` | id ачивки, ступень |
+| `achievement_earned` | id ачивки, ступень: число 1–6 (I–VI) |
 | `achievement_visibility_set` | id ачивки, видна ли в профиле |
 | `unlock_granted` | kind, ключ, источник: веха, ачивка (со ступенью) или админ (id админа) |
 | `unlock_revoked` | kind, ключ, id админа |
