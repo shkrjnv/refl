@@ -103,6 +103,8 @@ mod tests {
         assert!(!is_near("a", "abcd"));
         // Short accepted words allow one edit, longer ones two.
         assert!(!is_near("asdf", "the"));
+        // Two edits on a 3-letter word.
+        assert!(!is_near("tso", "the"));
         assert!(!is_near("tre", "teh"));
         // Two edits on a 4-letter word: no.
         assert!(!is_near("hoes", "show"));

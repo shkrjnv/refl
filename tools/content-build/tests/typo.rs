@@ -111,6 +111,8 @@ fn real_words_are_not_typos() {
 fn distance_is_bounded_by_the_accepted_word() {
     // Not near "the" at all; and two edits on a 4-letter word are too many.
     assert_eq!(verdict("the", "asdf"), Verdict::Unrecognized);
+    assert_eq!(verdict("the", "tso"), Verdict::Unrecognized);
+    assert_eq!(verdict("the", "teh"), Verdict::Typo);
     assert_eq!(verdict("word", "wxrx"), Verdict::Unrecognized);
     // One swap on a short word, two edits on a long one.
     assert_eq!(verdict("word", "wrod"), Verdict::Typo);
