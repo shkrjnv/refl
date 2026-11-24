@@ -22,6 +22,16 @@ use crate::unlock::{
 use crate::value::{MAX_SAFE_INTEGER, Seed, Timestamp, UnitInterval, ValueError};
 
 /// Schema version written into every new event.
+///
+/// When to bump it (`docs/13-sync-versions.md`, «Изменение схемы событий»):
+/// an older core must read an event correctly or see it as unknown, never
+/// misread it. Only two additions keep the version, because an older core
+/// detects them by tag: a new [`EventPayload`] variant (listed in
+/// [`EVENT_TYPES`]) and a new [`Response`] variant (in [`RESPONSE_KINDS`]).
+/// Anything else bumps it and appends an upcaster: a new enum value inside an
+/// existing payload, a new field (required or not), a changed meaning. Older
+/// cores then see such events as unknown by version, while the server and
+/// newer cores lift old versions through `UPCASTERS`.
 pub const CURRENT_SCHEMA_VERSION: u16 = 1;
 
 /// An upcaster lifts the JSON of an event from version `n` to `n + 1`.
@@ -597,6 +607,9 @@ mod tests {
         v
     }
 
+    // A new payload or response variant only needs its tag added to the list:
+    // older cores decode it as Unknown. Any other change to an existing payload
+    // bumps CURRENT_SCHEMA_VERSION (see its doc comment).
     #[test]
     fn event_types_list_every_payload_variant() {
         assert_eq!(
