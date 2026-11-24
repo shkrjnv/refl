@@ -7,11 +7,24 @@ let Localized = { uz | String | optional, ru | String | optional, en | String | 
 let Lang = OneOf ["uz", "ru", "en"] in
 
 {
+  Subject = {
+    id | String,
+    title | Localized,
+    scale | {
+      levels | Array { key | String, title | Localized },
+      step_logit | Number,
+    },
+    domains | Array String,
+    checker | OneOf ["en-words"],
+  },
   Kc = {
     id | String,
-    domain | OneOf ["grammar", "phonology", "orthography", "discourse", "reading-skill", "listening-skill", "writing-skill"],
+    subject | String,
+    # From the subject's list of domains.
+    domain | String,
     title | Localized,
-    cefr | OneOf ["pre-A1", "A1", "A2", "B1", "B2", "C1", "C2"],
+    # A level key of the subject's scale.
+    level | String,
     importance | Unit,
     rule | String,
     tags | Array String | optional,
@@ -72,6 +85,7 @@ let Lang = OneOf ["uz", "ru", "en"] in
   },
   # What every content file exports. Lessons are checked by content-build only.
   File = {
+    subjects | Array Subject | optional,
     kcs | Array Kc | optional,
     edges | Array Edge | optional,
     misconceptions | Array Misconception | optional,

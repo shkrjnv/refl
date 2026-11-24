@@ -1,5 +1,6 @@
 let b = import "../lib/base.ncl" in
 {
+  subjects = b.subjects,
   kcs = b.kcs,
   edges = b.edges @ [{ kind = "supports", from = "k.a", to = "k.missing" }],
   misconceptions = b.misconceptions,

@@ -9,6 +9,7 @@ use std::process::Command;
 use refl_core::content::{Edge, Explanation, Instruction, Kc, Misconception};
 use refl_core::item::Item;
 use refl_core::lesson::Lesson;
+use refl_core::subject::Subject;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
@@ -24,6 +25,7 @@ pub struct Sourced<T> {
 /// All content, in file order, then in order within each file.
 #[derive(Debug, Default)]
 pub struct Content {
+    pub subjects: Vec<Sourced<Subject>>,
     pub kcs: Vec<Sourced<Kc>>,
     pub edges: Vec<Sourced<Edge>>,
     pub misconceptions: Vec<Sourced<Misconception>>,
@@ -33,7 +35,8 @@ pub struct Content {
     pub lessons: Vec<Sourced<Lesson>>,
 }
 
-const SECTIONS: [&str; 7] = [
+const SECTIONS: [&str; 8] = [
+    "subjects",
     "kcs",
     "edges",
     "misconceptions",
@@ -171,6 +174,7 @@ pub fn load(root: &Path, nickel: &Path) -> std::io::Result<(Content, Vec<Diagnos
         for (key, value) in map {
             let d = &mut diags;
             match key.as_str() {
+                "subjects" => parse_section(&rel, &key, value, &mut content.subjects, d),
                 "kcs" => parse_section(&rel, &key, value, &mut content.kcs, d),
                 "edges" => parse_section(&rel, &key, value, &mut content.edges, d),
                 "misconceptions" => {

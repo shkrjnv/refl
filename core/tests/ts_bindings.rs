@@ -12,6 +12,7 @@ use refl_core::Event;
 use refl_core::content::{Edge, Explanation, Instruction, Kc, Misconception};
 use refl_core::item::Item;
 use refl_core::lesson::Lesson;
+use refl_core::subject::Subject;
 use ts_rs::{Config, TS};
 
 fn committed_dir() -> PathBuf {
@@ -28,6 +29,7 @@ fn export_all(dir: &Path) {
     Explanation::export_all(&cfg).unwrap();
     Instruction::export_all(&cfg).unwrap();
     Lesson::export_all(&cfg).unwrap();
+    Subject::export_all(&cfg).unwrap();
 }
 
 fn read_tree(dir: &Path) -> BTreeMap<PathBuf, String> {

@@ -197,6 +197,7 @@ pub enum ValueError {
     NotFinite,
     ChosenOutOfRange,
     ShowcaseTooLarge,
+    InvalidLevelKey,
 }
 
 impl fmt::Display for ValueError {
@@ -214,6 +215,7 @@ impl fmt::Display for ValueError {
             Self::NotFinite => "number must be finite",
             Self::ChosenOutOfRange => "chosen must index one of the candidates",
             Self::ShowcaseTooLarge => "a showcase holds at most 5 cards",
+            Self::InvalidLevelKey => "level key must be non-empty ASCII letters, digits and -",
         })
     }
 }

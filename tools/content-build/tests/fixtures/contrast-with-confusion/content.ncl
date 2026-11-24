@@ -5,8 +5,9 @@ let b = import "../lib/base.ncl" in
 let a = b.live_kc "k.a" in
 let bb = b.live_kc "k.b" in
 {
+  subjects = b.subjects,
   kcs = b.kcs @ [
-    { id = "k.c", domain = "grammar", title = { en = "C" }, cefr = "A1", importance = 0.5, rule = "c" },
+    { id = "k.c", subject = "en", domain = "grammar", title = { en = "C" }, level = "A1", importance = 0.5, rule = "c" },
   ],
   edges = b.edges @ [
     { kind = "contrasts", from = "k.a", to = "k.b" },

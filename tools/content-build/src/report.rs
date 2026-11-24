@@ -39,6 +39,10 @@ pub enum Code {
     DuplicateDistractor,
     TooFewErrorPatterns,
     MissingAudio,
+    /// A KC's level key is not in its subject's scale.
+    UnknownLevel,
+    /// A KC's domain is not in its subject's list.
+    UnknownDomain,
     /// A `contrasts` edge between live KCs has no live item marked
     /// `confuses_with` across it.
     ContrastWithoutConfusion,
@@ -46,7 +50,7 @@ pub enum Code {
 
 impl Code {
     /// Every check; tests require a negative fixture named after each one.
-    pub const ALL: [Self; 21] = [
+    pub const ALL: [Self; 23] = [
         Self::Nickel,
         Self::Schema,
         Self::DuplicateId,
@@ -67,6 +71,8 @@ impl Code {
         Self::DuplicateDistractor,
         Self::TooFewErrorPatterns,
         Self::MissingAudio,
+        Self::UnknownLevel,
+        Self::UnknownDomain,
         Self::ContrastWithoutConfusion,
     ];
 
@@ -92,6 +98,8 @@ impl Code {
             Self::DuplicateDistractor => "duplicate-distractor",
             Self::TooFewErrorPatterns => "too-few-error-patterns",
             Self::MissingAudio => "missing-audio",
+            Self::UnknownLevel => "unknown-level",
+            Self::UnknownDomain => "unknown-domain",
             Self::ContrastWithoutConfusion => "contrast-without-confusion",
         }
     }

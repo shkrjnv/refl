@@ -6,30 +6,21 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 
-use crate::ids::{ExplanationId, InstructionId, KcId, MisconceptionId, Tag};
-use crate::value::{Cefr, Lang, Localized, UnitInterval};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename_all = "kebab-case"))]
-#[serde(rename_all = "kebab-case")]
-pub enum KcDomain {
-    Grammar,
-    Phonology,
-    Orthography,
-    Discourse,
-    ReadingSkill,
-    ListeningSkill,
-    WritingSkill,
-}
+use crate::ids::{DomainId, ExplanationId, InstructionId, KcId, MisconceptionId, SubjectId, Tag};
+use crate::subject::LevelKey;
+use crate::value::{Lang, Localized, UnitInterval};
 
 /// Knowledge component: the smallest rule one can know or not know.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct Kc {
     pub id: KcId,
-    pub domain: KcDomain,
+    pub subject: SubjectId,
+    /// One of the subject's domains.
+    pub domain: DomainId,
     pub title: Localized,
-    pub cefr: Cefr,
+    /// Key in the subject's scale: the level where the rule is usually learned.
+    pub level: LevelKey,
     /// Construction frequency × goal weight; planner input.
     pub importance: UnitInterval,
     /// Short statement for content authors, not shown to learners.

@@ -1,5 +1,6 @@
 let b = import "../lib/base.ncl" in
 {
+  subjects = b.subjects,
   kcs = b.kcs,
   edges = b.edges,
   misconceptions = b.misconceptions,

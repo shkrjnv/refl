@@ -3,20 +3,34 @@
 let why_text = { ru = "почему", en = "why" } in
 let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
 {
+  subjects = [
+    {
+      id = "en",
+      title = { en = "English" },
+      scale = {
+        levels = [{ key = "A1", title = { en = "A1" } }, { key = "A2", title = { en = "A2" } }],
+        step_logit = 1.2,
+      },
+      domains = ["grammar"],
+      checker = "en-words",
+    },
+  ],
   kcs = [
     {
       id = "k.a",
+      subject = "en",
       domain = "grammar",
       title = { en = "A" },
-      cefr = "A1",
+      level = "A1",
       importance = 0.5,
       rule = "a",
     },
     {
       id = "k.b",
+      subject = "en",
       domain = "grammar",
       title = { en = "B" },
-      cefr = "A1",
+      level = "A1",
       importance = 0.5,
       rule = "b",
     },

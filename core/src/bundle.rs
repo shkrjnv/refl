@@ -16,9 +16,10 @@ use crate::content::{Edge, Explanation, Instruction, Kc, Misconception};
 use crate::ids::{ContentVersion, ItemRef, KcId, MisconceptionId};
 use crate::item::Item;
 use crate::lesson::Lesson;
+use crate::subject::Subject;
 
 /// Layout version of [`Bundle`].
-pub const BUNDLE_FORMAT_VERSION: u32 = 2;
+pub const BUNDLE_FORMAT_VERSION: u32 = 3;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Bundle {
@@ -33,6 +34,8 @@ pub struct BundleContent {
     /// Normalization the automata were compiled with; answers must be
     /// normalized with the same version.
     pub normalization_version: u32,
+    /// Sorted by id.
+    pub subjects: Vec<Subject>,
     /// Sorted by id.
     pub kcs: Vec<KcEntry>,
     /// Sorted.
@@ -67,6 +70,8 @@ pub enum KcStatus {
 pub struct KcEntry {
     pub kc: Kc,
     pub status: KcStatus,
+    /// Rank of `kc.level` in its subject's scale, lowest = 0.
+    pub level_rank: u16,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

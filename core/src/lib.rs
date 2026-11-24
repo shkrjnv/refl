@@ -20,6 +20,7 @@ pub mod event;
 pub mod ids;
 pub mod item;
 pub mod lesson;
+pub mod subject;
 pub mod unlock;
 pub mod value;
 

@@ -103,6 +103,15 @@ slug_id!(
     AchievementId
 );
 slug_id!(
+    /// Subject, e.g. `en`, `ja`, `math`: the prefix of its KC, misconception
+    /// and family ids (`docs/10-subjects.md`, «Предмет»).
+    SubjectId
+);
+slug_id!(
+    /// Domain of a KC from its subject's list, e.g. `grammar`, `reading-skill`.
+    DomainId
+);
+slug_id!(
     /// Package of a theme, frame or companion (`docs/07-themes-achievements-frames.md`).
     PackageKey
 );

@@ -8,6 +8,7 @@ pub mod graph;
 pub mod load;
 pub mod report;
 pub mod status;
+pub mod subjects;
 pub mod templates;
 
 use std::collections::BTreeMap;
@@ -18,7 +19,7 @@ use refl_core::answer::normalize::NORMALIZATION_VERSION;
 use refl_core::bundle::{
     BUNDLE_FORMAT_VERSION, Bundle, BundleContent, ItemEntry, KcEntry, KcItems, KcStatus,
 };
-use refl_core::ids::{ContentVersion, ItemRef};
+use refl_core::ids::{ContentVersion, ItemRef, KcId};
 use refl_core::item::{ItemStatus, KcRole};
 use sha2::{Digest, Sha256};
 
@@ -65,6 +66,7 @@ pub fn build(opts: &Options) -> std::io::Result<Output> {
     let (content, mut diags) = load::load(&opts.content, &opts.nickel)?;
     let ids = check::duplicates(&content, &mut diags);
     check::references(&content, &ids, &mut diags);
+    subjects::check(&content, &mut diags);
     check::misconception_feedback(&content, &mut diags);
     check::instruction_text(&content, &mut diags);
     let requires = graph::Requires::new(&content, &ids);
@@ -86,15 +88,7 @@ pub fn build(opts: &Options) -> std::io::Result<Output> {
         });
     }
 
-    let mut kcs: Vec<KcEntry> = content
-        .kcs
-        .iter()
-        .map(|k| KcEntry {
-            kc: k.value.clone(),
-            status: status[&k.value.id],
-        })
-        .collect();
-    kcs.sort_by(|a, b| a.kc.id.cmp(&b.kc.id));
+    let kcs = kc_entries(&content, &status);
 
     let mut items_by_kc: BTreeMap<_, KcItems> = BTreeMap::new();
     let mut items = Vec::with_capacity(content.items.len());
@@ -139,6 +133,7 @@ pub fn build(opts: &Options) -> std::io::Result<Output> {
     edges.sort();
     let body = BundleContent {
         normalization_version: NORMALIZATION_VERSION,
+        subjects: sorted(&content.subjects, |s| &s.id),
         kcs,
         edges,
         requires_closure: requires.closure(&ids),
@@ -163,6 +158,26 @@ pub fn build(opts: &Options) -> std::io::Result<Output> {
             content: body,
         }),
     })
+}
+
+/// KCs with computed status and level rank, sorted by id. Only called
+/// without errors, so every subject and level resolves.
+fn kc_entries(content: &load::Content, status: &BTreeMap<KcId, KcStatus>) -> Vec<KcEntry> {
+    let by_subject = subjects::by_id(content);
+    let mut kcs: Vec<KcEntry> = content
+        .kcs
+        .iter()
+        .map(|k| KcEntry {
+            kc: k.value.clone(),
+            status: status[&k.value.id],
+            level_rank: by_subject[&k.value.subject]
+                .scale
+                .rank(&k.value.level)
+                .expect("subjects::check rejects unknown levels"),
+        })
+        .collect();
+    kcs.sort_by(|a, b| a.kc.id.cmp(&b.kc.id));
+    kcs
 }
 
 /// Values of `entries`, sorted by `key`.

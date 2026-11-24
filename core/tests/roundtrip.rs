@@ -1,22 +1,21 @@
 //! Serialization round trips and byte-level determinism for the log and content types.
 
 use proptest::prelude::*;
-use refl_core::content::{
-    Edge, EdgeKind, Kc, KcDomain, L1Prior, L1Set, Misconception, MisconceptionOrigin,
-};
+use refl_core::content::{Edge, EdgeKind, Kc, L1Prior, L1Set, Misconception, MisconceptionOrigin};
 use refl_core::event::{
     AnswerContext, AnswerEvent, Confidence, CriterionScore, EventPayload, HalfBands,
     MentorOverrideEvent, OverrideKind, OverrideReason, PlanAction, PlanCandidate, PlanFactor,
     PlanIssuedEvent, PlanScope, ReclassifiedEvent, Response, Verdict, WritingScoredEvent,
 };
 use refl_core::ids::{
-    AchievementId, ContentVersion, EventId, ExplanationId, ItemId, ItemRef, ItemVersion, KcId,
-    LearnerId, LessonId, MisconceptionId, PackageKey, SessionId, Tag, UserId,
+    AchievementId, ContentVersion, DomainId, EventId, ExplanationId, ItemId, ItemRef, ItemVersion,
+    KcId, LearnerId, LessonId, MisconceptionId, PackageKey, SessionId, SubjectId, Tag, UserId,
 };
 use refl_core::item::{
     AnswerPattern, AuthorDifficulty, ChoiceOption, Contractions, ExpectedWrong, Item, ItemStatus,
     ItemType, KcRole, Slot, SlotKc, Stimulus,
 };
+use refl_core::subject::{Checker, LevelKey, ScaleDef, ScaleLevel, Subject};
 use refl_core::unlock::{
     AchievementTier, CosmeticSlot, Milestone, ShowcaseKeys, ShowcaseKind, UnlockKind, UnlockSource,
 };
@@ -513,23 +512,51 @@ fn item() -> impl Strategy<Value = Item> {
         )
 }
 
+fn level_key() -> impl Strategy<Value = LevelKey> {
+    "[A-Za-z0-9][A-Za-z0-9-]{0,6}".prop_map(|s| LevelKey::new(s).unwrap())
+}
+
+fn subject() -> impl Strategy<Value = Subject> {
+    (
+        slug(SubjectId::new),
+        localized(),
+        proptest::collection::vec(
+            (level_key(), localized()).prop_map(|(key, title)| ScaleLevel { key, title }),
+            1..8,
+        ),
+        finite(),
+        proptest::collection::vec(slug(DomainId::new), 0..8),
+    )
+        .prop_map(|(id, title, levels, step_logit, domains)| Subject {
+            id,
+            title,
+            scale: ScaleDef { levels, step_logit },
+            domains,
+            checker: Checker::EnWords,
+        })
+}
+
 fn kc() -> impl Strategy<Value = Kc> {
     (
-        slug(KcId::new),
+        (slug(KcId::new), slug(SubjectId::new), slug(DomainId::new)),
         localized(),
+        level_key(),
         unit(),
         text(),
         proptest::collection::vec(slug(Tag::new), 0..3),
     )
-        .prop_map(|(id, title, importance, rule, tags)| Kc {
-            id,
-            domain: KcDomain::Grammar,
-            title,
-            cefr: Cefr::B1,
-            importance,
-            rule,
-            tags,
-        })
+        .prop_map(
+            |((id, subject, domain), title, level, importance, rule, tags)| Kc {
+                id,
+                subject,
+                domain,
+                title,
+                level,
+                importance,
+                rule,
+                tags,
+            },
+        )
 }
 
 fn misconception() -> impl Strategy<Value = Misconception> {
@@ -597,6 +624,9 @@ proptest! {
 
     #[test]
     fn kc_roundtrip(k in kc()) { assert_roundtrip(&k); }
+
+    #[test]
+    fn subject_roundtrip(s in subject()) { assert_roundtrip(&s); }
 
     #[test]
     fn misconception_roundtrip(m in misconception()) { assert_roundtrip(&m); }

@@ -23,7 +23,7 @@ fn wire_name(v: impl serde::Serialize) -> String {
     }
 }
 
-fn diag(code: Code, file: &Path, subject: String, message: String) -> Diagnostic {
+pub(crate) fn diag(code: Code, file: &Path, subject: String, message: String) -> Diagnostic {
     Diagnostic {
         severity: Severity::Error,
         code,
@@ -66,6 +66,7 @@ fn unique<'a, T, K: Ord + Clone + std::fmt::Display + 'a>(
 
 /// Every id must be unique within its kind.
 pub fn duplicates(c: &Content, diags: &mut Vec<Diagnostic>) -> Ids {
+    unique("subject", &c.subjects, |s| &s.id, diags);
     let ids = Ids {
         kcs: unique("KC", &c.kcs, |k| &k.id, diags),
         misconceptions: unique("misconception", &c.misconceptions, |m| &m.id, diags),

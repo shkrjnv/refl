@@ -61,24 +61,36 @@ pub async fn import_bundle(
     Ok(Imported::New)
 }
 
-/// KCs with status, edges and the `requires` closure.
+/// Subjects, KCs with status and level rank, edges and the `requires` closure.
 async fn insert_graph(
     conn: &mut PgConnection,
     v: &str,
     c: &BundleContent,
 ) -> Result<(), sqlx::Error> {
+    for s in &c.subjects {
+        sqlx::query("INSERT INTO content_subjects VALUES ($1, $2, $3)")
+            .bind(v)
+            .bind(s.id.as_str())
+            .bind(json(s))
+            .execute(&mut *conn)
+            .await?;
+    }
     for k in &c.kcs {
         let status = match k.status {
             KcStatus::Draft => "draft",
             KcStatus::Live => "live",
         };
-        sqlx::query("INSERT INTO content_kcs VALUES ($1, $2, $3, $4)")
-            .bind(v)
-            .bind(k.kc.id.as_str())
-            .bind(status)
-            .bind(json(&k.kc))
-            .execute(&mut *conn)
-            .await?;
+        sqlx::query(
+            "INSERT INTO content_kcs (content_version, id, status, body, level_rank) \
+             VALUES ($1, $2, $3, $4, $5)",
+        )
+        .bind(v)
+        .bind(k.kc.id.as_str())
+        .bind(status)
+        .bind(json(&k.kc))
+        .bind(i32::from(k.level_rank))
+        .execute(&mut *conn)
+        .await?;
     }
     for e in &c.edges {
         sqlx::query("INSERT INTO content_edges VALUES ($1, $2, $3, $4)")
