@@ -1,4 +1,8 @@
 # Item instructions, translated once and referenced by id (docs/02, «Задание: общая часть»).
+# No `review` record yet: every language is draft, and a draft is never shown.
+# After a person has read a language, add
+#   review = { ru = { status = "reviewed", by = "<name>" } }
+# (docs/02, «Вычитка и показ»).
 let s = import "lib/schema.ncl" in
 {
   instructions = [

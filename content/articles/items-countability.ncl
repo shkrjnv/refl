@@ -100,7 +100,7 @@ in
 let find = fun noun r =>
   b.item "find_error" {
     id = "art.count.find.%{noun}",
-    version = 1,
+    version = r.version,
     family = "en.art.count.find",
     instruction = "instr.find-error",
     difficulty = 3,
@@ -134,12 +134,17 @@ in
     uncountable "advice" "Can you give me ___ (advice)?",
     uncountable "homework" "We have ___ (homework) for tomorrow.",
     uncountable "luggage" "She has ___ (luggage) with her.",
+    # Version 2 of furniture and advice: flagging a correct "a lamp" or
+    # "a pen" has no single cause, so those options have no diagnosis; an
+    # option on a_always replaces them as the second diagnosed one.
     find "furniture" {
-      sentence = "We bought three chairs, a lamp and some new furnitures.",
+      version = 2,
+      sentence = "We bought three chairs, an old sofa, a lamp and some new furnitures.",
       error = "some new furnitures",
       distractors = [
         { text = "three chairs", misconception = b.mis.singular_after_number },
-        { text = "a lamp", misconception = b.mis.omission },
+        { text = "an old sofa", misconception = b.mis.a_always },
+        { text = "a lamp", misconception = null },
       ],
       why = {
         uz = "*Furniture* koʻplik shakliga ega emas: *some new furniture*.",
@@ -148,11 +153,13 @@ in
       },
     },
     find "advice" {
-      sentence = "My sister gave me an advice, two books and a pen.",
+      version = 2,
+      sentence = "My sister gave me an advice, two books, an old map and a pen.",
       error = "an advice",
       distractors = [
         { text = "two books", misconception = b.mis.singular_after_number },
-        { text = "a pen", misconception = b.mis.omission },
+        { text = "an old map", misconception = b.mis.a_always },
+        { text = "a pen", misconception = null },
       ],
       why = {
         uz = "*Advice* sanalmaydi: *an advice* emas, *some advice*.",
@@ -161,6 +168,7 @@ in
       },
     },
     find "bread" {
+      version = 1,
       sentence = "For breakfast I have an egg, two apples and a bread.",
       error = "a bread",
       distractors = [

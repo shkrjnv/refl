@@ -89,7 +89,7 @@ in
 let find = fun slug r =>
   b.item "find_error" {
     id = "art.aan.find.%{slug}",
-    version = 1,
+    version = r.version,
     family = "en.art.aan.find",
     instruction = "instr.find-error",
     difficulty = 3,
@@ -120,16 +120,22 @@ in
     gap "sound-gap" 4 "silent-h" "hour" "hour" "The film lasts ___ (hour).",
     gap "sound-gap" 4 "yu" "university" "university" "My brother goes to ___ (university) in Tashkent.",
     gap "sound-gap" 4 "silent-h" "honest-girl" "honest girl" "She is ___ (honest girl).",
+    # Version 2: nobody holding `an by letter` flags "a horse" (h is a
+    # consonant letter and a consonant sound), so it has no diagnosis;
+    # "an honest guard" is the option that letter-based thinking flags.
     find "owl" {
-      sentence = "At the zoo we saw a owl, an elephant and a horse.",
+      version = 2,
+      sentence = "At the zoo we saw a owl, an elephant, an honest guard and a horse.",
       error = "a owl",
       distractors = [
         { text = "an elephant", misconception = b.mis.a_always },
-        { text = "a horse", misconception = b.mis.an_by_letter },
+        { text = "an honest guard", misconception = b.mis.an_by_letter },
+        { text = "a horse", misconception = null },
       ],
       why = why_of "vowel" "owl",
     },
     find "university" {
+      version = 1,
       sentence = "My uncle is an engineer and works at an university in a small town.",
       error = "an university",
       distractors = [
@@ -139,6 +145,7 @@ in
       why = why_of "yu" "university",
     },
     find "hour" {
+      version = 1,
       sentence = "We waited a hour for an old bus at a small station.",
       error = "a hour",
       distractors = [

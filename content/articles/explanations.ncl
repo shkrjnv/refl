@@ -1,8 +1,9 @@
 # Topic «Articles»: explanations, one record per target, depth and language
 # (docs/02, «Объяснение»).
 let s = import "../lib/schema.ncl" in
-# en is the source text and final; uz and ru wait for the author's review.
-let final = { status = "reviewed" } in
+# Every text is draft, en included: nobody but Claude has read it. A draft is
+# never shown to a learner; `reviewed` goes with the reviewer's name, `by`
+# (docs/02, «Вычитка и показ»).
 let draft = { status = "draft" } in
 let kc = fun target => { kind = "kc", id = target } in
 let mis = fun target => { kind = "misconception", id = target } in
@@ -15,7 +16,7 @@ let micro = fun misconception language text =>
     depth = "short",
     lang = language,
     body = text,
-    review = if language == "en" then final else draft,
+    review = draft,
   }
 in
 let countability = "en.gram.noun.countability" in
@@ -31,7 +32,7 @@ let zero = "en.gram.article.zero-general" in
       lang = "en",
       body = "**A book**, **two books**: you can count books. **Water**, **advice**: you can't count them, so they take no *a/an* and no *-s*. Say *some water*, *some advice*.",
       examples = [{ text = "There are three chairs in the room." }, { text = "Can I have some water?" }],
-      review = final,
+      review = draft,
     },
     {
       id = "expl.noun.countability.short.uz",
@@ -51,7 +52,7 @@ let zero = "en.gram.article.zero-general" in
       lang = "en",
       body = "*a* cat, *an* apple, *an* hour, *a* university. Listen to the first sound, not the first letter: *an* before a vowel sound, *a* before a consonant sound. *Hour* starts with the sound /aʊ/, *university* with /j/.",
       examples = [{ text = "I ate an apple." }, { text = "We waited an hour." }],
-      review = final,
+      review = draft,
     },
     {
       id = "expl.article.a-an-sound.short.ru",
@@ -81,7 +82,7 @@ let zero = "en.gram.article.zero-general" in
       lang = "en",
       body = "**Cats** are clever. **Water** is important. When we talk about things in general, plural and uncountable nouns take no article. *The cats* means particular cats we already know.",
       examples = [{ text = "I like music." }, { text = "Dogs are friendly." }],
-      review = final,
+      review = draft,
     },
     {
       id = "expl.article.zero-general.short.ru",
@@ -155,7 +156,7 @@ let zero = "en.gram.article.zero-general" in
       lang = "en",
       body = "I have **a** cat. **The** cat is black. The first time we mention a thing, we say *a* or *an*: the listener doesn't know it yet.",
       examples = [{ text = "I have a cat." }, { text = "She bought an umbrella." }],
-      review = final,
+      review = draft,
     },
     {
       id = "expl.article.second-mention.short.ru",
@@ -184,7 +185,7 @@ let zero = "en.gram.article.zero-general" in
       lang = "en",
       body = "I bought **a** book. **The** book is about space. After the first mention the thing is known, so it takes *the*. *The* also goes with things both people already know: *Close the door*.",
       examples = [{ text = "I have a dog. The dog is black." }, { text = "A man and a woman came in. The woman sat down." }],
-      review = final,
+      review = draft,
     },
     {
       id = "expl.noun.countability.short.ru",
