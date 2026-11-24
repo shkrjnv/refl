@@ -189,6 +189,39 @@ fn every_kind_keeps_its_old_ladder_production_and_rule() {
     }
 }
 
+/// Guessing rate g and typed input, the inputs of the learner model
+/// (`docs/03-layer2-learner-model.md`): `1/n` for a choice among the answer
+/// and its options, 0 for typed input and for kinds that cannot be live yet.
+#[test]
+fn every_kind_states_its_guessing_rate_and_input() {
+    let options = slot().options.len();
+    for body in every_kind(&[slot()], EnglishCheck::default()) {
+        let tag = body.tag();
+        let (guessing, typed) = match tag {
+            ItemKindTag::Choice | ItemKindTag::FindError => {
+                (1.0 / f64::from(u32::try_from(options + 1).unwrap()), false)
+            }
+            ItemKindTag::GapFill
+            | ItemKindTag::Transformation
+            | ItemKindTag::SentenceAssembly
+            | ItemKindTag::Translation
+            | ItemKindTag::Dictation
+            | ItemKindTag::OwnSentence
+            | ItemKindTag::Writing => (0.0, true),
+            ItemKindTag::Matching | ItemKindTag::TrueFalseNotGiven | ItemKindTag::Shadowing => {
+                (0.0, false)
+            }
+        };
+        assert!(
+            (body.guessing(0) - guessing).abs() < f64::EPSILON,
+            "{tag:?}"
+        );
+        assert_eq!(body.typed_input(), typed, "{tag:?}");
+        // No such slot: no guessing.
+        assert!(body.guessing(9).abs() < f64::EPSILON, "{tag:?}");
+    }
+}
+
 #[test]
 fn tag_is_the_serialized_type() {
     for body in every_kind(&[slot()], EnglishCheck::default()) {
