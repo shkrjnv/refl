@@ -4,6 +4,7 @@
 
 | Файл | Содержание | Архив |
 | --- | --- | --- |
+| 00-philosophy.md | философия и цели: принципы, направление, чего не будет, деньги, критерии зрелости | — |
 | 01-architecture.md | архитектура, фундамент, стек, этапы 0–7, социальные функции | https://claude.ai/artifact/1UZoBKdntCipZqjTeHsEzf |
 | 02-layer1-content.md | слой 1: KC, заблуждения, задания, проверка ответов, лог, версии | https://claude.ai/artifact/734jmwdycVPn7Cv28YxxDc |
 | 03-layer2-learner-model.md | слой 2: модель ученика (знание, FSRS, автоматизм, заблуждения) | https://claude.ai/artifact/Csr1PjWxgzMQ5ek5jSfVvK |

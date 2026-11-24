@@ -10,8 +10,20 @@ refl does not hand out points for activity. It builds a model of what the learne
 >
 > The specifications in [`docs/`](docs/README.md) are written in Russian and are the single source of truth. This README is their English overview.
 
+## Philosophy
+
+refl is a personal learning system built as open educational infrastructure. The learner is at the centre: their knowledge, gaps and goals. Success is measured by how well a person learns to understand and apply things alone, so refl should make them less dependent on refl.
+
+- The learner sets goals; the system proposes and explains, and never forces a route.
+- Basic learning is free. Money comes from organisations, grants and donations, never from ads, data or paid shortcuts.
+- Learning works offline; the network is for sync, updates and chat.
+- The code is open (AGPL-3.0-only) and the formats are documented; anyone can build their own content on the same infrastructure.
+- No AI as a source of truth: the core is deterministic and checkable.
+- Not here: rankings, endless rewards, a score for a person's worth, forced routes. Full text and maturity criteria: [docs/00](docs/00-philosophy.md).
+
 ## Contents
 
+- [Philosophy](#philosophy)
 - [What is our own](#what-is-our-own)
 - [Who it is for](#who-it-is-for)
 - [How refl teaches](#how-refl-teaches)
@@ -420,6 +432,7 @@ In Russian; the index is in [docs/README.md](docs/README.md).
 
 | File | Topic |
 | --- | --- |
+| [00-philosophy](docs/00-philosophy.md) | philosophy and goals: principles, direction, anti-goals, funding, maturity criteria |
 | [01-architecture](docs/01-architecture.md) | architecture, foundation, stack, stages, social features, users and social graph |
 | [02-layer1-content](docs/02-layer1-content.md) | KCs, graph, misconceptions, tasks, answer pattern language, explanations, lessons, events, versions, authoring tools |
 | [03-layer2-learner-model](docs/03-layer2-learner-model.md) | learner model: knowledge, FSRS-6, automaticity, misconceptions, breaks and returns, extended diagnostics, mastery, self-check |
