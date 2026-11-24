@@ -138,9 +138,12 @@ fn example_content_builds_with_computed_status() {
         bundle.content.requires_closure
             [&refl_core::ids::KcId::new("en.gram.article.second-mention").unwrap()]
             .iter()
-            .map(refl_core::ids::KcId::as_str)
+            .map(|r| (r.kc.as_str(), r.distance))
             .collect::<Vec<_>>(),
-        ["en.gram.article.first-mention", "en.gram.noun.countability"]
+        [
+            ("en.gram.article.first-mention", 1),
+            ("en.gram.noun.countability", 2)
+        ]
     );
 }
 

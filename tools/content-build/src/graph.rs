@@ -1,8 +1,9 @@
 //! The `requires` graph: acyclicity check and transitive closure.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, VecDeque};
 use std::path::PathBuf;
 
+use refl_core::bundle::Required;
 use refl_core::content::EdgeKind;
 use refl_core::ids::KcId;
 
@@ -86,20 +87,29 @@ impl<'a> Requires<'a> {
     }
 
     /// Every KC in `ids` mapped to all KCs it requires, directly or
-    /// transitively. Call only on an acyclic graph.
-    pub fn closure(&self, ids: &Ids) -> BTreeMap<KcId, Vec<KcId>> {
+    /// transitively, with the shortest distance in edges (breadth-first).
+    /// Call only on an acyclic graph.
+    pub fn closure(&self, ids: &Ids) -> BTreeMap<KcId, Vec<Required>> {
         let mut out = BTreeMap::new();
         for kc in &ids.kcs {
-            let mut seen: BTreeSet<&KcId> = BTreeSet::new();
-            let mut stack = vec![kc];
-            while let Some(k) = stack.pop() {
+            let mut distance: BTreeMap<&KcId, u16> = BTreeMap::new();
+            let mut queue = VecDeque::from([(kc, 0u16)]);
+            while let Some((k, d)) = queue.pop_front() {
                 for &(to, _) in self.next.get(k).into_iter().flatten() {
-                    if seen.insert(to) {
-                        stack.push(to);
+                    if !distance.contains_key(to) {
+                        distance.insert(to, d + 1);
+                        queue.push_back((to, d + 1));
                     }
                 }
             }
-            out.insert(kc.clone(), seen.into_iter().cloned().collect());
+            let required = distance
+                .into_iter()
+                .map(|(kc, distance)| Required {
+                    kc: kc.clone(),
+                    distance,
+                })
+                .collect();
+            out.insert(kc.clone(), required);
         }
         out
     }

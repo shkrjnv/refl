@@ -20,7 +20,7 @@ use crate::lexicon::LexiconRef;
 use crate::subject::Subject;
 
 /// Layout version of [`Bundle`].
-pub const BUNDLE_FORMAT_VERSION: u32 = 4;
+pub const BUNDLE_FORMAT_VERSION: u32 = 5;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Bundle {
@@ -44,8 +44,9 @@ pub struct BundleContent {
     pub kcs: Vec<KcEntry>,
     /// Sorted.
     pub edges: Vec<Edge>,
-    /// Every KC mapped to all KCs it requires directly or transitively, sorted.
-    pub requires_closure: BTreeMap<KcId, Vec<KcId>>,
+    /// Every KC mapped to all KCs it requires directly or transitively,
+    /// sorted by id, each with its shortest distance in `requires` edges.
+    pub requires_closure: BTreeMap<KcId, Vec<Required>>,
     /// Sorted by id.
     pub misconceptions: Vec<Misconception>,
     /// Sorted by id.
@@ -60,6 +61,15 @@ pub struct BundleContent {
     pub items_by_kc: BTreeMap<KcId, KcItems>,
     /// Token alphabet of all automata.
     pub tokens: TokenTable,
+}
+
+/// A KC required directly (`distance` 1) or through `distance` edges, the
+/// shortest path; success propagates to it with weight ρ^distance
+/// (`docs/03-layer2-learner-model.md`, «Распространение по графу»).
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct Required {
+    pub kc: KcId,
+    pub distance: u16,
 }
 
 /// Computed by content-build from the live conditions; never authored.

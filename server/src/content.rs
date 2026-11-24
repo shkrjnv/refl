@@ -146,12 +146,16 @@ async fn insert_graph(
     }
     for (kc, required) in &c.requires_closure {
         for r in required {
-            sqlx::query("INSERT INTO content_requires_closure VALUES ($1, $2, $3)")
-                .bind(v)
-                .bind(kc.as_str())
-                .bind(r.as_str())
-                .execute(&mut *conn)
-                .await?;
+            sqlx::query(
+                "INSERT INTO content_requires_closure (content_version, kc, required_kc, distance) \
+                 VALUES ($1, $2, $3, $4)",
+            )
+            .bind(v)
+            .bind(kc.as_str())
+            .bind(r.kc.as_str())
+            .bind(i32::from(r.distance))
+            .execute(&mut *conn)
+            .await?;
         }
     }
     Ok(())
