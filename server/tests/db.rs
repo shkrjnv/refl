@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use refl_core::value::Timestamp;
+use refl_core::{Decoded, Event};
 use refl_server::MIGRATOR;
 use refl_server::content::{Imported, activate, import_bundle};
 use refl_server::events::{InsertError, Inserted, insert_event, learner_events};
@@ -138,6 +139,19 @@ fn lesson_started() -> serde_json::Value {
 
 const NOW: Timestamp = Timestamp(1_700_000_000_500);
 
+/// Events read back from the log; all of them must be known to this core.
+async fn known_events(db: &PgPool) -> Vec<Event> {
+    learner_events(db, LEARNER)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|d| match d {
+            Decoded::Known(e) => e,
+            Decoded::Unknown(u) => panic!("unknown event in the log: {}", u.raw),
+        })
+        .collect()
+}
+
 async fn tables(db: &PgPool) -> Vec<String> {
     sqlx::query_scalar(
         "SELECT tablename::text FROM pg_tables WHERE schemaname = 'public' \
@@ -229,7 +243,7 @@ async fn duplicate_event_id_is_ignored(c: &Cluster) {
         insert_event(&db, &e, NOW).await.unwrap(),
         Inserted::Duplicate
     );
-    let events = learner_events(&db, LEARNER).await.unwrap();
+    let events = known_events(&db).await;
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].server_ts, Some(NOW));
     db.close().await;
@@ -237,11 +251,53 @@ async fn duplicate_event_id_is_ignored(c: &Cluster) {
 
 async fn invalid_events_are_rejected(c: &Cluster) {
     let db = migrated(c, "invalid").await;
-    let bad_payload = event(event_id(1), &serde_json::json!({ "type": "no_such_event" }));
+    let bad_payload = event(
+        event_id(1),
+        &serde_json::json!({ "type": "lesson_started", "lesson": "Not A Slug" }),
+    );
     assert!(matches!(
         insert_event(&db, &bad_payload, NOW).await,
         Err(InsertError::Invalid(_))
     ));
+    db.close().await;
+}
+
+/// Events from a newer client are rejected with a reason, never stored.
+async fn unknown_events_are_rejected(c: &Cluster) {
+    let db = migrated(c, "unknown").await;
+    let new_type = event(event_id(1), &serde_json::json!({ "type": "sticker_sent" }));
+    let new_response = event(
+        event_id(2),
+        &serde_json::json!({
+            "type": "answer",
+            "item": { "id": "articles.a-an.1", "version": 1 },
+            "slot": 0, "context": "lesson",
+            "response": { "kind": "point", "value": [1, 2] },
+            "verdict": "correct", "misconception": null, "latency_ms": 900,
+            "backgrounded": false, "confidence": null, "hints": 0, "attempt": 1,
+        }),
+    );
+    let mut future: serde_json::Value =
+        serde_json::from_str(&event(event_id(3), &lesson_started())).unwrap();
+    future["schema_version"] = 2.into();
+    for json in [new_type, new_response, future.to_string()] {
+        let err = insert_event(&db, &json, NOW).await.unwrap_err();
+        assert!(matches!(err, InsertError::Unknown), "{json}: {err}");
+        assert_eq!(
+            err.to_string(),
+            "unknown event type, client newer than server"
+        );
+    }
+    let n: i64 = sqlx::query_scalar("SELECT count(*) FROM events")
+        .fetch_one(&db)
+        .await
+        .unwrap();
+    assert_eq!(n, 0);
+    db.close().await;
+}
+
+async fn server_ts_must_be_empty(c: &Cluster) {
+    let db = migrated(c, "server_ts").await;
     let mut with_server_ts: serde_json::Value =
         serde_json::from_str(&event(event_id(2), &lesson_started())).unwrap();
     with_server_ts["server_ts"] = 1.into();
@@ -297,7 +353,7 @@ async fn duplicate_derived_event_is_rejected(c: &Cluster) {
             Inserted::New
         );
     }
-    let events = learner_events(&db, LEARNER).await.unwrap();
+    let events = known_events(&db).await;
     assert_eq!(events.len(), 5);
     db.close().await;
 }
@@ -449,6 +505,8 @@ fn database() {
         log_is_append_only(&cluster).await;
         duplicate_event_id_is_ignored(&cluster).await;
         invalid_events_are_rejected(&cluster).await;
+        unknown_events_are_rejected(&cluster).await;
+        server_ts_must_be_empty(&cluster).await;
         duplicate_derived_event_is_rejected(&cluster).await;
         erasure_removes_one_learner(&cluster).await;
         privacy_defaults_depend_on_minor(&cluster).await;

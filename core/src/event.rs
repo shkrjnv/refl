@@ -224,13 +224,90 @@ pub struct ReclassifiedEvent {
     pub content_version: ContentVersion,
 }
 
+/// `type` tags of every [`EventPayload`] variant this core knows. An event
+/// with any other tag was written by a newer core and decodes as
+/// [`Decoded::Unknown`]. A unit test checks this list against the enum.
+pub const EVENT_TYPES: &[&str] = &[
+    "answer",
+    "reclassified",
+    "lesson_started",
+    "lesson_finished",
+    "explanation_viewed",
+    "milestone_reached",
+    "achievement_earned",
+    "achievement_visibility_set",
+    "unlock_granted",
+    "unlock_revoked",
+    "theme_selected",
+    "companion_selected",
+];
+
+/// `kind` tags of every [`Response`] variant this core knows; checked like
+/// [`EVENT_TYPES`].
+pub const RESPONSE_KINDS: &[&str] = &["option", "text"];
+
+/// Result of [`decode_event`].
+///
+/// The fold must skip [`Decoded::Unknown`] and mark the learner state as
+/// incomplete; after a core update the state is recomputed from all stored
+/// events, unknown ones included (`docs/13-sync-versions.md`, «Неизвестные события»).
+#[derive(Debug, Clone, PartialEq)]
+pub enum Decoded {
+    Known(Event),
+    /// Written by a newer core: stored as is, never guessed at.
+    Unknown(UnknownEvent),
+}
+
+/// An event with a valid envelope whose content this core does not know: a
+/// newer `schema_version`, payload `type` or `response.kind`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnknownEvent {
+    pub schema_version: u64,
+    pub event_id: EventId,
+    pub learner_id: LearnerId,
+    /// The JSON exactly as received.
+    pub raw: String,
+}
+
+/// Envelope fields every event of every schema version must have.
+#[derive(Deserialize)]
+struct Envelope {
+    #[serde(rename = "schema_version")]
+    _schema_version: u64,
+    event_id: EventId,
+    learner_id: LearnerId,
+    #[serde(rename = "session_id")]
+    _session_id: Option<SessionId>,
+    #[serde(rename = "client_ts")]
+    _client_ts: Timestamp,
+    #[serde(rename = "server_ts")]
+    _server_ts: Option<Timestamp>,
+}
+
+/// Whether a payload of the current schema carries a tag this core does not
+/// know. A missing or non-string tag is not "unknown" but malformed: serde
+/// reports it.
+fn has_unknown_tag(payload: &Value) -> bool {
+    let Some(event_type) = payload.get("type").and_then(Value::as_str) else {
+        return false;
+    };
+    if !EVENT_TYPES.contains(&event_type) {
+        return true;
+    }
+    // `answer` is the only payload that carries a `Response`.
+    event_type == "answer"
+        && payload
+            .get("response")
+            .and_then(|r| r.get("kind"))
+            .and_then(Value::as_str)
+            .is_some_and(|kind| !RESPONSE_KINDS.contains(&kind))
+}
+
 #[derive(Debug)]
 pub enum DecodeError {
     Json(serde_json::Error),
     MissingSchemaVersion,
     UnknownSchemaVersion(u64),
-    /// Written by a newer core; must not be guessed at.
-    FutureSchemaVersion(u64),
 }
 
 impl fmt::Display for DecodeError {
@@ -239,10 +316,6 @@ impl fmt::Display for DecodeError {
             Self::Json(e) => write!(f, "invalid event JSON: {e}"),
             Self::MissingSchemaVersion => f.write_str("event has no schema_version"),
             Self::UnknownSchemaVersion(v) => write!(f, "unknown schema_version {v}"),
-            Self::FutureSchemaVersion(v) => write!(
-                f,
-                "schema_version {v} is newer than supported {CURRENT_SCHEMA_VERSION}"
-            ),
         }
     }
 }
@@ -268,23 +341,89 @@ pub fn encode_event(event: &Event) -> String {
     serde_json::to_string(event).expect("event serialization is infallible")
 }
 
-/// Parses an event of any supported schema version, upcasting it to the current one.
+/// Parses an event of any supported schema version, upcasting it to the
+/// current one. An event from a newer core — a future `schema_version`, or a
+/// payload `type` or `response.kind` not in [`EVENT_TYPES`] or
+/// [`RESPONSE_KINDS`] — is [`Decoded::Unknown`] as long as its envelope is
+/// valid. Upcasters must pass payloads of unknown type through unchanged.
 ///
 /// # Errors
-/// Invalid JSON or field values, or a missing, unknown or future `schema_version`.
-pub fn decode_event(json: &str) -> Result<Event, DecodeError> {
+/// Invalid JSON, an invalid envelope, invalid field values of a known type,
+/// or a missing or zero `schema_version`.
+pub fn decode_event(json: &str) -> Result<Decoded, DecodeError> {
     let mut value: Value = serde_json::from_str(json)?;
-    let raw = value
+    let schema_version = value
         .get("schema_version")
         .and_then(Value::as_u64)
         .ok_or(DecodeError::MissingSchemaVersion)?;
-    let version = match u16::try_from(raw) {
-        Ok(0) => return Err(DecodeError::UnknownSchemaVersion(raw)),
+    if schema_version == 0 {
+        return Err(DecodeError::UnknownSchemaVersion(schema_version));
+    }
+    let envelope = Envelope::deserialize(&value)?;
+    let unknown = || {
+        Decoded::Unknown(UnknownEvent {
+            schema_version,
+            event_id: envelope.event_id,
+            learner_id: envelope.learner_id,
+            raw: json.into(),
+        })
+    };
+    let version = match u16::try_from(schema_version) {
         Ok(v) if v <= CURRENT_SCHEMA_VERSION => v,
-        _ => return Err(DecodeError::FutureSchemaVersion(raw)),
+        _ => return Ok(unknown()),
     };
     for upcast in &UPCASTERS[usize::from(version - 1)..] {
         value = upcast(value)?;
     }
-    Ok(serde_json::from_value(value)?)
+    if value.get("payload").is_some_and(has_unknown_tag) {
+        return Ok(unknown());
+    }
+    Ok(Decoded::Known(serde_json::from_value(value)?))
+}
+
+#[cfg(test)]
+mod tests {
+    use alloc::string::ToString;
+    use alloc::vec::Vec;
+
+    use super::*;
+
+    /// Variant names as serde itself lists them when it meets an unknown tag.
+    fn serde_variants<T: serde::de::DeserializeOwned + fmt::Debug>(probe: &str) -> Vec<String> {
+        let err = serde_json::from_str::<T>(probe).unwrap_err().to_string();
+        // "… expected `a`", "… expected `a` or `b`", "… expected one of `a`, `b`, `c`"
+        let (_, expected) = err
+            .split_once("expected ")
+            .unwrap_or_else(|| panic!("unexpected serde message: {err}"));
+        let mut names: Vec<String> = expected
+            .split('`')
+            .skip(1)
+            .step_by(2)
+            .map(ToString::to_string)
+            .collect();
+        names.sort();
+        names
+    }
+
+    fn sorted(list: &[&str]) -> Vec<String> {
+        let mut v: Vec<String> = list.iter().map(|s| (*s).into()).collect();
+        v.sort();
+        v
+    }
+
+    #[test]
+    fn event_types_list_every_payload_variant() {
+        assert_eq!(
+            serde_variants::<EventPayload>(r#"{"type":"__probe__"}"#),
+            sorted(EVENT_TYPES)
+        );
+    }
+
+    #[test]
+    fn response_kinds_list_every_response_variant() {
+        assert_eq!(
+            serde_variants::<Response>(r#"{"kind":"__probe__","value":0}"#),
+            sorted(RESPONSE_KINDS)
+        );
+    }
 }

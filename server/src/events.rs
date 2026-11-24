@@ -6,7 +6,7 @@ use std::fmt;
 
 use refl_core::event::DecodeError;
 use refl_core::value::Timestamp;
-use refl_core::{Event, decode_event};
+use refl_core::{Decoded, decode_event};
 use serde_json::Value;
 use sqlx::PgExecutor;
 use uuid::Uuid;
@@ -22,6 +22,9 @@ pub enum Inserted {
 pub enum InsertError {
     /// The core rejected the event.
     Invalid(DecodeError),
+    /// Written by a newer core than the server's: never stored
+    /// (`docs/13-sync-versions.md`, «Неизвестные события»).
+    Unknown,
     /// Clients never set `server_ts`; the server assigns it on insert.
     ServerTsSet,
     /// A derived event with the same (learner, type, kind, key) exists.
@@ -33,6 +36,7 @@ impl fmt::Display for InsertError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Invalid(e) => write!(f, "invalid event: {e}"),
+            Self::Unknown => f.write_str("unknown event type, client newer than server"),
             Self::ServerTsSet => f.write_str("server_ts must be empty when an event is written"),
             Self::DerivedDuplicate => f.write_str("derived event already recorded"),
             Self::Db(e) => write!(f, "database error: {e}"),
@@ -44,7 +48,7 @@ impl std::error::Error for InsertError {}
 
 /// Validates `json` with the core and appends it to the log with
 /// `server_ts = now`. A repeated `event_id` is ignored; a second derived event
-/// with the same uniqueness key is rejected.
+/// with the same uniqueness key and an event unknown to this core are rejected.
 ///
 /// # Errors
 /// See [`InsertError`].
@@ -53,7 +57,10 @@ pub async fn insert_event(
     json: &str,
     now: Timestamp,
 ) -> Result<Inserted, InsertError> {
-    let event = decode_event(json).map_err(InsertError::Invalid)?;
+    let event = match decode_event(json).map_err(InsertError::Invalid)? {
+        Decoded::Known(event) => event,
+        Decoded::Unknown(_) => return Err(InsertError::Unknown),
+    };
     if event.server_ts.is_some() {
         return Err(InsertError::ServerTsSet);
     }
@@ -112,14 +119,16 @@ impl fmt::Display for ReadError {
 
 impl std::error::Error for ReadError {}
 
-/// A learner's events in fold order (`event_id`), upcast to the current schema.
+/// A learner's events in fold order (`event_id`), upcast to the current
+/// schema. Events unknown to this core (stored by a newer server before a
+/// rollback) come back as [`Decoded::Unknown`] for the fold to skip.
 ///
 /// # Errors
 /// Database errors, or a stored event the core cannot decode.
 pub async fn learner_events(
     db: impl PgExecutor<'_>,
     learner: Uuid,
-) -> Result<Vec<Event>, ReadError> {
+) -> Result<Vec<Decoded>, ReadError> {
     let rows: Vec<(Uuid, Option<Uuid>, i16, i64, i64, Value)> = sqlx::query_as(
         "SELECT event_id, session_id, schema_version, client_ts, server_ts, payload \
          FROM events WHERE learner_id = $1 ORDER BY event_id",

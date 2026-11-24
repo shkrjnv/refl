@@ -17,7 +17,9 @@ use refl_core::item::{
 };
 use refl_core::unlock::{Milestone, UnlockKind, UnlockSource};
 use refl_core::value::{Cefr, Localized, Timestamp, UnitInterval};
-use refl_core::{CURRENT_SCHEMA_VERSION, DecodeError, Event, decode_event, encode_event};
+use refl_core::{
+    CURRENT_SCHEMA_VERSION, DecodeError, Decoded, Event, UnknownEvent, decode_event, encode_event,
+};
 use uuid::Uuid;
 
 fn slug<T: std::fmt::Debug>(make: fn(String) -> Option<T>) -> impl Strategy<Value = T> {
@@ -369,6 +371,14 @@ fn misconception() -> impl Strategy<Value = Misconception> {
         )
 }
 
+/// Decodes an event this core must know.
+fn known(json: &str) -> Event {
+    match decode_event(json).unwrap() {
+        Decoded::Known(e) => e,
+        Decoded::Unknown(u) => panic!("known event decoded as unknown: {}", u.raw),
+    }
+}
+
 /// x → bytes → x' must give x' == x, and x' must serialize to the same bytes.
 fn assert_roundtrip<T>(x: &T)
 where
@@ -387,11 +397,17 @@ proptest! {
     #[test]
     fn event_roundtrip_and_determinism(e in event()) {
         let a = encode_event(&e);
-        let back = decode_event(&a).unwrap();
+        let back = known(&a);
         prop_assert_eq!(&back, &e);
         let again = encode_event(&back);
         prop_assert_eq!(a.as_bytes(), again.as_bytes());
         prop_assert_eq!(a, encode_event(&e));
+    }
+
+    #[test]
+    fn known_events_never_decode_as_unknown(e in event()) {
+        let decoded = decode_event(&encode_event(&e));
+        prop_assert!(matches!(decoded, Ok(Decoded::Known(_))), "{:?}", decoded);
     }
 
     #[test]
@@ -432,16 +448,115 @@ const V4: &str = "019aa5b4-0000-4000-8000-000000000000";
 #[test]
 fn decodes_current_version_byte_exact() {
     let json = sample_event_json(1, V7);
-    let e = decode_event(&json).unwrap();
+    let e = known(&json);
     assert_eq!(encode_event(&e), json, "canonical form must be stable");
 }
 
+fn sample_with_payload(schema_version: u64, payload: &serde_json::Value) -> String {
+    let mut v: serde_json::Value = serde_json::from_str(&sample_event_json(1, V7)).unwrap();
+    v["schema_version"] = schema_version.into();
+    v["payload"] = payload.clone();
+    v.to_string()
+}
+
+fn answer_payload(response: &serde_json::Value) -> serde_json::Value {
+    serde_json::json!({
+        "type": "answer",
+        "item": { "id": "articles.a-an.1", "version": 1 },
+        "slot": 0,
+        "context": "lesson",
+        "response": response,
+        "verdict": "correct",
+        "misconception": null,
+        "latency_ms": 1200,
+        "backgrounded": false,
+        "confidence": null,
+        "hints": 0,
+        "attempt": 1,
+    })
+}
+
+fn assert_unknown(json: &str, schema_version: u64) {
+    match decode_event(json) {
+        Ok(Decoded::Unknown(u)) => assert_eq!(
+            u,
+            UnknownEvent {
+                schema_version,
+                event_id: EventId::new(V7.parse().unwrap()).unwrap(),
+                learner_id: LearnerId(Uuid::from_u128(1)),
+                raw: json.to_owned(),
+            }
+        ),
+        other => panic!("expected Unknown, got {other:?}"),
+    }
+}
+
 #[test]
-fn rejects_future_unknown_and_missing_versions() {
-    assert!(matches!(
-        decode_event(&sample_event_json(2, V7)),
-        Err(DecodeError::FutureSchemaVersion(2))
-    ));
+fn newer_events_decode_as_unknown_with_raw_preserved() {
+    // Unusual spacing and key order: raw is kept byte for byte.
+    let new_type = sample_with_payload(1, &serde_json::json!({ "type": "sticker_sent", "n": 1 }))
+        .replace(',', " ,  ");
+    assert_unknown(&new_type, 1);
+    let new_response = sample_with_payload(
+        1,
+        &answer_payload(&serde_json::json!({ "kind": "point", "value": [1, 2] })),
+    );
+    assert_unknown(&new_response, 1);
+    // A future schema version is unknown whatever its payload looks like.
+    let future = sample_with_payload(2, &serde_json::json!({ "anything": [] }));
+    assert_unknown(&future, 2);
+    assert_unknown(&sample_event_json(u64::MAX, V7), u64::MAX);
+}
+
+#[test]
+fn malformed_events_stay_errors() {
+    let json_err = |json: &str| matches!(decode_event(json), Err(DecodeError::Json(_)));
+    // Known type, invalid field values.
+    assert!(json_err(&sample_with_payload(
+        1,
+        &serde_json::json!({ "type": "lesson_started", "lesson": "Not A Slug" })
+    )));
+    assert!(json_err(&sample_with_payload(
+        1,
+        &serde_json::json!({ "type": "lesson_started" })
+    )));
+    // Known response kind, wrong value.
+    assert!(json_err(&sample_with_payload(
+        1,
+        &answer_payload(&serde_json::json!({ "kind": "option", "value": "a" }))
+    )));
+    // Answer without a response kind is malformed, not unknown.
+    assert!(json_err(&sample_with_payload(
+        1,
+        &answer_payload(&serde_json::json!({ "value": 1 }))
+    )));
+    // Payload without a type tag, or no payload at all.
+    assert!(json_err(&sample_with_payload(
+        1,
+        &serde_json::json!({ "lesson": "a" })
+    )));
+    let mut no_payload: serde_json::Value =
+        serde_json::from_str(&sample_event_json(1, V7)).unwrap();
+    no_payload.as_object_mut().unwrap().remove("payload");
+    assert!(json_err(&no_payload.to_string()));
+    // The envelope must parse even for unknown and future events.
+    for v in [1, 2] {
+        let bad_envelope =
+            sample_with_payload(v, &serde_json::json!({ "type": "sticker_sent" })).replace(V7, V4);
+        assert!(json_err(&bad_envelope), "schema {v}");
+        let mut no_learner: serde_json::Value = serde_json::from_str(&sample_with_payload(
+            v,
+            &serde_json::json!({ "type": "sticker_sent" }),
+        ))
+        .unwrap();
+        no_learner.as_object_mut().unwrap().remove("learner_id");
+        assert!(json_err(&no_learner.to_string()), "schema {v}");
+    }
+    assert!(json_err("{not json"));
+}
+
+#[test]
+fn rejects_zero_and_missing_versions() {
     assert!(matches!(
         decode_event(&sample_event_json(0, V7)),
         Err(DecodeError::UnknownSchemaVersion(0))
