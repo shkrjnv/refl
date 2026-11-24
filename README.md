@@ -213,7 +213,8 @@ Alternatives `( | )`, optional `[ ]`, nesting up to 4, no repetition: the langua
 - every task has a primary KC and enough distractors and error patterns, each tied to a misconception;
 - the correct answer is accepted, distractors are not;
 - accepted and error patterns do not overlap, checked by an exact automaton product with the shortest witness in the report;
-- topic status (live / draft) is computed: live only with an explanation in ru and en, at least 10 tasks, 3 families, 3 production tasks and difficulty spread over two adjacent levels.
+- topic status (live / draft) is computed: live only with a reviewed explanation in ru and en, at least 10 tasks, 3 families, 3 production tasks and difficulty spread over two adjacent levels.
+- **review gate:** a text written by Claude is `draft`, in every language, until a named person has read it (`reviewed` without `by` is a build error). A draft is never shown to a learner: the language chain interface → ru → en skips it. A topic is live only if its explanation, the micro-explanations of the misconceptions its tasks diagnose, and those tasks' instructions are reviewed in ru and en; the report says which one blocks. uz is optional and not shown until reviewed. The "Articles" unit is complete, but draft until it is reviewed.
 - every `contrasts` pair of live topics has a live task whose wrong answer is right for the other topic (`confuses_with`), so confusing the two can be measured.
 - task versions are locked: `content/item-versions.lock` holds, for every published (task id, version), the *model projection* of that version (kind, per-slot topics with roles, number of choices and diagnosed misconceptions, difficulty, expected time, family). content-build only appends to it; changing the projection of a published version without a version bump, or losing an entry, fails the build (`projection-changed`, `lock-corrupt`; CI runs `--locked`).
 
