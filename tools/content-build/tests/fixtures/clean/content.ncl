@@ -5,5 +5,14 @@ let b = import "../lib/base.ncl" in
   misconceptions = b.misconceptions,
   instructions = b.instructions,
   explanations = b.explanations,
-  items = [b.gap {}, b.choice {}],
+  items = [
+    b.gap {},
+    b.choice {
+      options = [
+        { text = "the", misconception = "m.two", confuses_with = "k.b" },
+        { text = "—", misconception = "m.one" },
+        { text = "an", misconception = null },
+      ],
+    },
+  ],
 }

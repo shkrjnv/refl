@@ -200,6 +200,12 @@ pub struct AnswerPattern(pub String);
 pub struct ChoiceOption {
     pub text: String,
     pub misconception: Option<MisconceptionId>,
+    /// The option is the correct answer for this neighbouring KC: a confusion
+    /// between contrasting topics (`docs/03-layer2-learner-model.md`,
+    /// «Расширенная диагностика»).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub confuses_with: Option<KcId>,
 }
 
 /// Expected wrong answer for typed input, tied to a misconception.
@@ -208,6 +214,10 @@ pub struct ChoiceOption {
 pub struct ExpectedWrong {
     pub pattern: AnswerPattern,
     pub misconception: MisconceptionId,
+    /// As in [`ChoiceOption::confuses_with`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub confuses_with: Option<KcId>,
 }
 
 /// A gap: the unit of assessment, with its own KCs, distractors and log event.

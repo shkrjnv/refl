@@ -246,19 +246,29 @@ fn slot() -> impl Strategy<Value = Slot> {
         ),
         proptest::collection::vec(text().prop_map(AnswerPattern), 0..3),
         proptest::collection::vec(
-            (text(), proptest::option::of(slug(MisconceptionId::new))).prop_map(
-                |(text, misconception)| ChoiceOption {
+            (
+                text(),
+                proptest::option::of(slug(MisconceptionId::new)),
+                proptest::option::of(slug(KcId::new)),
+            )
+                .prop_map(|(text, misconception, confuses_with)| ChoiceOption {
                     text,
                     misconception,
-                },
-            ),
+                    confuses_with,
+                }),
             0..4,
         ),
         proptest::collection::vec(
-            (text(), slug(MisconceptionId::new)).prop_map(|(p, misconception)| ExpectedWrong {
-                pattern: AnswerPattern(p),
-                misconception,
-            }),
+            (
+                text(),
+                slug(MisconceptionId::new),
+                proptest::option::of(slug(KcId::new)),
+            )
+                .prop_map(|(p, misconception, confuses_with)| ExpectedWrong {
+                    pattern: AnswerPattern(p),
+                    misconception,
+                    confuses_with,
+                }),
             0..3,
         ),
         proptest::option::of(localized()),

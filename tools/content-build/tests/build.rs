@@ -64,6 +64,18 @@ fn each_check_catches_its_own_defect() {
 }
 
 #[test]
+fn unknown_reference_covers_confusions() {
+    let out = run(&fixtures().join("unknown-reference"));
+    let report = out.report.to_string();
+    for kc in ["k.missing", "k.missing-gap", "k.missing-choice"] {
+        assert!(
+            report.contains(&format!("unknown KC `{kc}`")),
+            "{kc}:\n{report}"
+        );
+    }
+}
+
+#[test]
 fn witnesses_are_shortest_examples() {
     let out = run(&fixtures().join("accepted-matches-error"));
     let msg = &out.report.diagnostics[0].message;

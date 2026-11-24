@@ -126,9 +126,18 @@ pub fn references(c: &Content, ids: &Ids, diags: &mut Vec<Diagnostic>) {
             unknown(&it.file, &subject, "instruction", &it.value.instruction);
         }
         for slot in &it.value.slots {
-            for sk in &slot.kcs {
-                if !ids.kcs.contains(&sk.kc) {
-                    unknown(&it.file, &subject, "KC", &sk.kc);
+            let confused = slot
+                .options
+                .iter()
+                .filter_map(|o| o.confuses_with.as_ref())
+                .chain(
+                    slot.expected_wrong
+                        .iter()
+                        .filter_map(|w| w.confuses_with.as_ref()),
+                );
+            for kc in slot.kcs.iter().map(|sk| &sk.kc).chain(confused) {
+                if !ids.kcs.contains(kc) {
+                    unknown(&it.file, &subject, "KC", kc);
                 }
             }
             let mis = slot
