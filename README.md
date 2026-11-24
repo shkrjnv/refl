@@ -198,6 +198,7 @@ Alternatives `( | )`, optional `[ ]`, nesting up to 4, no repetition: the langua
 - the correct answer is accepted, distractors are not;
 - accepted and error patterns do not overlap, checked by an exact automaton product with the shortest witness in the report;
 - topic status (live / draft) is computed: live only with an explanation in ru and en, at least 10 tasks, 3 families, 3 production tasks and difficulty spread over two adjacent levels.
+- every `contrasts` pair of live topics has a live task whose wrong answer is right for the other topic (`confuses_with`), so confusing the two can be measured.
 
 The result is a deterministic bundle; the content version is the SHA-256 of its contents. If an author later adds an accepted answer, old events do not change: the server writes `reclassified` and the model is recomputed.
 
@@ -297,7 +298,7 @@ All learning logic lives in one Rust core. The server calls it natively, the PWA
 
 | What | How |
 | --- | --- |
-| event log | append-only, updates and deletes rejected by triggers; the application role can only append; each row gets a `server_seq` receipt number for the sync cursor; events from a newer client are rejected, not stored |
+| event log | append-only, updates and deletes rejected by triggers; the application role can only append; each row gets a `server_seq` receipt number for the sync cursor, and inserts take a per-learner lock so a cursor never skips an event; events from a newer client are rejected, not stored; every integer in an event fits in 2⁵³ − 1 so the JavaScript client reads it exactly |
 | model snapshots | fold speed-up, tied to model and weights version |
 | users, login, roles | learner, mentor, author, admin; child flag; login methods in a separate table |
 | social graph and privacy | teams, friends, blocks, reports, public codes, `profile_visibility` |
