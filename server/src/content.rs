@@ -210,7 +210,8 @@ async fn insert_texts(
     Ok(())
 }
 
-/// Items with their automata and the item indexes by KC.
+/// Items with their automata, the projections of all published item
+/// versions and the item indexes by KC.
 async fn insert_items(
     conn: &mut PgConnection,
     v: &str,
@@ -226,6 +227,15 @@ async fn insert_items(
             .bind(entry.session_eligible)
             .bind(json(item))
             .bind(json(&entry.slots))
+            .execute(&mut *conn)
+            .await?;
+    }
+    for e in &c.item_versions {
+        sqlx::query("INSERT INTO content_item_versions VALUES ($1, $2, $3, $4)")
+            .bind(v)
+            .bind(e.item.as_str())
+            .bind(i64::from(e.version.0))
+            .bind(json(&e.projection))
             .execute(&mut *conn)
             .await?;
     }

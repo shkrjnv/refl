@@ -328,10 +328,10 @@ All learning logic lives in one Rust core. The server calls it natively, the PWA
 | Path | Contents |
 | --- | --- |
 | `core/` | `refl-core`: domain types, events, normalisation, pattern language, DFA, unlock model, learner model v1 with FSRS-6, the SplitMix64 PRNG. `no_std` + `alloc`; the `std` feature is for tests and tools, `ts` for TS type generation |
-| `server/` | `refl-server`: migrations, event writes, bundle import, tests on a temporary PostgreSQL. HTTP from stage 1 |
-| `tools/content-build/` | CLI for building and checking content; test fixtures for every check |
+| `server/` | `refl-server`: migrations, event writes, bundle import (including the projections of all published task versions), tests on a temporary PostgreSQL. HTTP from stage 1 |
+| `tools/content-build/` | CLI for building and checking content; keeps `content/item-versions.lock` (`--locked` in CI); test fixtures for every check |
 | `tools/sim/` | `refl-sim`: synthetic bundles and learner logs for the fold tests, the native = WASM hash check (`fold-hash`) and fold timing. The learner simulator of docs/03 will be built here |
-| `content/` | Nickel content: schema (`lib/`) and a sample "Articles" topic (`articles/`) |
+| `content/` | Nickel content: schema (`lib/`) and a sample "Articles" topic (`articles/`); `item-versions.lock`, the generated append-only projections of published task versions |
 | `web/` | the client; for now, TS types generated from Rust in `web/src/generated/core/` |
 | `docs/` | specifications (in Russian), the single source of truth for decisions |
 | `design/reference/` | artboards from the design canvas: the visual reference for the prototype |
@@ -375,14 +375,14 @@ just ci            # full hermetic CI = nix flake check
 | `just wasm` | build the core for the browser |
 | `just wasm-hash` | fold one generated log natively and in wasm32 under wasmtime; the state hashes must match |
 | `just fold-speed` | time the fold of 100 000 generated events |
-| `just content` | check `content/`, bundle into `target/bundle.json` |
+| `just content` | check `content/`, bundle into `target/bundle.json`; appends newly published task versions to `content/item-versions.lock` (commit it; CI runs with `--locked` and fails if the file is stale) |
 | `just bindings` | regenerate TS types after core type changes (the result is committed) |
 
 Server tests start a throwaway PostgreSQL cluster themselves (`initdb` in a temporary directory); no system database is needed.
 
 **How to add:**
 
-- **a content topic**: Nickel files in `content/<topic>/`: KCs, misconceptions, explanations, tasks with patterns; `just content` shows the report and live / draft status;
+- **a content topic**: Nickel files in `content/<topic>/`: KCs, misconceptions, explanations, tasks with patterns; `just content` shows the report and live / draft status. Once a task is live, changing its kind, topics, choices, diagnosed misconceptions, difficulty, expected time or family needs a new `version`, otherwise the build fails;
 - **an item kind**: an `ItemBody` variant implementing `ItemKind` in the core (ladder step, quality rule, checking) and a rendering component in the client registry;
 - **a subject**: a subject record in content (scale, domains, checker) and its item kinds; the model and planner do not change (docs/10);
 - **an achievement**: content on an existing core predicate; a new achievement is awarded retroactively to everyone who earned it;

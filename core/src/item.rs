@@ -32,6 +32,53 @@ pub enum ItemKindTag {
     Shadowing,
 }
 
+impl ItemKindTag {
+    /// Step of the ladder: recognition, guided, free, pronunciation.
+    pub const fn ladder(self) -> LadderLevel {
+        match self {
+            Self::Choice | Self::FindError | Self::Matching | Self::TrueFalseNotGiven => {
+                LadderLevel::Recognition
+            }
+            Self::GapFill
+            | Self::Transformation
+            | Self::SentenceAssembly
+            | Self::Translation
+            | Self::Dictation => LadderLevel::Guided,
+            Self::OwnSentence | Self::Writing => LadderLevel::Free,
+            Self::Shadowing => LadderLevel::Pronunciation,
+        }
+    }
+
+    /// Whether a correct answer counts as production for mastery
+    /// (`docs/03-layer2-learner-model.md`) and the KC live condition.
+    /// Dictation and sentence assembly are not: the learner transcribes or
+    /// orders given words rather than producing the form.
+    pub const fn is_production(self) -> bool {
+        matches!(
+            self,
+            Self::GapFill
+                | Self::Transformation
+                | Self::Translation
+                | Self::OwnSentence
+                | Self::Writing
+        )
+    }
+
+    /// Whether the learner types the answer rather than picking it.
+    pub const fn typed_input(self) -> bool {
+        matches!(
+            self,
+            Self::GapFill
+                | Self::Transformation
+                | Self::SentenceAssembly
+                | Self::Translation
+                | Self::Dictation
+                | Self::OwnSentence
+                | Self::Writing
+        )
+    }
+}
+
 /// Step of the ladder recognition → guided production → free production.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename_all = "snake_case"))]

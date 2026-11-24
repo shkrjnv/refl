@@ -17,10 +17,11 @@ use crate::ids::{ContentVersion, ItemRef, KcId, MisconceptionId};
 use crate::item::Item;
 use crate::lesson::Lesson;
 use crate::lexicon::LexiconRef;
+use crate::projection::{ItemProjection, ItemVersionEntry};
 use crate::subject::Subject;
 
 /// Layout version of [`Bundle`].
-pub const BUNDLE_FORMAT_VERSION: u32 = 5;
+pub const BUNDLE_FORMAT_VERSION: u32 = 6;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Bundle {
@@ -57,10 +58,26 @@ pub struct BundleContent {
     pub lessons: Vec<Lesson>,
     /// Sorted by id.
     pub items: Vec<ItemEntry>,
+    /// Projections of every published item version, current and old
+    /// (`docs/02-layer1-content.md`, «Идентификаторы и версии»); the fold
+    /// resolves an event's item through them. Sorted by (item, version).
+    pub item_versions: Vec<ItemVersionEntry>,
     /// Session-eligible items per KC, by the KC's role in their slots.
     pub items_by_kc: BTreeMap<KcId, KcItems>,
     /// Token alphabet of all automata.
     pub tokens: TokenTable,
+}
+
+impl Bundle {
+    /// The projection of exactly this item version; `None` only if the
+    /// bundle is corrupt.
+    pub fn projection(&self, r: &ItemRef) -> Option<&ItemProjection> {
+        let versions = &self.content.item_versions;
+        versions
+            .binary_search_by(|e| (&e.item, e.version).cmp(&(&r.id, r.version)))
+            .ok()
+            .map(|i| &versions[i].projection)
+    }
 }
 
 /// A KC required directly (`distance` 1) or through `distance` edges, the

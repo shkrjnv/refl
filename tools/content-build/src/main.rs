@@ -1,7 +1,11 @@
-//! `content-build <content-dir> [--out <bundle.json>] [--audio-root <dir>] [--nickel <path>] [--scowl <dir>]`
+//! `content-build <content-dir> [--out <bundle.json>] [--locked] [--audio-root <dir>] [--nickel <path>] [--scowl <dir>]`
 //!
 //! With `--out`, the lexicon the bundle references is written next to it as
 //! `lexicon-<version>.txt`. SCOWL defaults to `$REFL_SCOWL_DICT`.
+//!
+//! New published item versions are appended to `<content-dir>/item-versions.lock`;
+//! commit the file. With `--locked` the file is never written, and a build that
+//! would append to it fails (CI).
 //!
 //! Prints the report. Exit status: 0 on success, 1 if the content has errors,
 //! 2 on usage or I/O problems.
@@ -11,7 +15,7 @@ use std::process::ExitCode;
 
 use content_build::{Options, build, to_bytes};
 
-const USAGE: &str = "usage: content-build <content-dir> [--out <bundle.json>] [--audio-root <dir>] [--nickel <path>] [--scowl <dir>]";
+const USAGE: &str = "usage: content-build <content-dir> [--out <bundle.json>] [--locked] [--audio-root <dir>] [--nickel <path>] [--scowl <dir>]";
 
 fn parse_args() -> Result<(Options, Option<PathBuf>), String> {
     let mut args = std::env::args_os().skip(1);
@@ -20,6 +24,7 @@ fn parse_args() -> Result<(Options, Option<PathBuf>), String> {
     let mut audio_root = None;
     let mut nickel = None;
     let mut scowl = None;
+    let mut locked = false;
     while let Some(arg) = args.next() {
         let mut value = |name: &str| {
             args.next()
@@ -31,6 +36,7 @@ fn parse_args() -> Result<(Options, Option<PathBuf>), String> {
             Some("--audio-root") => audio_root = Some(value("--audio-root")?),
             Some("--nickel") => nickel = Some(value("--nickel")?),
             Some("--scowl") => scowl = Some(value("--scowl")?),
+            Some("--locked") => locked = true,
             Some("-h" | "--help") => return Err(String::new()),
             Some(s) if s.starts_with('-') => return Err(format!("unknown option {s}")),
             _ if content.is_none() => content = Some(PathBuf::from(arg)),
@@ -38,6 +44,7 @@ fn parse_args() -> Result<(Options, Option<PathBuf>), String> {
         }
     }
     let mut opts = Options::new(content.ok_or("missing content directory")?);
+    opts.locked = locked;
     if let Some(a) = audio_root {
         opts.audio_root = a;
     }
@@ -72,6 +79,16 @@ fn main() -> ExitCode {
     let (Some(bundle), Some(lexicon)) = (output.bundle, output.lexicon) else {
         return ExitCode::from(1);
     };
+    if let Some(text) = output.lock_update {
+        if let Err(e) = std::fs::write(&opts.lock, text) {
+            eprintln!("content-build: cannot write {}: {e}", opts.lock.display());
+            return ExitCode::from(2);
+        }
+        println!(
+            "lock written to {}: commit it with the content",
+            opts.lock.display()
+        );
+    }
     let lex = &bundle.content.lexicon;
     println!("content version {}", bundle.content_version.0);
     println!(

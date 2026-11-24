@@ -18,14 +18,14 @@ use super::{
     AnswerOutcome, Applied, FoldCtx, LearnerModel, NativeLanguage, NeedsReplay, Profile, event_id,
 };
 use crate::answer::normalize::{NormalizeOptions, normalize};
-use crate::bundle::{Bundle, ItemEntry, KcEntry};
+use crate::bundle::{Bundle, KcEntry};
 use crate::content::{Explanation, ExplanationTarget, Misconception};
 use crate::event::{
     AnswerContext, AnswerEvent, Confidence, Decoded, Event, EventPayload, Response, Verdict,
 };
 use crate::ids::{ExplanationId, ItemRef, KcId, MisconceptionId, SubjectId};
-use crate::item::{Item, KcRole};
-use crate::kind::ItemKind;
+use crate::item::KcRole;
+use crate::projection::ItemProjection;
 use crate::subject::Subject;
 use crate::value::Timestamp;
 
@@ -192,11 +192,6 @@ fn explanation<'b>(bundle: &'b Bundle, id: &ExplanationId) -> Option<&'b Explana
     find(&bundle.content.explanations, id, |e| &e.id)
 }
 
-/// The bundle's entry for exactly this item version.
-fn item_entry<'b>(bundle: &'b Bundle, r: &ItemRef) -> Option<&'b ItemEntry> {
-    find(&bundle.content.items, &r.id, |e| &e.item.id).filter(|e| e.item.version == r.version)
-}
-
 /// A typed answer whose normalized words are all letters only: it shows
 /// spelling, unlike numbers, contractions or hyphenated forms.
 fn letter_only(response: &Response) -> bool {
@@ -208,7 +203,7 @@ fn letter_only(response: &Response) -> bool {
 }
 
 /// IRT difficulty from the author's 1–5: b ∈ {−2, …, 2}.
-fn difficulty(item: &Item) -> f64 {
+fn difficulty(item: &ItemProjection) -> f64 {
     f64::from(item.difficulty.get()) - 3.0
 }
 
@@ -289,11 +284,11 @@ impl KnowledgeModel {
         &self,
         s: &State,
         bundle: &Bundle,
-        item: &Item,
+        item: &ItemProjection,
         slot_index: u16,
         now: Timestamp,
     ) -> Option<f64> {
-        let slot = item.body.slots().get(usize::from(slot_index))?;
+        let slot = item.slots.get(usize::from(slot_index))?;
         let b = difficulty(item);
         let terms = slot
             .kcs
@@ -301,7 +296,7 @@ impl KnowledgeModel {
             .map(|k| Some(self.term(self.belief(s, bundle, &k.kc, now)?, b)))
             .collect::<Option<Vec<_>>>()?;
         Some(math::predict(
-            item.body.guessing(slot_index),
+            item.guessing(slot_index),
             self.params.slip,
             &terms,
         ))
@@ -453,14 +448,12 @@ impl KnowledgeModel {
         let bundle = ctx.bundle;
         let t = ev.client_ts;
         let shown = Timestamp(t.0 - i64::from(a.latency_ms));
-        let Some(entry) = item_entry(bundle, &a.item) else {
+        let Some(item) = bundle.projection(&a.item) else {
             s.unresolved += 1;
             return Applied::Unresolved;
         };
-        let item = &entry.item;
-        let body = &item.body;
         let (Some(slot), Some(predicted)) = (
-            body.slots().get(usize::from(a.slot)),
+            item.slots.get(usize::from(a.slot)),
             self.predict_slot(s, bundle, item, a.slot, shown),
         ) else {
             s.unresolved += 1;
@@ -479,14 +472,14 @@ impl KnowledgeModel {
         let rapid = !a.backgrounded
             && expected_ms > 0.0
             && latency < p.rapid_share * expected_ms
-            && (!body.typed_input() || a.latency_ms < p.rapid_typed_ms);
+            && (!item.typed_input() || a.latency_ms < p.rapid_typed_ms);
         let outcome = AnswerOutcome {
             predicted,
             correct,
             rapid,
             subject: item.subject.clone(),
             context: a.context,
-            ladder: body.ladder(),
+            ladder: item.ladder(),
         };
         if rapid {
             s.rapid.total += 1;
@@ -496,7 +489,7 @@ impl KnowledgeModel {
         s.rapid.streak = 0;
 
         // Knowledge: confidence adjusts g and s, hints and attempts adjust w.
-        let mut g = body.guessing(a.slot);
+        let mut g = item.guessing(a.slot);
         let mut slip = p.slip;
         if correct && a.confidence == Some(Confidence::Unsure) {
             g += (1.0 - g) * p.unsure_gamma;
@@ -546,7 +539,7 @@ impl KnowledgeModel {
         // secondary weight.
         let spelling = match verdict {
             Verdict::Typo => Some((false, modifier)),
-            Verdict::Correct if body.typed_input() && letter_only(&a.response) => {
+            Verdict::Correct if item.typed_input() && letter_only(&a.response) => {
                 Some((true, p.w_secondary * modifier))
             }
             _ => None,
@@ -607,11 +600,11 @@ impl KnowledgeModel {
                 k.timed += 1;
             }
             if correct
-                && body.is_production()
+                && item.is_production()
                 && k.production.len() < p.production_needed
-                && !k.production.contains(&item.id)
+                && !k.production.contains(&a.item.id)
             {
-                k.production.push(item.id.clone());
+                k.production.push(a.item.id.clone());
             }
         }
 
@@ -624,13 +617,7 @@ impl KnowledgeModel {
             m.manifested += 1;
         }
         if correct {
-            let possible: BTreeSet<&MisconceptionId> = slot
-                .options
-                .iter()
-                .filter_map(|o| o.misconception.as_ref())
-                .chain(slot.expected_wrong.iter().map(|w| &w.misconception))
-                .collect();
-            for x in possible {
+            for x in &slot.misconceptions {
                 if let Some(m) = self.touch_misconception(s, bundle, x, t) {
                     m.beta += 1.0;
                 }
@@ -711,7 +698,7 @@ impl LearnerModel for KnowledgeModel {
         slot: u16,
         now: Timestamp,
     ) -> Option<f64> {
-        self.predict_slot(s, bundle, &item_entry(bundle, item)?.item, slot, now)
+        self.predict_slot(s, bundle, bundle.projection(item)?, slot, now)
     }
 
     fn apply(

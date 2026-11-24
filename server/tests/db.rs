@@ -186,6 +186,15 @@ async fn migrations_apply_and_revert(c: &Cluster) {
     ] {
         assert!(all.iter().any(|x| x == t), "missing table {t}: {all:?}");
     }
+    // A snapshot always says which content version it was computed with.
+    let nullable: String = sqlx::query_scalar(
+        "SELECT is_nullable::text FROM information_schema.columns \
+         WHERE table_name = 'model_snapshots' AND column_name = 'content_version'",
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(nullable, "NO");
     MIGRATOR.undo(&db, 0).await.unwrap();
     assert_eq!(
         tables(&db).await,
@@ -540,8 +549,8 @@ async fn erasure_removes_one_learner(c: &Cluster) {
     theirs["learner_id"] = other.to_string().into();
     insert(&db, &theirs.to_string()).await.unwrap();
     sqlx::query(
-        "INSERT INTO model_snapshots (learner_id, model_version, parameters, parameters_hash, \
-         state, last_event_id) VALUES ($1, 'v1', '{}', 'h', '\\x00', $2)",
+        "INSERT INTO model_snapshots (learner_id, model_version, content_version, parameters, \
+         parameters_hash, state, last_event_id) VALUES ($1, 'v1', 'c1', '{}', 'h', '\\x00', $2)",
     )
     .bind(LEARNER)
     .bind(event_id(1))
@@ -664,6 +673,15 @@ async fn content_bundle_imports_idempotently(c: &Cluster) {
             .unwrap();
     assert_eq!(ranks, [Some(1)]);
     assert_eq!(count("content_items").await, n(content.items.len()));
+    // Every published version's projection is there, not only the current ones.
+    assert_eq!(
+        count("content_item_versions").await,
+        n(content.item_versions.len())
+    );
+    assert!(
+        content.item_versions.len() > 1,
+        "the sample has published tasks"
+    );
     assert_eq!(
         count("content_explanations").await,
         n(content.explanations.len())

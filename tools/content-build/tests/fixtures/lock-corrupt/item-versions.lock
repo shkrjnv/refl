@@ -1,0 +1,2 @@
+{"item":"it.gap","version":1,"projection":{"subject":"en","family":"en.f.gap","kind":"gap_fill","difficulty":1,"expected_time":20,"slots":[{"kcs":[{"kc":"en.k.a","role":"primary"}],"choices":0,"misconceptions":["en.m.one","en.m.two"]}]}}
+sha256 cf470954b212104af50c60067ca887020b8a8c270f592601c237a8a77743140e

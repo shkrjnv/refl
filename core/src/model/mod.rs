@@ -151,8 +151,10 @@ pub enum Applied {
     /// Written by a newer core: skipped, state marked incomplete
     /// (`docs/13-sync-versions.md`, «Неизвестные события»).
     Unknown,
-    /// An answer whose item version or slot is not in the bundle: skipped
-    /// and counted (`docs/02-layer1-content.md`, open decision 11).
+    /// An answer whose item version or slot has no projection in the bundle:
+    /// skipped and counted. Only a corrupt bundle gets here, as it carries
+    /// the projection of every published version
+    /// (`docs/02-layer1-content.md`, «Идентификаторы и версии»).
     Unresolved,
 }
 

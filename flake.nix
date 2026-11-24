@@ -94,9 +94,10 @@
           );
           test = craneLib.cargoTest (commonArgs // { inherit cargoArtifacts; });
           # The real content must pass every check; the bundle and report are the output.
+          # `--locked`: the committed item-versions.lock must already hold every published item version.
           content = pkgs.runCommand "refl-content" { } ''
             mkdir -p $out
-            ${content-build}/bin/content-build ${./content} \
+            ${content-build}/bin/content-build ${./content} --locked \
               --nickel ${pkgs.nickel}/bin/nickel \
               --scowl ${pkgs.scowl}/share/dict \
               --out $out/bundle.json > $out/report.txt \

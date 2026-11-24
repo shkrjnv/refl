@@ -38,6 +38,7 @@ use refl_core::item::{
 use refl_core::kind::ItemKind;
 use refl_core::lexicon::LexiconRef;
 use refl_core::model::math::sigmoid;
+use refl_core::projection::{ItemProjection, ItemVersionEntry};
 use refl_core::rng::SplitMix64;
 use refl_core::subject::{Checker, LevelKey, ScaleDef, ScaleLevel, Subject};
 use refl_core::value::{Finite, Localized, Seed, Timestamp, UnitInterval};
@@ -283,6 +284,14 @@ pub fn synthetic_bundle(spec: BundleSpec) -> Bundle {
     misconceptions.sort_by(|a, b| a.id.cmp(&b.id));
     explanations.sort_by(|a, b| a.id.cmp(&b.id));
     items.sort_by(|a, b| a.item.id.cmp(&b.item.id));
+    let item_versions = items
+        .iter()
+        .map(|e| ItemVersionEntry {
+            item: e.item.id.clone(),
+            version: e.item.version,
+            projection: ItemProjection::of(&e.item),
+        })
+        .collect();
     let requires_closure = closure(&kcs, &edges);
     Bundle {
         format_version: BUNDLE_FORMAT_VERSION,
@@ -303,6 +312,7 @@ pub fn synthetic_bundle(spec: BundleSpec) -> Bundle {
             instructions: Vec::new(),
             lessons: Vec::new(),
             items,
+            item_versions,
             items_by_kc: BTreeMap::new(),
             tokens: TokenTable::default(),
         },

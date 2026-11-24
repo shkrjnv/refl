@@ -54,11 +54,19 @@ pub enum Code {
     /// A `contrasts` edge between live KCs has no live item marked
     /// `confuses_with` across it.
     ContrastWithoutConfusion,
+    /// The model projection of a published item version differs from its
+    /// entry in the lock file, and the version was not bumped.
+    ProjectionChanged,
+    /// The lock file cannot be trusted: unreadable, unsorted, or its digest
+    /// does not match (an entry was removed or changed by hand).
+    LockCorrupt,
+    /// With `--locked`: the build would append entries to the lock file.
+    LockOutdated,
 }
 
 impl Code {
     /// Every check; tests require a negative fixture named after each one.
-    pub const ALL: [Self; 27] = [
+    pub const ALL: [Self; 30] = [
         Self::Nickel,
         Self::Schema,
         Self::DuplicateId,
@@ -86,6 +94,9 @@ impl Code {
         Self::InvalidScale,
         Self::KcOutsideSubject,
         Self::ContrastWithoutConfusion,
+        Self::ProjectionChanged,
+        Self::LockCorrupt,
+        Self::LockOutdated,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -117,6 +128,9 @@ impl Code {
             Self::InvalidScale => "invalid-scale",
             Self::KcOutsideSubject => "kc-outside-subject",
             Self::ContrastWithoutConfusion => "contrast-without-confusion",
+            Self::ProjectionChanged => "projection-changed",
+            Self::LockCorrupt => "lock-corrupt",
+            Self::LockOutdated => "lock-outdated",
         }
     }
 }

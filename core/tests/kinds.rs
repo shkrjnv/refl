@@ -8,15 +8,18 @@ use refl_core::answer::normalize::NormalizeOptions;
 use refl_core::answer::template::{NormPattern, Pattern};
 use refl_core::bundle::{ErrorAutomaton, SlotAutomata};
 use refl_core::event::{Response, Verdict};
-use refl_core::ids::{KcId, MisconceptionId};
+use refl_core::ids::{
+    FamilyId, InstructionId, ItemId, ItemVersion, KcId, MisconceptionId, SubjectId,
+};
 use refl_core::item::{
-    AnswerPattern, ChoiceBody, ChoiceOption, DictationBody, EnglishCheck, ExpectedWrong,
-    FindErrorBody, GapFillBody, ItemBody, ItemKindTag, KcRole, LadderLevel, MatchingBody,
-    OwnSentenceBody, SentenceAssemblyBody, ShadowingBody, Slot, SlotKc, Stimulus,
-    TransformationBody, TranslationBody, TrueFalseNotGivenBody, WritingBody,
+    AnswerPattern, AuthorDifficulty, ChoiceBody, ChoiceOption, DictationBody, EnglishCheck,
+    ExpectedWrong, FindErrorBody, GapFillBody, Item, ItemBody, ItemKindTag, ItemStatus, KcRole,
+    LadderLevel, MatchingBody, OwnSentenceBody, SentenceAssemblyBody, ShadowingBody, Slot, SlotKc,
+    Stimulus, TransformationBody, TranslationBody, TrueFalseNotGivenBody, WritingBody,
 };
 use refl_core::kind::{CheckCtx, CheckOutcome, Compiled, ItemKind, QualityCtx, QualityIssueKind};
 use refl_core::lexicon::Lexicon;
+use refl_core::projection::ItemProjection;
 use refl_core::value::Localized;
 
 fn mis(s: &str) -> MisconceptionId {
@@ -219,6 +222,45 @@ fn every_kind_states_its_guessing_rate_and_input() {
         assert_eq!(body.typed_input(), typed, "{tag:?}");
         // No such slot: no guessing.
         assert!(body.guessing(9).abs() < f64::EPSILON, "{tag:?}");
+    }
+}
+
+/// A stored projection answers the model's questions exactly as the item
+/// does, so the fold may read the projection of any version.
+#[test]
+fn projection_answers_like_the_item() {
+    for body in every_kind(&[slot()], EnglishCheck::default()) {
+        let tag = body.tag();
+        let item = Item {
+            id: ItemId::new("en.item.x").unwrap(),
+            version: ItemVersion(1),
+            subject: SubjectId::new("en").unwrap(),
+            family: FamilyId::new("en.fam.x").unwrap(),
+            instruction: InstructionId::new("en.instr.x").unwrap(),
+            difficulty: AuthorDifficulty::new(3).unwrap(),
+            expected_time: 10,
+            topic: None,
+            status: ItemStatus::Live,
+            source: None,
+            license: None,
+            breaks_calibration: false,
+            body: body.clone(),
+        };
+        let p = ItemProjection::of(&item);
+        assert_eq!(p.kind, tag);
+        assert_eq!(p.ladder(), body.ladder(), "{tag:?}");
+        assert_eq!(p.is_production(), body.is_production(), "{tag:?}");
+        assert_eq!(p.typed_input(), body.typed_input(), "{tag:?}");
+        for slot in [0, 9] {
+            assert!(
+                (p.guessing(slot) - body.guessing(slot)).abs() < f64::EPSILON,
+                "{tag:?} slot {slot}"
+            );
+        }
+        let m = &p.slots[0].misconceptions;
+        assert!(m.windows(2).all(|w| w[0] < w[1]), "ascending, no repeats");
+        assert!(m.len() >= 2, "{m:?}");
+        assert_eq!(p.slots[0].kcs, item.body.slots()[0].kcs);
     }
 }
 

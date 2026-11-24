@@ -7,15 +7,17 @@ use refl_core::event::{
     AnswerContext, AnswerEvent, Confidence, Decoded, EventPayload, ReclassifiedEvent, Response,
     Verdict,
 };
-use refl_core::ids::{ContentVersion, KcId};
+use refl_core::ids::{ContentVersion, ItemVersion, KcId};
+use refl_core::item::AuthorDifficulty;
 use refl_core::model::derived::{KcProgress, MisconceptionStatus};
 use refl_core::model::{
     Applied, FoldCtx, KcState, KnowledgeModel, LearnerModel, NeedsReplay, Profile, State, replay,
 };
+use refl_core::projection::{ItemProjection, ItemVersionEntry};
 use refl_core::value::Timestamp;
 use refl_sim::{
-    BundleSpec, DAY_MS, SPELLING_KC, T0, answer, event, explanation_id, item_ref, kc_id,
-    misconception_id, synthetic_bundle, unknown_event,
+    BundleSpec, DAY_MS, LogSpec, SPELLING_KC, T0, answer, event, explanation_id, item_ref, kc_id,
+    misconception_id, synthetic_bundle, synthetic_log, unknown_event,
 };
 
 fn bundle() -> Bundle {
@@ -461,4 +463,59 @@ fn profile_is_part_of_the_state_hash() {
     };
     let uz = replay(&model, &profile, &b, &events);
     assert_ne!(zero.hash(), uz.hash());
+}
+
+/// What content-build does on a release that bumps every item: version 2 is
+/// the current body with another difficulty, and the lock keeps the
+/// projections of version 1.
+fn bumped(b: &Bundle) -> Bundle {
+    let mut out = b.clone();
+    for e in &mut out.content.items {
+        e.item.version = ItemVersion(2);
+        e.item.difficulty = AuthorDifficulty::new(e.item.difficulty.get() % 5 + 1).unwrap();
+    }
+    let current: Vec<_> = out
+        .content
+        .items
+        .iter()
+        .map(|e| ItemVersionEntry {
+            item: e.item.id.clone(),
+            version: e.item.version,
+            projection: ItemProjection::of(&e.item),
+        })
+        .collect();
+    out.content.item_versions.extend(current);
+    out.content
+        .item_versions
+        .sort_by(|a, b| (&a.item, a.version).cmp(&(&b.item, b.version)));
+    out.content_version = ContentVersion("bumped".into());
+    out
+}
+
+#[test]
+fn old_log_folds_to_the_same_state_after_a_version_bump() {
+    let old = bundle();
+    let log = synthetic_log(
+        &old,
+        LogSpec {
+            events: 400,
+            seed: 11,
+        },
+    );
+    let model = KnowledgeModel::default();
+    let before = replay(&model, &Profile::default(), &old, &log);
+    assert_eq!(before.unresolved, 0);
+    assert!(before.kcs.len() > 1, "the log answers items");
+
+    let new = bumped(&old);
+    let after = replay(&model, &Profile::default(), &new, &log);
+    assert_eq!(after.unresolved, 0);
+    assert_eq!(before.hash(), after.hash());
+
+    // Without the old projections the answers would be lost, not guessed.
+    let mut lost = new;
+    lost.content.item_versions.retain(|e| e.version.0 == 2);
+    let broken = replay(&model, &Profile::default(), &lost, &log);
+    assert!(broken.unresolved > 0);
+    assert_ne!(before.hash(), broken.hash());
 }

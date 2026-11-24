@@ -110,6 +110,7 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
     let a =
       {
         id | default = "it.gap",
+        version | default = 1,
         family | default = "en.f.gap",
         difficulty | default = 1,
         type | default = "gap_fill",
@@ -127,7 +128,7 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
     in
     {
       id = a.id,
-      version = 1,
+      version = a.version,
       subject = "en",
       family = a.family,
       type = a.type,

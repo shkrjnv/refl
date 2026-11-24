@@ -7,6 +7,7 @@ pub mod check;
 pub mod graph;
 pub mod lexicon;
 pub mod load;
+pub mod lock;
 pub mod report;
 pub mod status;
 pub mod subjects;
@@ -37,15 +38,23 @@ pub struct Options {
     pub nickel: PathBuf,
     /// `share/dict` of the nixpkgs `scowl` package.
     pub scowl: PathBuf,
+    /// The item versions lock file; a missing file is an empty lock.
+    pub lock: PathBuf,
+    /// The lock must not change: a build that would append an entry fails
+    /// (`lock-outdated`). For CI, where nothing may write the file.
+    pub locked: bool,
 }
 
 impl Options {
-    /// Audio under `<content>/audio`, `nickel` from `PATH`, SCOWL from
-    /// `REFL_SCOWL_DICT` (the dev shell and the flake checks set it).
+    /// Audio under `<content>/audio`, the lock at `<content>/item-versions.lock`,
+    /// `nickel` from `PATH`, SCOWL from `REFL_SCOWL_DICT` (the dev shell and
+    /// the flake checks set it).
     pub fn new(content: impl Into<PathBuf>) -> Self {
         let content = content.into();
         Self {
             audio_root: content.join("audio"),
+            lock: content.join(lock::FILE),
+            locked: false,
             content,
             nickel: PathBuf::from("nickel"),
             scowl: std::env::var_os("REFL_SCOWL_DICT").map_or_else(PathBuf::new, PathBuf::from),
@@ -60,12 +69,16 @@ pub struct Output {
     pub bundle: Option<Bundle>,
     /// The lexicon the bundle references; `None` with the bundle.
     pub lexicon: Option<Lexicon>,
+    /// The new text of the lock file when the build appended entries; the
+    /// caller writes it to [`Options::lock`]. `None` when the lock is
+    /// unchanged or the build has errors.
+    pub lock_update: Option<String>,
 }
 
 /// Loads, checks and compiles the content.
 ///
 /// # Errors
-/// The content root or the SCOWL lists cannot be read. Content problems are reported in
+/// The content root, the lock file or the SCOWL lists cannot be read. Content problems are reported in
 /// [`Output::report`], not as errors.
 ///
 /// # Panics
@@ -90,6 +103,7 @@ pub fn build(opts: &Options) -> std::io::Result<Output> {
     let compiled = templates::compile(&content.items, &mut diags);
     check::live_items(&content, &compiled, &mut diags);
     check::audio(&content, &opts.audio_root, &mut diags);
+    let (lock, lock_update) = item_versions(opts, &content, &mut diags)?;
 
     let mut report = Report {
         diagnostics: diags,
@@ -102,6 +116,7 @@ pub fn build(opts: &Options) -> std::io::Result<Output> {
             report,
             bundle: None,
             lexicon: None,
+            lock_update: None,
         });
     }
 
@@ -122,6 +137,7 @@ pub fn build(opts: &Options) -> std::io::Result<Output> {
         instructions: sorted(&content.instructions, |i| &i.id),
         lessons: sorted(&content.lessons, |l| &l.id),
         items,
+        item_versions: lock.entries().to_vec(),
         items_by_kc,
         tokens: compiled.tokens,
     };
@@ -138,7 +154,47 @@ pub fn build(opts: &Options) -> std::io::Result<Output> {
             content: body,
         }),
         lexicon: Some(lexicon),
+        lock_update,
     })
+}
+
+/// The lock after this build and, unless `opts.locked`, its new text when it
+/// differs from the file. A lock that cannot be trusted is reported and
+/// replaced by an empty one: the build fails on the report anyway.
+fn item_versions(
+    opts: &Options,
+    content: &load::Content,
+    diags: &mut Vec<report::Diagnostic>,
+) -> std::io::Result<(lock::Lock, Option<String>)> {
+    let file = std::path::Path::new(lock::FILE);
+    let old = match lock::read(&opts.lock)? {
+        Ok(lock) => lock,
+        Err(why) => {
+            diags.push(check::diag(
+                report::Code::LockCorrupt,
+                file,
+                format!("lock file `{}`", opts.lock.display()),
+                why,
+            ));
+            return Ok((lock::Lock::default(), None));
+        }
+    };
+    let new = lock::reconcile(content, &old, diags);
+    if new == old {
+        return Ok((new, None));
+    }
+    if opts.locked {
+        let added = new.entries().len() - old.entries().len();
+        diags.push(check::diag(
+            report::Code::LockOutdated,
+            file,
+            format!("lock file `{}`", opts.lock.display()),
+            format!("{added} published item version(s) are not in the lock; run content-build without --locked and commit the file"),
+        ));
+        return Ok((new, None));
+    }
+    let text = new.render();
+    Ok((new, Some(text)))
 }
 
 /// Items with their automata and session eligibility, sorted by id, and
