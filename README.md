@@ -147,6 +147,8 @@ FSRS-6 memory: R(t) = (1 + F·t/S)^(−w₂₀), F = 0.9^(−1/w₂₀) − 1. F
 
 **The model checks itself:** the prediction is made before the task is shown, and "prediction vs outcome" calibration is visible to the learner in the "Model" tab of the statistics. A new model can run "in the shadow" next to the old one (the `LearnerModel` trait) and be compared on the real log.
 
+**Built so far: version 1** (`core/src/model/`). Knowledge, FSRS-6 memory (default weights of py-fsrs 6.3.3 / fsrs-rs 7.0.0), automaticity, misconceptions, the rapid-guess filter and the spread of success to prerequisites are one fold. One `predict` function serves the fold, the planner and calibration, and the fold reports the prediction made when the task was shown. From the state the core derives KC statuses (including "long-term" and "forgetting"), the continuous level per domain with an 80% interval, and whether the next session starts with a return check. Unknown events mark the state incomplete. A late event or a `reclassified` triggers a full replay, which folds each corrected answer with its latest verdict. The same log gives the same state hash on the server and in WASM; a test folds 20 000 generated events both ways. 100 000 events fold in about 0.13 s natively. Not in v1: extended diagnostics other than rapid guesses, the "Why?" task kind, and the mentor's "known" mark (its weight is an open question in docs/03). The v1 readings of the formulas are in docs/03, «Уточнения версии 1».
+
 ## Quality control
 
 How do we know the system understands the learner and builds a good plan? Predictions can be checked directly, plans only indirectly, so there are several levels ([docs/11](docs/11-quality.md)):
@@ -312,9 +314,10 @@ All learning logic lives in one Rust core. The server calls it natively, the PWA
 
 | Path | Contents |
 | --- | --- |
-| `core/` | `refl-core`: domain types, events, normalisation, pattern language, DFA, unlock model. `no_std` + `alloc`; the `std` feature is for tests and tools, `ts` for TS type generation |
+| `core/` | `refl-core`: domain types, events, normalisation, pattern language, DFA, unlock model, learner model v1 with FSRS-6, the SplitMix64 PRNG. `no_std` + `alloc`; the `std` feature is for tests and tools, `ts` for TS type generation |
 | `server/` | `refl-server`: migrations, event writes, bundle import, tests on a temporary PostgreSQL. HTTP from stage 1 |
 | `tools/content-build/` | CLI for building and checking content; test fixtures for every check |
+| `tools/sim/` | `refl-sim`: synthetic bundles and learner logs for the fold tests, the native = WASM hash check (`fold-hash`) and fold timing. The learner simulator of docs/03 will be built here |
 | `content/` | Nickel content: schema (`lib/`) and a sample "Articles" topic (`articles/`) |
 | `web/` | the client; for now, TS types generated from Rust in `web/src/generated/core/` |
 | `docs/` | specifications (in Russian), the single source of truth for decisions |
@@ -326,7 +329,7 @@ All learning logic lives in one Rust core. The server calls it natively, the PWA
 
 | Part | Choice |
 | --- | --- |
-| Core | Rust (version in `rust-toolchain.toml`), native and `wasm32-unknown-unknown` |
+| Core | Rust (version in `rust-toolchain.toml`), native and `wasm32-unknown-unknown`; `wasm32-wasip1` under wasmtime for the native = WASM check |
 | Server | axum + tokio, sqlx, PostgreSQL |
 | Client | TypeScript + SolidJS + Vite, PWA, IndexedDB; types from Rust (ts-rs) |
 | Content | Nickel → `content-build` in Rust |
@@ -345,8 +348,8 @@ All learning logic lives in one Rust core. The server calls it natively, the PWA
 You need Nix with flakes enabled; everything else comes from the environment. With direnv the environment loads automatically (`.envrc`).
 
 ```sh
-nix develop        # Rust, sqlx-cli, PostgreSQL, Nickel, Node, just
-just               # fmt-check, clippy, tests, wasm32 core build, content-build
+nix develop        # Rust, sqlx-cli, PostgreSQL, Nickel, Node, just, wasmtime
+just               # fmt-check, clippy, tests, wasm32 core build, native = WASM fold hash, content-build
 just --list        # individual recipes
 just ci            # full hermetic CI = nix flake check
 ```
@@ -357,6 +360,8 @@ just ci            # full hermetic CI = nix flake check
 | `just lint` | clippy with `-D warnings` |
 | `just test` | all tests, including the database (temporary PostgreSQL) and TS type freshness |
 | `just wasm` | build the core for the browser |
+| `just wasm-hash` | fold one generated log natively and in wasm32 under wasmtime; the state hashes must match |
+| `just fold-speed` | time the fold of 100 000 generated events |
 | `just content` | check `content/`, bundle into `target/bundle.json` |
 | `just bindings` | regenerate TS types after core type changes (the result is committed) |
 
@@ -390,7 +395,7 @@ Every stage has a measurable exit criterion. Value starts after stage 1, not at 
 | Stage | Scope | Status |
 | --- | --- | --- |
 | 0. Foundation | monorepo, Nix flake, CI; domain types; content-build with checks; DB schema and event log | in progress: 0.1–0.3 done, unknown events and schema-1 additions done |
-| 1. Learning core | item kinds, checking pipeline, learner model v1 + FSRS, lessons, offline PWA, sync, Telegram bot; grammar A1–A2 (~60 KCs) | — |
+| 1. Learning core | item kinds, checking pipeline, learner model v1 + FSRS, lessons, offline PWA, sync, Telegram bot; grammar A1–A2 (~60 KCs) | in progress: learner model v1 done |
 | 2. Placement and planner | adaptive placement, planner, knowledge map, "why this task", mentor, teams and friends, error notebook; up to B1 (~120 KCs) | — |
 | 3. Vocabulary, reading, library | vocabulary model, FSRS for words, texts, personal dictionary, notes graph, achievements, cosmetics, cards | — |
 | 4. Listening | audio pipeline, player, dictation with error classification, shadowing | — |
