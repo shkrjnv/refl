@@ -176,13 +176,25 @@ fn committed_lock_is_up_to_date() {
     assert!(!out.report.has_errors(), "{}", out.report);
     assert_eq!(out.lock_update, None);
     let bundle = out.bundle.expect("bundle");
-    let published = bundle
+    let published: Vec<_> = bundle
         .content
         .items
         .iter()
         .filter(|e| matches!(e.item.status, ItemStatus::Live | ItemStatus::Retired))
-        .count();
-    assert_eq!(bundle.content.item_versions.len(), published);
+        .collect();
+    // Every published item has its projection; superseded versions add more.
+    for e in &published {
+        assert!(
+            bundle
+                .content
+                .item_versions
+                .iter()
+                .any(|v| v.item == e.item.id && v.version == e.item.version),
+            "{}",
+            e.item.id
+        );
+    }
+    assert!(bundle.content.item_versions.len() >= published.len());
 }
 
 /// Bumping a version together with a projection change passes; the bundle
