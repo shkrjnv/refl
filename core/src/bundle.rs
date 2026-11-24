@@ -16,10 +16,11 @@ use crate::content::{Edge, Explanation, Instruction, Kc, Misconception};
 use crate::ids::{ContentVersion, ItemRef, KcId, MisconceptionId};
 use crate::item::Item;
 use crate::lesson::Lesson;
+use crate::lexicon::LexiconRef;
 use crate::subject::Subject;
 
 /// Layout version of [`Bundle`].
-pub const BUNDLE_FORMAT_VERSION: u32 = 3;
+pub const BUNDLE_FORMAT_VERSION: u32 = 4;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Bundle {
@@ -34,6 +35,9 @@ pub struct BundleContent {
     /// Normalization the automata were compiled with; answers must be
     /// normalized with the same version.
     pub normalization_version: u32,
+    /// The checker's word list, a separate file; with `normalization_version`
+    /// it makes the checker version.
+    pub lexicon: LexiconRef,
     /// Sorted by id.
     pub subjects: Vec<Subject>,
     /// Sorted by id.

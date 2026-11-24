@@ -21,6 +21,7 @@ pub mod ids;
 pub mod item;
 pub mod kind;
 pub mod lesson;
+pub mod lexicon;
 pub mod subject;
 pub mod unlock;
 pub mod value;

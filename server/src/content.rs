@@ -2,11 +2,15 @@
 //! версии»): per-entity tables keyed by content version, idempotent by
 //! version, exactly one active version.
 
+use std::fmt::Write as _;
+
 use refl_core::bundle::{Bundle, BundleContent, KcStatus};
 use refl_core::content::ExplanationTarget;
 use refl_core::item::KcRole;
+use refl_core::lexicon::Lexicon;
 use serde::Serialize;
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use sqlx::{PgConnection, Postgres, Transaction};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,10 +32,47 @@ fn wire(v: &impl Serialize) -> String {
     }
 }
 
+/// Stores a lexicon file under its version, the hex SHA-256 of its contents
+/// (`docs/02-layer1-content.md`, «Словарь проверщика»). Idempotent; import
+/// it before a bundle that references it.
+///
+/// # Errors
+/// Database errors.
+///
+/// # Panics
+/// Never: a lexicon holds fewer than 2^32 words.
+pub async fn import_lexicon(
+    tx: &mut Transaction<'_, Postgres>,
+    lexicon: &Lexicon,
+) -> Result<Imported, sqlx::Error> {
+    let version =
+        Sha256::digest(lexicon.as_str().as_bytes())
+            .iter()
+            .fold(String::new(), |mut s, b| {
+                let _ = write!(s, "{b:02x}");
+                s
+            });
+    let words = i64::try_from(lexicon.len()).expect("a lexicon file is under 4 GiB");
+    let inserted = sqlx::query(
+        "INSERT INTO content_lexicons (version, words, body) VALUES ($1, $2, $3) \
+         ON CONFLICT (version) DO NOTHING",
+    )
+    .bind(&version)
+    .bind(words)
+    .bind(lexicon.as_str())
+    .execute(&mut **tx)
+    .await?;
+    Ok(if inserted.rows_affected() == 1 {
+        Imported::New
+    } else {
+        Imported::AlreadyPresent
+    })
+}
+
 /// Imports `bundle` in one transaction. Does not change the active version.
 ///
 /// # Errors
-/// Database errors; the transaction is rolled back.
+/// Database errors; the transaction is rolled back. Fails if the lexicon the bundle references was not imported.
 ///
 /// # Panics
 /// Never: bundle types always serialize.
@@ -42,13 +83,15 @@ pub async fn import_bundle(
     let v = bundle.content_version.0.as_str();
     let c = &bundle.content;
     let inserted = sqlx::query(
-        "INSERT INTO content_versions (version, format_version, normalization_version, tokens) \
-         VALUES ($1, $2, $3, $4) ON CONFLICT (version) DO NOTHING",
+        "INSERT INTO content_versions \
+         (version, format_version, normalization_version, tokens, lexicon_version) \
+         VALUES ($1, $2, $3, $4, $5) ON CONFLICT (version) DO NOTHING",
     )
     .bind(v)
     .bind(i64::from(bundle.format_version))
     .bind(i64::from(c.normalization_version))
     .bind(json(&c.tokens))
+    .bind(&c.lexicon.version)
     .execute(&mut **tx)
     .await?;
     if inserted.rows_affected() == 0 {

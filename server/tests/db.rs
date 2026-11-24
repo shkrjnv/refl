@@ -13,7 +13,7 @@ use std::process::Command;
 use refl_core::value::Timestamp;
 use refl_core::{Decoded, Event};
 use refl_server::MIGRATOR;
-use refl_server::content::{Imported, activate, import_bundle};
+use refl_server::content::{Imported, activate, import_bundle, import_lexicon};
 use refl_server::events::{InsertError, Inserted, insert_event, learner_events};
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use sqlx::{Connection, Executor, PgPool, Row};
@@ -604,7 +604,17 @@ async fn content_bundle_imports_idempotently(c: &Cluster) {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../content");
     let out = content_build::build(&content_build::Options::new(root)).unwrap();
     let bundle = out.bundle.unwrap_or_else(|| panic!("{}", out.report));
+    let lexicon = out.lexicon.unwrap();
+    // A bundle cannot be imported before the lexicon it references.
     let mut tx = db.begin().await.unwrap();
+    let err = import_bundle(&mut tx, &bundle).await.unwrap_err();
+    assert!(err.to_string().contains("lexicon_version"), "{err}");
+    tx.rollback().await.unwrap();
+    let mut tx = db.begin().await.unwrap();
+    assert_eq!(
+        import_lexicon(&mut tx, &lexicon).await.unwrap(),
+        Imported::New
+    );
     assert_eq!(
         import_bundle(&mut tx, &bundle).await.unwrap(),
         Imported::New
@@ -613,9 +623,23 @@ async fn content_bundle_imports_idempotently(c: &Cluster) {
     tx.commit().await.unwrap();
     let mut tx = db.begin().await.unwrap();
     assert_eq!(
+        import_lexicon(&mut tx, &lexicon).await.unwrap(),
+        Imported::AlreadyPresent
+    );
+    assert_eq!(
         import_bundle(&mut tx, &bundle).await.unwrap(),
         Imported::AlreadyPresent
     );
+    // The server's version of the file is the one the bundle references.
+    let (version, words): (String, i32) = sqlx::query_as(
+        "SELECT l.version, l.words FROM content_versions v \
+         JOIN content_lexicons l ON l.version = v.lexicon_version",
+    )
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap();
+    assert_eq!(version, bundle.content.lexicon.version);
+    assert_eq!(u32::try_from(words).unwrap(), bundle.content.lexicon.words);
     tx.commit().await.unwrap();
 
     let count = |table: &str| {

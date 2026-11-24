@@ -65,6 +65,8 @@
               pkgs.nickel
               pkgs.postgresql
             ];
+            # The checker's lexicon is built from SCOWL (docs/02, THIRD_PARTY.md).
+            REFL_SCOWL_DICT = "${pkgs.scowl}/share/dict";
           };
           cargoArtifacts = craneLib.buildDepsOnly commonArgs;
           content-build = craneLib.buildPackage (
@@ -95,6 +97,7 @@
             mkdir -p $out
             ${content-build}/bin/content-build ${./content} \
               --nickel ${pkgs.nickel}/bin/nickel \
+              --scowl ${pkgs.scowl}/share/dict \
               --out $out/bundle.json > $out/report.txt \
               || { cat $out/report.txt; exit 1; }
           '';
@@ -126,10 +129,10 @@
               pkgs.just
             ];
             # Stages 3-5 bring back: piper-tts (audio), languagetool and
-            # hunspell + dictionaries (writing checks), ffmpeg/opus-tools (audio
-            # pipeline).
+            # hunspell (writing checks), ffmpeg/opus-tools (audio pipeline).
 
             DATABASE_URL = "postgres://refl@localhost/refl";
+            REFL_SCOWL_DICT = "${pkgs.scowl}/share/dict";
           };
         }
       );
