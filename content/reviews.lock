@@ -46,6 +46,9 @@
 {"record":"group:articles","lang":"uz","by":"Hara","hash":"49563bd7812813d76e2163a967999e71bc3176b14e8e2c8fa8c77df13179e414"}
 {"record":"group:articles","lang":"ru","by":"Hara","hash":"b588a322e766b03a92bfc14e1d4c1d1cb646330ff56982be8078be7acad8d7d6"}
 {"record":"group:articles","lang":"en","by":"Hara","hash":"3a26dc179dae892e58068bcd07c9e01ef5c22b05747c35385ec83a6e275e0634"}
+{"record":"group:articles-2","lang":"uz","by":"Hara","hash":"f2775ce08fcfb409601d5a7b6612230a309fd8583c2a6b714fb2323ae83ac09b"}
+{"record":"group:articles-2","lang":"ru","by":"Hara","hash":"a50453e119c5bd92e47e7b46870a519faa78c237562d062118a54c012115bade"}
+{"record":"group:articles-2","lang":"en","by":"Hara","hash":"4ccb848066f9ef23a85e8506aaabf83ddbb1e0aafc46acdb586704d643f32d1a"}
 {"record":"instruction:instr.choose-option","lang":"uz","by":"Hara","hash":"4b29a011fb581b1fc65364bfa5f728e653e4d0478c747b6382ee06a86fbf4a35"}
 {"record":"instruction:instr.choose-option","lang":"ru","by":"Hara","hash":"30820921310d6e10f927b663e7b9b99d4f1518cb9958f3ad67a8524f1785082f"}
 {"record":"instruction:instr.choose-option","lang":"en","by":"Hara","hash":"2b250b9ad8215806e5d53a9b1fb53c44e7a1ba6f116c69883151fc0e7130a67c"}
