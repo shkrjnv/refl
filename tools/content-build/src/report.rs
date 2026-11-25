@@ -72,11 +72,13 @@ pub enum Code {
     ImpliedPrerequisite,
     /// A `supports` edge between KCs already joined by a `requires` path.
     RedundantSupports,
+    /// A slot's secondary KC requires a primary KC of the same slot.
+    SecondaryDownstream,
 }
 
 impl Code {
     /// Every check; tests require a negative fixture named after each one.
-    pub const ALL: [Self; 34] = [
+    pub const ALL: [Self; 35] = [
         Self::Nickel,
         Self::Schema,
         Self::DuplicateId,
@@ -111,6 +113,7 @@ impl Code {
         Self::OrphanReview,
         Self::ImpliedPrerequisite,
         Self::RedundantSupports,
+        Self::SecondaryDownstream,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -149,6 +152,7 @@ impl Code {
             Self::OrphanReview => "orphan-review",
             Self::ImpliedPrerequisite => "implied-prerequisite",
             Self::RedundantSupports => "redundant-supports",
+            Self::SecondaryDownstream => "secondary-downstream",
         }
     }
 }

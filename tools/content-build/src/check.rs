@@ -544,3 +544,36 @@ pub fn redundant_supports(
         ));
     }
 }
+
+/// A slot whose secondary KC requires one of its primary KCs: the item
+/// teaches the primary but needs a KC the planner gives after it (docs/02,
+/// «Проверки при сборке»). Every item, whatever its status. `closure` is the
+/// bundle's.
+pub fn secondary_downstream(
+    c: &Content,
+    closure: &BTreeMap<KcId, Vec<Required>>,
+    diags: &mut Vec<Diagnostic>,
+) {
+    for it in &c.items {
+        let item = &it.value;
+        for (j, slot) in item.body.slots().iter().enumerate() {
+            let role = |r| slot.kcs.iter().filter(move |k| k.role == r).map(|k| &k.kc);
+            for s in role(KcRole::Secondary) {
+                let required = closure.get(s).map_or(&[][..], Vec::as_slice);
+                for p in role(KcRole::Primary) {
+                    if !required.iter().any(|r| &r.kc == p) {
+                        continue;
+                    }
+                    diags.push(diag(
+                        Code::SecondaryDownstream,
+                        &it.file,
+                        format!("item `{}`", item.id),
+                        format!(
+                            "slots[{j}]: secondary KC `{s}` requires primary KC `{p}`: swap their roles or drop `{s}` from the slot"
+                        ),
+                    ));
+                }
+            }
+        }
+    }
+}

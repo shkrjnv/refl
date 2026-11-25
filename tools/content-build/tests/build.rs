@@ -165,6 +165,30 @@ fn unknown_reference_covers_confusions() {
 }
 
 #[test]
+fn secondary_downstream_names_item_slot_and_kcs() {
+    let out = run(&fixtures().join("secondary-downstream"));
+    let [d] = out.report.diagnostics.as_slice() else {
+        panic!("expected one diagnostic:\n{}", out.report);
+    };
+    assert_eq!(d.code, Code::SecondaryDownstream);
+    assert_eq!(d.subject.as_deref(), Some("item `it.gap`"));
+    assert!(
+        d.message
+            .contains("slots[0]: secondary KC `en.k.b` requires primary KC `en.k.a`"),
+        "{d}"
+    );
+}
+
+/// A prerequisite of the primary, or a KC with no path to it, may be
+/// secondary.
+#[test]
+fn upstream_and_unrelated_secondaries_pass() {
+    let out = run(&fixtures().join("secondary-upstream"));
+    assert!(out.report.diagnostics.is_empty(), "{}", out.report);
+    assert!(out.bundle.is_some());
+}
+
+#[test]
 fn witnesses_are_shortest_examples() {
     let out = run(&fixtures().join("accepted-matches-error"));
     let msg = &out.report.diagnostics[0].message;

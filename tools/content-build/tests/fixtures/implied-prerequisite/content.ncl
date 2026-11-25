@@ -1,13 +1,14 @@
 # Every session-eligible item of live KC k.a has k.b as a secondary KC, and
-# k.a does not require k.b (the base graph has the opposite edge, k.b requires
-# k.a). reviews.lock marks everything reviewed, so the items are session-
-# eligible. Fails with `implied-prerequisite` only.
+# k.a does not require k.b. The base edge k.b requires k.a is left out: with
+# it, k.b would be downstream of k.a, which is `secondary-downstream`.
+# reviews.lock marks everything reviewed, so the items are session-eligible.
+# Fails with `implied-prerequisite` only.
 let b = import "../lib/base.ncl" in
 let a = b.live_kc "en.k.a" in
 {
   subjects = b.subjects,
   kcs = b.kcs,
-  edges = b.edges,
+  edges = [],
   misconceptions = b.misconceptions,
   instructions = b.instructions,
   explanations = b.explanations @ a.explanations,
