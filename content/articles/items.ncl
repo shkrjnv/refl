@@ -6,10 +6,14 @@ let s = import "../lib/schema.ncl" in
 let b = import "lib/build.ncl" in
 let vowel = fun noun => b.article_of noun == "an" in
 
-# KCs of a first-mention slot: a vowel noun also needs the a/an-by-sound rule.
+# KCs of a first-mention slot. A vowel noun also needs the a/an-by-sound rule,
+# which requires first mention, so it is that slot's primary KC: a secondary
+# KC must not be downstream of the primary (docs/02, `secondary-downstream`).
 let kcs_of = fun noun =>
-  [b.primary b.kc.first, b.secondary b.kc.countability]
-  @ (if vowel noun then [b.secondary b.kc.a_an] else [])
+  if vowel noun then
+    [b.primary b.kc.a_an, b.secondary b.kc.first, b.secondary b.kc.countability]
+  else
+    [b.primary b.kc.first, b.secondary b.kc.countability]
 in
 let why_of = fun noun =>
   let art = b.article_of noun in
@@ -34,6 +38,7 @@ let first_hint = {
 # Choice: pick the article for a thing mentioned for the first time.
 # Version 2: `the` is marked as the second-mention answer; the wrong a/an
 # before a vowel sound is diagnosed; vowel nouns need a-an-sound.
+# Version 3 of the vowel nouns: a-an-sound primary, first mention secondary.
 let choice = fun ver noun =>
   let art = b.article_of noun in
   b.item "choice" {
@@ -64,7 +69,8 @@ in
 
 # Gap fill with the base form: the learner writes the article and the noun.
 # Version 2 of the first members: the article instruction, `the` marked as
-# the second-mention answer, `a` before a vowel sound diagnosed.
+# the second-mention answer, `a` before a vowel sound diagnosed. Version 3 of
+# the vowel nouns: a-an-sound primary, first mention secondary.
 let gap = fun fam level frame ver noun =>
   let art = b.article_of noun in
   b.item "gap_fill" {
@@ -94,8 +100,11 @@ let look = gap "art.fm.gap" 2 (fun noun => "Look! There is ___ (%{noun}) in the 
 let bought = gap "art.fm.story" 3 (fun noun => "Yesterday I bought ___ (%{noun}). The %{noun} was very cheap.") in
 {
   items =
-    (std.array.map (choice 2) ["cat", "dog", "umbrella", "egg"])
+    (std.array.map (choice 2) ["cat", "dog"])
+    @ (std.array.map (choice 3) ["umbrella", "egg"])
     @ [choice 1 "bike"]
-    @ (std.array.map (look 2) ["bird", "owl", "ball", "apple"])
-    @ (std.array.map (bought 2) ["umbrella", "bike", "hat"]),
+    @ (std.array.map (look 2) ["bird", "ball"])
+    @ (std.array.map (look 3) ["owl", "apple"])
+    @ (std.array.map (bought 2) ["bike", "hat"])
+    @ [bought 3 "umbrella"],
 } | s.File
