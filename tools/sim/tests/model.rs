@@ -619,17 +619,28 @@ fn process_noise_widens_the_belief_before_the_update_and_changes_the_version() {
         },
     };
     let v11 = KnowledgeModel::default();
-    assert!(v11.version().starts_with("knowledge-v1.1+"));
+    assert!(v11.version().starts_with("knowledge-v1.2+"));
     assert_ne!(v1.version(), v11.version());
     let first = ev(at(0, 0), 1, chosen(0, 0));
+    let shown = Timestamp(at(0, 0).0 - 8_000);
     let run = |m: &KnowledgeModel| {
         let mut s = m.init(&Profile::default());
+        let before = m
+            .predict(&s, &b, &item_ref(0, 0), 0, shown)
+            .expect("in the bundle");
         let applied = m.apply(&mut s, &first, &FoldCtx::new(&b)).unwrap();
-        (s, applied)
+        (s, before, applied)
     };
-    let ((s1, a1), (s11, a11)) = (run(&v1), run(&v11));
-    // The prediction is made before q is added.
-    assert_eq!(a1, a11);
+    let ((s1, _, _), (s11, before, applied)) = (run(&v1), run(&v11));
+    // The fold's prediction is `predict`'s, q included, and the update then
+    // starts from the same σ² (prior + q), so the new σ² is below it.
+    let Applied::Answer(outcome) = applied else {
+        panic!("an answer");
+    };
+    assert_eq!(outcome.predicted.to_bits(), before.to_bits());
     let kc = kc_id(0);
     assert!(s11.kcs[&kc].var > s1.kcs[&kc].var);
+    // A wider belief predicts closer to the middle than the same belief.
+    let plain = v1.predict(&v1.init(&Profile::default()), &b, &item_ref(0, 0), 0, shown);
+    assert_ne!(plain, Some(before));
 }

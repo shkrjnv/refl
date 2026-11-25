@@ -2,7 +2,7 @@
 
 Measurement only. Neither `core/` nor `docs/` changed. Labels: **[code]** read in the source, **[run]** measured by `m1`, **[docs]** the spec, **[hyp]** not verified.
 
-Note (M2): this report is the M1 measurement of model v1, kept as written. After M2 the core default is model v1.1; `m1` pins v1 (q = 0) for its baseline and puts q after the prediction, as the core does, so the "q per answer" rows of the current `output.txt` differ slightly from the tables below (they placed q before the prediction), and `output.txt` has a new section «v1 against v1.1».
+Note (M2): this report is the M1 measurement of model v1, kept as written. After M2 the core default is model v1.1; `m1` pins v1 (q = 0) for its baseline. The core now (model 1.2) applies q at the start of processing and runs the direct update at the moment the task was shown, like the replica; so the current `output.txt` differs from the tables below in the third digit (e.g. 61,295 answers in the logs instead of 61,313), and has a new section «v1 against v1.1».
 
 Reproduce: `nix develop -c just m1` (about 1 minute) writes `output.txt` next to this file. Every number below is from it.
 

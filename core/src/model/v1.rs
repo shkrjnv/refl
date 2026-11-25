@@ -1,6 +1,7 @@
-//! Learner model version 1.1 (`docs/03-layer2-learner-model.md`; the v1
-//! readings are in «Уточнения версии 1»; 1.1 adds the process noise q):
-//! knowledge μ/σ with the observation model, FSRS-6 memory, automaticity, misconceptions, the rapid-guess
+//! Learner model version 1.2 (`docs/03-layer2-learner-model.md`; the v1
+//! readings are in «Уточнения версии 1»; 1.1 added the process noise q, 1.2
+//! applies it before the prediction): knowledge μ/σ with the observation
+//! model, FSRS-6 memory, automaticity, misconceptions, the rapid-guess
 //! filter and propagation of success down the `requires` graph.
 
 use alloc::collections::{BTreeMap, BTreeSet};
@@ -51,8 +52,8 @@ pub struct Params {
     pub delta: f64,
     /// η: growth of σ² per day without practice.
     pub eta: f64,
-    /// q: process noise, σ² added to every slot KC before each knowledge
-    /// update (version 1.1).
+    /// q: process noise, σ² added to every slot KC at the start of
+    /// processing an answer, before the prediction (versions 1.1–1.2).
     pub process_noise: f64,
     /// λ: smoothing of τ.
     pub lambda: f64,
@@ -285,6 +286,23 @@ impl KnowledgeModel {
         )
     }
 
+    /// The belief of `kc` at `now` widened by `noise`: the σ² of an answer
+    /// not yet processed, whose process noise is not in the state yet.
+    fn noisy_belief(
+        &self,
+        s: &State,
+        bundle: &Bundle,
+        kc: &KcId,
+        now: Timestamp,
+        noise: f64,
+    ) -> Option<Belief> {
+        let mut b = self.belief(s, bundle, kc, now)?;
+        b.var += noise;
+        Some(b)
+    }
+
+    /// `noise` is `q` for a state where the answer's process noise is not
+    /// applied yet, and 0 after the fold applied it.
     fn predict_slot(
         &self,
         s: &State,
@@ -292,13 +310,14 @@ impl KnowledgeModel {
         item: &ItemProjection,
         slot_index: u16,
         now: Timestamp,
+        noise: f64,
     ) -> Option<f64> {
         let slot = item.slots.get(usize::from(slot_index))?;
         let b = difficulty(item);
         let terms = slot
             .kcs
             .iter()
-            .map(|k| Some(self.term(self.belief(s, bundle, &k.kc, now)?, b)))
+            .map(|k| Some(self.term(self.noisy_belief(s, bundle, &k.kc, now, noise)?, b)))
             .collect::<Option<Vec<_>>>()?;
         Some(math::predict(
             item.guessing(slot_index),
@@ -325,9 +344,10 @@ impl KnowledgeModel {
         let kcs = &item.slots.get(usize::from(slot))?.kcs;
         let index = kcs.iter().position(|k| &k.kc == kc)?;
         let b = difficulty(item);
+        let noise = self.params.process_noise;
         let terms = kcs
             .iter()
-            .map(|k| Some(self.term(self.belief(s, bundle, &k.kc, now)?, b)))
+            .map(|k| Some(self.term(self.noisy_belief(s, bundle, &k.kc, now, noise)?, b)))
             .collect::<Option<Vec<_>>>()?;
         // The information does not depend on the outcome.
         let evidence = math::evidence(item.guessing(slot), self.params.slip, true, &terms);
@@ -506,9 +526,9 @@ impl KnowledgeModel {
             s.unresolved += 1;
             return Applied::Unresolved;
         };
-        let (Some(slot), Some(predicted)) = (
+        let (Some(slot), Some(predicted_noisy)) = (
             item.slots.get(usize::from(a.slot)),
-            self.predict_slot(s, bundle, item, a.slot, shown),
+            self.predict_slot(s, bundle, item, a.slot, shown, p.process_noise),
         ) else {
             s.unresolved += 1;
             return Applied::Unresolved;
@@ -527,6 +547,21 @@ impl KnowledgeModel {
             && expected_ms > 0.0
             && latency < p.rapid_share * expected_ms
             && (!item.typed_input() || a.latency_ms < p.rapid_typed_ms);
+        // Process noise: the skill changes while the learner learns. σ²
+        // grows by η·Δt + q at the start of processing, so the prediction
+        // and the update below use the same σ². A rapid guess updates
+        // nothing and only reports the prediction as `predict` made it.
+        let predicted = if rapid {
+            predicted_noisy
+        } else {
+            for k in &slot.kcs {
+                if let Some(state) = self.touch(s, bundle, &k.kc, shown) {
+                    state.var += p.process_noise;
+                }
+            }
+            self.predict_slot(s, bundle, item, a.slot, shown, 0.0)
+                .expect("the slot resolved above")
+        };
         let outcome = AnswerOutcome {
             predicted,
             correct,
@@ -574,14 +609,8 @@ impl KnowledgeModel {
             })
             .collect();
         let b = difficulty(item);
-        // Process noise: the skill changes while the learner learns, so the
-        // belief widens before the answer is weighed. The prediction above
-        // was made without it.
-        for (kc, _) in &weighted {
-            if let Some(k) = self.touch(s, bundle, kc, t) {
-                k.var += p.process_noise;
-            }
-        }
+        // The slot's KCs were widened at `shown` above; the update uses the
+        // same moment, so its σ² is the one the prediction used.
         self.observe(
             s,
             bundle,
@@ -593,7 +622,7 @@ impl KnowledgeModel {
                 correct,
                 direct: true,
             },
-            t,
+            shown,
         );
         let mut touched: BTreeSet<KcId> = weighted.iter().map(|(k, _)| k.clone()).collect();
         // Spelling: a typo fails the subject's spelling KC with the primary
@@ -745,7 +774,7 @@ impl LearnerModel for KnowledgeModel {
             let _ = write!(s, "{b:02x}");
             s
         });
-        format!("knowledge-v1.1+{short}")
+        format!("knowledge-v1.2+{short}")
     }
 
     fn init(&self, profile: &Profile) -> State {
@@ -760,7 +789,8 @@ impl LearnerModel for KnowledgeModel {
         slot: u16,
         now: Timestamp,
     ) -> Option<f64> {
-        self.predict_slot(s, bundle, bundle.projection(item)?, slot, now)
+        let noise = self.params.process_noise;
+        self.predict_slot(s, bundle, bundle.projection(item)?, slot, now, noise)
     }
 
     fn apply(

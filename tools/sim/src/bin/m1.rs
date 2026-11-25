@@ -571,11 +571,24 @@ fn replay(
                     (KcRole::Secondary, Secondary::Oracle) => fixed.push(true_star(&k.kc)),
                 }
             }
+            // Process noise comes first, at display time, as in the core: an
+            // answer that updates widens its KCs; one that does not still
+            // predicts with q.
+            let update = !rapid && (!v.typed_only || item.typed_input());
+            let mut noise = v.q_answer;
+            if update && v.q_answer > 0.0 {
+                for (kc, _) in &weighted {
+                    if let Some(bel) = r.touch(kc, shown) {
+                        bel.var += v.q_answer;
+                    }
+                }
+                noise = 0.0;
+            }
             // Prediction at display time, base g and s.
             let mut terms = Vec::new();
             for (kc, _) in &weighted {
                 let (mu, var) = r.belief(kc, shown).expect("in the bundle");
-                terms.push(r.term(&state, kc, mu, var, b, shown));
+                terms.push(r.term(&state, kc, mu, var + noise, b, shown));
             }
             for p_star in &fixed {
                 terms.push(KcTerm {
@@ -587,7 +600,6 @@ fn replay(
 
             let mut touched: BTreeSet<KcId> = BTreeSet::new();
             let mut info: Vec<(KcId, f64)> = Vec::new();
-            let update = !rapid && (!v.typed_only || item.typed_input());
             if !rapid {
                 let y = if correct { 1.0 } else { 0.0 };
                 let q = predicted.clamp(1e-9, 1.0 - 1e-9);
@@ -603,15 +615,8 @@ fn replay(
                 if !correct && a.confidence == Some(Confidence::Sure) {
                     slip /= 2.0;
                 }
-                // Process noise comes after the prediction, as in the core.
-                if v.q_answer > 0.0 {
-                    for (kc, _) in &weighted {
-                        if let Some(bel) = r.touch(kc, t) {
-                            bel.var += v.q_answer;
-                        }
-                    }
-                }
-                info = r.observe(&state, &weighted, &fixed, b, g, slip, correct, t);
+                // The direct update runs at display time, like the core's.
+                info = r.observe(&state, &weighted, &fixed, b, g, slip, correct, shown);
                 touched.extend(weighted.iter().map(|(k, _)| k.clone()));
                 if correct && v.rho > 0.0 {
                     let mut pseudo: BTreeMap<&KcId, f64> = BTreeMap::new();
