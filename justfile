@@ -54,7 +54,7 @@ plan-speed:
 cohort learners="200" days="30" seed="1": content
     cargo run --locked --release --quiet -p refl-sim --bin cohort -- target/bundle.json {{learners}} {{days}} {{seed}}
 
-# K5 cohort benchmark v1 (tools/sim/bench/v1): the frozen bundle and seeds must give the recorded report byte for byte
+# K5 cohort benchmark v1 (tools/sim/bench/v1), frozen by the tag bench-v1: the report is identical there; on later commits a diff is the effect of a planner or model change
 bench-v1:
     cargo run --locked --release --quiet -p refl-sim --bin cohort -- content/bench/v1/bundle.json $(cat tools/sim/bench/v1/args) | diff -u tools/sim/bench/v1/expected.txt - && echo "benchmark v1: identical to tools/sim/bench/v1/expected.txt"
 
