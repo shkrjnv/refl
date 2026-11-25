@@ -1,0 +1,36 @@
+# P1b measurement: content/bench/v3/bundle.json, 200 learners, 30 days, seed 2
+
+model knowledge-v1.3+14ccb56428ee1941, planner session-prototype-4+c896293765c21793, budget 25 minutes
+
+### ours
+
+| | days 1-5 | days 6-30 |
+| --- | --: | --: |
+| minutes per session, median [p25-p75] | 5.3 [3.6-7.5], mean 5.8 | 7.3 [5.4-9.1], mean 7.3 |
+| answers per session, median [p25-p75] | 15.0 [15.0-26.0], mean 22.2 | 42.0 [31.0-51.0], mean 41.8 |
+| sessions by end reason | items_exhausted 86%, kc_cap 5%, kc_deferred 3%, kc_mastered 0%, reviews_done 6% | items_exhausted 61%, kc_cap 31%, kc_deferred 1%, kc_mastered 5%, nothing_due 0%, reviews_done 2% |
+
+- topics mastered per learner: ever 1.58, at the end 1.54
+- answers to mastery, median [p25-p75]: 44 [31-63] over 317 (learner, topic) pairs
+- calendar days to mastery, median [p25-p75]: 3 [2-5]
+- false mastery: 14.5% (46 of 317)
+- mastered on the UTC day of the first answer: 1.3% (4 of 317); false mastery there 50.0% (2 of 4), on later days 14.1% (44 of 313)
+- truly known topics per learner: start 0.04, end 4.67; gain 4.63 in 3.52 active hours = 1.32 per active hour
+- answers per learner 1157; validator violations {}
+
+### only FSRS
+
+| | days 1-5 | days 6-30 |
+| --- | --: | --: |
+| minutes per session, median [p25-p75] | 3.1 [2.6-4.0], mean 3.5 | 2.3 [2.1-2.6], mean 2.4 |
+| answers per session, median [p25-p75] | 15.0 [15.0-15.0], mean 15.0 | 15.0 [15.0-15.0], mean 15.0 |
+| sessions by end reason | items_exhausted 100% | items_exhausted 100% |
+
+- topics mastered per learner: ever 0.01, at the end 0.01
+- answers to mastery, median [p25-p75]: 37 [37-37] over 1 (learner, topic) pairs
+- calendar days to mastery, median [p25-p75]: 2 [2-2]
+- false mastery: 0.0% (0 of 1)
+- mastered on the UTC day of the first answer: 0.0% (0 of 1); false mastery there 0.0% (0 of 0), on later days 0.0% (0 of 1)
+- truly known topics per learner: start 0.04, end 1.03; gain 1.00 in 1.29 active hours = 0.77 per active hour
+- answers per learner 449; validator violations {}
+

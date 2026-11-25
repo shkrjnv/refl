@@ -29,8 +29,8 @@
 use std::collections::BTreeMap;
 use std::process::ExitCode;
 
-use refl_core::bundle::Bundle;
-use refl_core::event::{Decoded, EventPayload};
+use refl_core::bundle::{Bundle, KcStatus};
+use refl_core::event::{AnswerEvent, Decoded, EventPayload};
 use refl_core::ids::KcId;
 use refl_core::item::KcRole;
 use refl_core::model::{Applied, Families, Fluency, FoldCtx, KnowledgeModel, LearnerModel, State};
@@ -173,6 +173,48 @@ fn missing(planner: &Planner<'_>, bundle: &Bundle, s: &State, kc: &KcId, t: Time
     }
 }
 
+/// Why fluency left correct answers out, and what blocks the KCs never
+/// mastered.
+#[derive(Default)]
+struct Coverage {
+    /// Correct, non-rapid answers by the first fluency rule that excludes
+    /// them, in the order of docs/03; «counted» for the rest.
+    reasons: BTreeMap<&'static str, u32>,
+    /// (learner, KC) pairs never mastered by the end, by the conditions
+    /// false at the last event, and their counted answers.
+    unmastered: BTreeMap<String, (u32, u32)>,
+}
+
+/// The first fluency rule that leaves out a correct, non-rapid answer `a`,
+/// read from the state before it (docs/03, «Учтённые ответы»).
+fn exclusion(
+    families: &Families,
+    bundle: &Bundle,
+    before: &State,
+    a: &AnswerEvent,
+    shown: Timestamp,
+) -> &'static str {
+    let instruction = bundle
+        .projection(&a.item)
+        .and_then(|p| families.get(&p.family))
+        .map(|f| &f.instruction);
+    if a.attempt > 1 || a.hints > 0 {
+        "attempt or hint"
+    } else if a.hidden_ms != Some(0) {
+        "page hidden"
+    } else if instruction.is_none() || before.last_instruction.as_ref() != instruction {
+        "first after a change of instruction"
+    } else if before
+        .seen
+        .get(&a.item.id)
+        .is_some_and(|t| shown.0 - t.0 < 14 * DAY_MS)
+    {
+        "item seen within 14 days"
+    } else {
+        "counted"
+    }
+}
+
 fn run(
     model: &KnowledgeModel,
     bundle: &Bundle,
@@ -180,6 +222,7 @@ fn run(
     learners: usize,
     days: u32,
     seed: u64,
+    coverage: &mut Coverage,
 ) -> Vec<Pair> {
     let speed = ReadingSpeed::default();
     let planner = Planner::new(model, bundle, params, &speed);
@@ -230,6 +273,13 @@ fn run(
             let t = answer.map_or(e.client_ts, |(a, _)| {
                 Timestamp(e.client_ts.0 - i64::from(a.latency_ms))
             });
+            if let Some((a, o)) = answer
+                && o.correct
+                && !o.rapid
+            {
+                let reason = exclusion(&families, bundle, &before, a, t);
+                *coverage.reasons.entry(reason).or_insert(0) += 1;
+            }
             for (kc, k) in &state.kcs {
                 if spelling.contains(&kc) {
                     continue;
@@ -296,6 +346,19 @@ fn run(
         // The track folds a few events it does not log, so `position` may
         // differ; the KC states must not.
         assert_eq!(state.kcs, track.state.kcs, "the refold equals the session");
+        let end = track.now();
+        for e in &bundle.content.kcs {
+            let kc = &e.kc.id;
+            if e.status != KcStatus::Live || state.kcs.get(kc).is_some_and(|k| k.ever_mastered) {
+                continue;
+            }
+            let cell = coverage
+                .unmastered
+                .entry(missing(&planner, bundle, &state, kc, end))
+                .or_insert((0, 0));
+            cell.0 += 1;
+            cell.1 += state.kcs.get(kc).map_or(0, |k| k.counted);
+        }
     }
     pairs
 }
@@ -533,7 +596,42 @@ fn main() -> ExitCode {
         model.version(),
         planner.version()
     );
-    let pairs = run(&model, &bundle, &params, learners, days, seed);
+    let mut coverage = Coverage::default();
+    let pairs = run(
+        &model,
+        &bundle,
+        &params,
+        learners,
+        days,
+        seed,
+        &mut coverage,
+    );
     print(&bundle, &pairs);
+
+    println!("\n## Correct answers and fluency\n");
+    println!(
+        "Correct, non-rapid answers by the first fluency rule that leaves them out (docs/03, «Учтённые ответы»), read from the state before each answer.\n"
+    );
+    println!("| rule | answers | share |");
+    println!("| --- | --: | --: |");
+    let total: u32 = coverage.reasons.values().sum();
+    for (reason, n) in &coverage.reasons {
+        println!(
+            "| {reason} | {n} | {:.1}% |",
+            100.0 * f64::from(*n) / f64::from(total.max(1))
+        );
+    }
+    println!("\n## Live KCs never mastered by the end\n");
+    println!(
+        "(learner, KC) pairs by the mastery conditions false after the last answer, with their counted answers.\n"
+    );
+    println!("| false conditions | pairs | counted answers, mean |");
+    println!("| --- | --: | --: |");
+    for (label, (n, counted)) in &coverage.unmastered {
+        println!(
+            "| {label} | {n} | {:.1} |",
+            f64::from(*counted) / f64::from((*n).max(1))
+        );
+    }
     ExitCode::SUCCESS
 }

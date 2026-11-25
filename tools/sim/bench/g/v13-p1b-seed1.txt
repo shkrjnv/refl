@@ -1,0 +1,36 @@
+# P1b measurement: content/bench/v3/bundle.json, 200 learners, 30 days, seed 1
+
+model knowledge-v1.3+14ccb56428ee1941, planner session-prototype-4+c896293765c21793, budget 25 minutes
+
+### ours
+
+| | days 1-5 | days 6-30 |
+| --- | --: | --: |
+| minutes per session, median [p25-p75] | 5.3 [3.6-7.6], mean 5.8 | 7.6 [5.8-9.4], mean 7.7 |
+| answers per session, median [p25-p75] | 15.0 [15.0-26.0], mean 22.2 | 48.0 [37.0-52.0], mean 44.6 |
+| sessions by end reason | items_exhausted 88%, kc_cap 4%, kc_deferred 2%, kc_mastered 0%, reviews_done 5% | items_exhausted 66%, kc_cap 28%, kc_deferred 1%, kc_mastered 4%, nothing_due 0%, reviews_done 1% |
+
+- topics mastered per learner: ever 1.38, at the end 1.34
+- answers to mastery, median [p25-p75]: 43 [32-57] over 276 (learner, topic) pairs
+- calendar days to mastery, median [p25-p75]: 3 [2-5]
+- false mastery: 12.3% (34 of 276)
+- mastered on the UTC day of the first answer: 0.0% (0 of 276); false mastery there 0.0% (0 of 0), on later days 12.3% (34 of 276)
+- truly known topics per learner: start 0.03, end 4.69; gain 4.67 in 3.67 active hours = 1.27 per active hour
+- answers per learner 1226; validator violations {}
+
+### only FSRS
+
+| | days 1-5 | days 6-30 |
+| --- | --: | --: |
+| minutes per session, median [p25-p75] | 3.1 [2.6-3.9], mean 3.4 | 2.3 [2.1-2.6], mean 2.4 |
+| answers per session, median [p25-p75] | 15.0 [15.0-15.0], mean 15.0 | 15.0 [15.0-15.0], mean 15.0 |
+| sessions by end reason | items_exhausted 100% | items_exhausted 100% |
+
+- topics mastered per learner: ever 0.01, at the end 0.01
+- answers to mastery, median [p25-p75]: 38 [38-41] over 2 (learner, topic) pairs
+- calendar days to mastery, median [p25-p75]: 2 [2-2]
+- false mastery: 0.0% (0 of 2)
+- mastered on the UTC day of the first answer: 0.0% (0 of 2); false mastery there 0.0% (0 of 0), on later days 0.0% (0 of 2)
+- truly known topics per learner: start 0.03, end 1.02; gain 1.00 in 1.27 active hours = 0.78 per active hour
+- answers per learner 449; validator violations {}
+
