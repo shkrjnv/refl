@@ -70,12 +70,14 @@ in
 # Gap fill with the base form: the learner writes the article and the noun.
 # Version 2 of the first members: the article instruction, `the` marked as
 # the second-mention answer, `a` before a vowel sound diagnosed. Version 3 of
-# the vowel nouns: a-an-sound primary, first mention secondary.
-let gap = fun fam level frame ver noun =>
+# the vowel nouns: a-an-sound primary, first mention secondary. `group` is
+# the review group (lib/build.ncl).
+let gap = fun group fam level frame ver noun =>
   let art = b.article_of noun in
   b.item "gap_fill" {
     id = "%{fam}.%{noun}",
     version = ver,
+    review_group = group,
     family = "en.%{fam}",
     instruction = "instr.gap-fill-article",
     difficulty = level,
@@ -96,15 +98,24 @@ let gap = fun fam level frame ver noun =>
     },
   }
 in
-let look = gap "art.fm.gap" 2 (fun noun => "Look! There is ___ (%{noun}) in the garden.") in
-let bought = gap "art.fm.story" 3 (fun noun => "Yesterday I bought ___ (%{noun}). The %{noun} was very cheap.") in
+let look = fun group => gap group "art.fm.gap" 2 (fun noun => "Look! There is ___ (%{noun}) in the garden.") in
+let bought = fun group => gap group "art.fm.story" 3 (fun noun => "Yesterday I bought ___ (%{noun}). The %{noun} was very cheap.") in
+let yard = fun group => gap group "art.fm.yard" 2 (fun noun => "My grandmother has ___ (%{noun}) in her yard.") in
+
+# The tasks of `articles` were reviewed together; the tasks added later are
+# reviewed as `articles-2`. Their nouns start with a consonant letter and
+# sound, so the answer never depends on a or an.
+let first = "articles" in
+let added = "articles-2" in
 {
   items =
     (std.array.map (choice 2) ["cat", "dog"])
     @ (std.array.map (choice 3) ["umbrella", "egg"])
     @ [choice 1 "bike"]
-    @ (std.array.map (look 2) ["bird", "ball"])
-    @ (std.array.map (look 3) ["owl", "apple"])
-    @ (std.array.map (bought 2) ["bike", "hat"])
-    @ [bought 3 "umbrella"],
+    @ (std.array.map (look first 2) ["bird", "ball"])
+    @ (std.array.map (look first 3) ["owl", "apple"])
+    @ [look added 1 "frog"]
+    @ (std.array.map (bought first 2) ["bike", "hat"])
+    @ [bought first 3 "umbrella", bought added 1 "phone"]
+    @ (std.array.map (yard added 1) ["cow", "goat"]),
 } | s.File

@@ -39,7 +39,9 @@ let task_review = {} in
     if std.array.elem (std.string.substring 0 1 noun) ["a", "e", "i", "o", "u"] then "an" else "a",
 
   # One live item with one slot. `r` holds id, version, family, instruction,
-  # difficulty, expected_time, stimulus and slot.
+  # difficulty, expected_time, stimulus and slot, and optionally
+  # review_group (default `articles`). Tasks added after a group was
+  # reviewed go into a new group: joining it would change its hash.
   item = fun kind r =>
     {
       id = r.id,
@@ -53,7 +55,7 @@ let task_review = {} in
       status = "live",
       review = task_review,
       # One review of all tasks' why and hint per language: one hash.
-      review_group = "articles",
+      review_group = if std.record.has_field "review_group" r then r.review_group else "articles",
       stimulus = { text = r.stimulus },
       slots = [r.slot],
     },
