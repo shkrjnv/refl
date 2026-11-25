@@ -33,7 +33,7 @@ pub use validate::Violation;
 pub use values::{LearnValue, ReviewValue};
 
 /// Version of the session rules; part of every `plan_issued`.
-const PLANNER_NAME: &str = "session-prototype-2";
+const PLANNER_NAME: &str = "session-prototype-3";
 
 /// Parameters of the prototype session builder with their starting values
 /// (`docs/04-placement-planner.md`, «Сборка сессии в прототипе»). They are
@@ -72,8 +72,12 @@ pub struct Params {
     pub kc_cap: u32,
     /// Learning KCs a session may have: the first and one opened by rule 6.
     pub learn_max: usize,
-    /// At most this many steps in a row on one KC after the block.
+    /// At most this many steps in a row on one KC after the block, while
+    /// anything else can get a step.
     pub max_run: usize,
+    /// Interleaved steps a learning KC gets in a session when it goes on
+    /// alone, nothing else being left.
+    pub alone_cap: u32,
     /// p* of the block, the interleaved part and the final, a prerequisite check.
     pub p_block: f64,
     pub p_interleaved: f64,
@@ -114,6 +118,7 @@ impl Default for Params {
             kc_cap: 12,
             learn_max: 2,
             max_run: 3,
+            alone_cap: 12,
             p_block: 0.80,
             p_interleaved: 0.70,
             p_prerequisite: 0.55,
@@ -299,9 +304,12 @@ pub enum End {
     NothingDue,
     /// No learning KC, and the reviews are done.
     ReviewsDone,
-    /// The learning KCs' blocks are closed (or they are mastered), nothing
-    /// is left to interleave, and no second learning KC can be opened.
-    NoPartner,
+    /// The learning KC went on alone and had its interleaved steps of the
+    /// session; nothing else is left and no second learning KC can open.
+    KcCap,
+    /// The learning KCs were mastered in the session; nothing else is left
+    /// and no second learning KC can open.
+    KcMastered,
     /// The learning KC was deferred, or its Ready fell below the threshold.
     KcDeferred,
     /// The steps left have no unseen item.
@@ -314,7 +322,8 @@ impl End {
             Self::Budget => "budget",
             Self::NothingDue => "nothing_due",
             Self::ReviewsDone => "reviews_done",
-            Self::NoPartner => "no_partner",
+            Self::KcCap => "kc_cap",
+            Self::KcMastered => "kc_mastered",
             Self::KcDeferred => "kc_deferred",
             Self::ItemsExhausted => "items_exhausted",
         }
@@ -348,6 +357,16 @@ impl Plan {
     /// `kc` is a learning KC of this session.
     fn is_learn(&self, kc: &KcId) -> bool {
         self.learn.iter().any(|l| &l.kc == kc)
+    }
+
+    /// Interleaved steps done on `kc` in this session.
+    fn interleaved_done(&self, kc: &KcId) -> u32 {
+        let n = self
+            .done
+            .iter()
+            .filter(|d| d.step.phase == Phase::Interleaved && &d.step.kc == kc)
+            .count();
+        u32::try_from(n).unwrap_or(u32::MAX)
     }
 }
 

@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use super::build::answered_production;
 use super::{Phase, Plan, Planner, Step};
-use crate::ids::{ItemRef, KcId};
+use crate::ids::{ItemId, ItemRef, KcId};
 use crate::item::KcRole;
 use crate::model::State;
 use crate::model::derived::KcProgress;
@@ -30,8 +30,12 @@ pub enum Violation {
     ReviewDebt,
     /// A KC still practised without a production item.
     NoProduction,
-    /// More than the allowed steps in a row on one KC after the block.
+    /// More than the allowed steps in a row on one KC after the block,
+    /// while something else could get a step.
     RunTooLong,
+    /// A learning KC going on alone gets more interleaved steps in the
+    /// session than the cap.
+    KcCap,
     ReviewShare,
     FinalShare,
     /// A shown item that is not session-eligible, or a step ahead that
@@ -48,6 +52,7 @@ impl Violation {
             Self::ReviewDebt => "review-debt",
             Self::NoProduction => "no-production",
             Self::RunTooLong => "run-too-long",
+            Self::KcCap => "kc-cap",
             Self::ReviewShare => "review-share",
             Self::FinalShare => "final-share",
             Self::Ineligible => "ineligible",
@@ -130,18 +135,7 @@ impl Planner<'_> {
             out.push(Violation::NoProduction);
         }
 
-        let mut run: Option<(&KcId, usize)> = None;
-        for st in all_steps().filter(|st| st.phase.counts_in_runs()) {
-            let n = match run {
-                Some((kc, n)) if kc == &st.kc => n + 1,
-                _ => 1,
-            };
-            if n > p.max_run {
-                out.push(Violation::RunTooLong);
-                break;
-            }
-            run = Some((&st.kc, n));
-        }
+        out.extend(self.run_violation(plan, s, now));
 
         for (phase, share, violation) in [
             (Phase::Review, p.review_share, Violation::ReviewShare),
@@ -168,6 +162,86 @@ impl Planner<'_> {
         out.sort();
         out.dedup();
         out
+    }
+
+    /// The run rule, or the cap of a learning KC going on alone, on the
+    /// steps ahead: the run carries over from the done steps, which were
+    /// checked when they were planned.
+    fn run_violation(&self, plan: &Plan, s: &State, now: Timestamp) -> Option<Violation> {
+        let p = self.params;
+        let counted = |st: &&Step| st.phase.counts_in_runs();
+        if let Some(kc) = self.alone_kc(plan, s, now) {
+            let ahead = plan
+                .steps
+                .iter()
+                .filter(|st| st.phase == Phase::Interleaved && &st.kc == kc)
+                .count();
+            let ahead = u32::try_from(ahead).unwrap_or(u32::MAX);
+            return (ahead > 0 && plan.interleaved_done(kc).saturating_add(ahead) > p.alone_cap)
+                .then_some(Violation::KcCap);
+        }
+        let mut run: Option<(&KcId, usize)> = None;
+        for st in plan.done.iter().map(|d| &d.step).filter(counted) {
+            run = Some(match run {
+                Some((kc, n)) if kc == &st.kc => (kc, n + 1),
+                _ => (&st.kc, 1),
+            });
+        }
+        for st in plan.steps.iter().filter(counted) {
+            let n = match run {
+                Some((kc, n)) if kc == &st.kc => n + 1,
+                _ => 1,
+            };
+            if n > p.max_run {
+                return Some(Violation::RunTooLong);
+            }
+            run = Some((&st.kc, n));
+        }
+        None
+    }
+
+    /// The validator's own reading of a learning KC going on alone: the only
+    /// one still given (not deferred, Ready above the threshold, not
+    /// mastered) while no review is left and no contrast of the learning
+    /// KCs or started, not mastered start candidate has Ready above the
+    /// threshold and an unseen eligible item. Written from the plan, the
+    /// state and the content rather than with the planner's predicate, so
+    /// that the run rule is checked, not restated.
+    fn alone_kc<'p>(&self, plan: &'p Plan, s: &State, now: Timestamp) -> Option<&'p KcId> {
+        let p = self.params;
+        let mastered = |kc: &KcId| {
+            matches!(
+                self.progress(s, kc, now),
+                KcProgress::Mastered | KcProgress::LongTerm
+            )
+        };
+        let given: Vec<&KcId> = plan
+            .learn
+            .iter()
+            .map(|l| &l.kc)
+            .filter(|kc| {
+                !plan.deferred(kc) && self.ready(s, kc, now) >= p.ready_min && !mastered(kc)
+            })
+            .collect();
+        let [only] = given[..] else {
+            return None;
+        };
+        let shown: BTreeSet<&ItemId> = plan.shown().map(|(_, sh)| &sh.item.id).collect();
+        let review_left = plan
+            .reviews
+            .iter()
+            .any(|r| plan.shown().all(|(st, _)| st.kc != r.kc));
+        let contrasts = plan.learn.iter().flat_map(|l| &l.contrasts);
+        let started = plan
+            .candidates
+            .iter()
+            .filter(|kc| self.progress(s, kc, now) != KcProgress::NotStarted && !mastered(kc));
+        let partner = contrasts.chain(started).any(|kc| {
+            !plan.is_learn(kc)
+                && self.ready(s, kc, now) >= p.ready_min
+                && self.slots(kc).iter().any(|c| !shown.contains(&c.item.id))
+        });
+        (!review_left && !partner).then_some(only)
     }
 
     /// The item is the current, session-eligible version and the step's KC

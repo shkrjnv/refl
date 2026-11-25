@@ -8,10 +8,11 @@ use std::collections::BTreeMap;
 use proptest::prelude::*;
 use refl_core::bundle::{Bundle, KcStatus};
 use refl_core::event::{PlanAction, PlanScope};
-use refl_core::ids::{FamilyId, KcId, SubjectId};
+use refl_core::ids::{FamilyId, ItemId, KcId, SubjectId};
 use refl_core::model::{KnowledgeModel, Profile, State, replay};
 use refl_core::plan::{
-    Budget, End, History, Next, Params, Phase, Plan, Planner, ReadingSpeed, Step, Violation,
+    Adapted, Answered, Budget, End, History, Next, Outcome, Params, Phase, Plan, PlannedReview,
+    Planner, ReadingSpeed, Rule, SECOND_KC, Step, Violation,
 };
 use refl_core::value::{Finite, Lang, Seed, Timestamp};
 use refl_sim::cohort::{Learner, SessionReport, Track, session_ours};
@@ -190,10 +191,12 @@ fn a_closed_block_without_partners_opens_a_second_kc() {
         };
         assert_eq!(kc, &plan.learn[1].kc);
         assert_ne!(ev.seed, plan.seed);
-        // After the second block both learning KCs alternate.
+        // After the second block both learning KCs alternate while both are
+        // given; once one is deferred, the other goes on alone.
         let interleaved: Vec<&KcId> = plan
             .done
             .iter()
+            .take_while(|d| d.rule != Some(Rule::KcDeferred))
             .filter(|d| d.step.phase == Phase::Interleaved)
             .map(|d| &d.step.kc)
             .collect();
@@ -502,6 +505,225 @@ fn a_deferred_kc_returns_the_next_day() {
     assert_ne!(build(&history, later), Some(first.clone()));
     // The next day it is a candidate again.
     assert_eq!(build(&history, Timestamp(now.0 + DAY_MS)), Some(first));
+}
+
+/// The longest run of steps on `kc` counted by the run rule.
+fn longest_run(steps: &[&Step], kc: &KcId) -> usize {
+    let mut run = (0, 0);
+    for st in steps
+        .iter()
+        .filter(|st| !matches!(st.phase, Phase::Lesson | Phase::Block))
+    {
+        run.0 = if &st.kc == kc { run.0 + 1 } else { 0 };
+        run.1 = usize::max(run.1, run.0);
+    }
+    run.1
+}
+
+/// A fresh learner's first session on `b`, with the state and time after it.
+fn first_session(b: &Bundle, params: &Params, seed: u64) -> (SessionReport, State, Timestamp) {
+    let model = KnowledgeModel::default();
+    let mut track = Track::new(&model, b, refl_sim::T0, seed);
+    let mut learner = Learner::new(b, seed);
+    let r = session_ours(&mut track, params, &mut learner, Budget::TwentyFive);
+    let now = track.now();
+    (r, track.state, now)
+}
+
+/// P1b on a graph with one root: a fresh learner has nothing ready but the
+/// root, so after its block the root goes on alone, more than three in a
+/// row, and the session ends by mastery, the cap, items or time, never for
+/// lack of a partner.
+#[test]
+fn a_kc_without_partners_goes_on_after_its_block() {
+    // k1 requires k0, k2 requires k1, k3 requires k2.
+    let b = bundle(4, 40, &[]);
+    let params = Params::default();
+    let k0 = kc_id(0);
+    let mut alone = 0;
+    for seed in 0..20 {
+        let (r, ..) = first_session(&b, &params, seed);
+        assert!(r.violations.is_empty(), "seed {seed}: {:?}", r.violations);
+        let plan = r.plan.expect("a plan");
+        let end = plan.end.expect("an end");
+        assert!(
+            matches!(
+                end,
+                End::KcMastered | End::KcCap | End::ItemsExhausted | End::Budget | End::KcDeferred
+            ),
+            "seed {seed}: {end:?}"
+        );
+        let done: Vec<&Step> = plan.done.iter().map(|d| &d.step).collect();
+        if plan.learn.len() == 1 && longest_run(&done, &k0) > params.max_run {
+            alone += 1;
+        }
+        if end == End::KcCap {
+            let on_k0 = done
+                .iter()
+                .filter(|st| st.phase == Phase::Interleaved && st.kc == k0)
+                .count();
+            assert_eq!(on_k0, params.alone_cap as usize, "seed {seed}");
+        }
+    }
+    assert!(alone > 0, "the root never went on alone");
+}
+
+/// P1b: rule 6 is checked on every replan. A start candidate whose Ready is
+/// below the threshold while the root goes on alone does not open; once it
+/// reaches the threshold, it opens as the second learning KC, and
+/// three-in-a-row applies again, counting the run the root has built.
+#[test]
+fn a_candidate_ready_mid_run_opens_the_second_kc() {
+    let b = bundle(4, 40, &[]);
+    let params = Params::default();
+    let model = KnowledgeModel::default();
+    let planner = planner(&model, &b, &params);
+    let (k0, k1) = (kc_id(0), kc_id(1));
+    let (r, state, now) = (0..20)
+        .map(|seed| first_session(&b, &params, seed))
+        .find(|(r, ..)| r.end == Some("kc_cap"))
+        .expect("a session reaches the cap");
+    // The plan after five interleaved steps of the root alone, one more
+    // ahead; k1 was a start candidate (its Ready fell after the start).
+    let mut plan = r.plan.expect("a plan");
+    let cut = plan
+        .done
+        .iter()
+        .enumerate()
+        .filter(|(_, d)| d.step.phase == Phase::Interleaved)
+        .nth(4)
+        .map(|(i, _)| i + 1)
+        .expect("five interleaved steps");
+    plan.done.truncate(cut);
+    plan.steps = vec![step(&k0, Phase::Interleaved, false, 10)];
+    plan.end = None;
+    plan.candidates.push(k1.clone());
+    let shown: Vec<&ItemId> = plan
+        .done
+        .iter()
+        .filter_map(|d| d.shown.as_ref().map(|s| &s.item.id))
+        .collect();
+    let item = b.content.items_by_kc[&k0]
+        .primary
+        .iter()
+        .find(|i| !shown.contains(&&i.id))
+        .expect("an unseen item")
+        .clone();
+    let answer = Outcome::Answer(Answered {
+        item,
+        slot: 0,
+        correct: true,
+        rapid: false,
+        sure: false,
+    });
+    // The root's μ puts k1's Ready below or above 0.5; without production
+    // credit the root is not mastered either way.
+    let with_mu = |z: f64| {
+        let mut s = state.clone();
+        let k = s.kcs.get_mut(&k0).expect("the root was answered");
+        k.mu = 1.5 + z * libm::sqrt(k.var);
+        k.production.clear();
+        s
+    };
+    let second = |a: &Adapted| {
+        a.issued
+            .iter()
+            .any(|e| e.trigger.as_deref() == Some(SECOND_KC))
+    };
+
+    let low = with_mu(-2.0);
+    assert!(planner.ready(&low, &k1, now) < 0.5);
+    let a = planner.adapt(&low, &plan, &answer, now);
+    assert!(!second(&a));
+    assert_eq!(a.plan.learn.len(), 1);
+    let ahead: Vec<&Step> = a.plan.steps.iter().collect();
+    assert!(longest_run(&ahead, &k0) > params.max_run);
+    assert_eq!(planner.validate_plan(&a.plan, &low, now), []);
+
+    let high = with_mu(2.0);
+    assert!(planner.ready(&high, &k1, now) >= 0.5);
+    let a = planner.adapt(&high, &plan, &answer, now);
+    assert!(second(&a));
+    assert_eq!(a.plan.learn.len(), 2);
+    assert_eq!(a.plan.learn[1].kc, k1);
+    // The root has six in a row: after k1's lesson and block, k1 comes
+    // first, and no run ahead goes past three.
+    let first = a
+        .plan
+        .steps
+        .iter()
+        .find(|st| !matches!(st.phase, Phase::Lesson | Phase::Block))
+        .expect("interleaved steps ahead");
+    assert_eq!(first.kc, k1);
+    let ahead: Vec<&Step> = a.plan.steps.iter().collect();
+    assert!(longest_run(&ahead, &k0) <= params.max_run);
+    assert_eq!(planner.validate_plan(&a.plan, &high, now), []);
+}
+
+/// P1b: a single KC goes on alone to exactly `alone_cap` interleaved steps
+/// and the session ends `kc_cap`; the validator accepts a run alone up to
+/// the cap, flags the step past it, and flags a fourth step in a row while
+/// a review is left.
+#[test]
+fn a_kc_alone_stops_at_the_cap() {
+    let b = bundle(1, 40, &[]);
+    let params = Params::default();
+    let model = KnowledgeModel::default();
+    let planner = planner(&model, &b, &params);
+    let k0 = kc_id(0);
+    let mut capped = 0;
+    for seed in 0..10 {
+        let model = KnowledgeModel::default();
+        let mut track = Track::new(&model, &b, refl_sim::T0, seed);
+        let mut learner = Learner::new(&b, seed);
+        let r = session_ours(&mut track, &params, &mut learner, Budget::TwentyFive);
+        assert!(r.violations.is_empty(), "seed {seed}: {:?}", r.violations);
+        let plan = r.plan.expect("a plan");
+        if plan.end != Some(End::KcCap) {
+            continue;
+        }
+        capped += 1;
+        let interleaved = |p: &Plan| {
+            p.done
+                .iter()
+                .filter(|d| d.step.phase == Phase::Interleaved)
+                .count()
+        };
+        assert_eq!(interleaved(&plan), params.alone_cap as usize, "seed {seed}");
+        assert_eq!(r.end, Some("kc_cap"));
+
+        let (s, now) = (&track.state, track.now());
+        let first = plan
+            .done
+            .iter()
+            .position(|d| d.step.phase == Phase::Interleaved)
+            .expect("interleaved steps");
+        let mut ahead = plan.clone();
+        ahead.done.truncate(first);
+        ahead.end = None;
+        let alone = |n: usize| -> Vec<Step> {
+            (0..n)
+                .map(|_| step(&k0, Phase::Interleaved, false, 10))
+                .collect()
+        };
+        ahead.steps = alone(params.alone_cap as usize);
+        assert_eq!(planner.validate_plan(&ahead, s, now), []);
+        ahead.steps = alone(params.alone_cap as usize + 1);
+        assert_eq!(planner.validate_plan(&ahead, s, now), [Violation::KcCap]);
+
+        ahead.reviews = vec![PlannedReview {
+            kc: KcId::new(SPELLING_KC).unwrap(),
+            seconds: 10,
+        }];
+        ahead.steps = alone(params.max_run);
+        assert_eq!(planner.validate_plan(&ahead, s, now), []);
+        ahead.steps = alone(params.max_run + 1);
+        assert_eq!(
+            planner.validate_plan(&ahead, s, now),
+            [Violation::RunTooLong]
+        );
+    }
+    assert!(capped > 0, "no session reached the cap");
 }
 
 /// A plan with nothing to give ends at once and says why.

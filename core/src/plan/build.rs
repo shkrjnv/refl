@@ -64,6 +64,8 @@ struct Builder<'p, 'a> {
     steps: Vec<Step>,
     /// The KC of the last step counted by the run rule, and its run.
     run: Option<(KcId, usize)>,
+    /// The run rule applies: off while a learning KC goes on alone.
+    runs: bool,
     /// Unseen eligible items per KC: all, and productions among them.
     capacity: BTreeMap<KcId, (u32, u32)>,
     shown: BTreeSet<&'p ItemId>,
@@ -72,12 +74,13 @@ struct Builder<'p, 'a> {
 }
 
 impl<'p, 'a> Builder<'p, 'a> {
-    fn new(planner: &'p Planner<'a>, plan: &'p Plan) -> Self {
+    fn new(planner: &'p Planner<'a>, plan: &'p Plan, runs: bool) -> Self {
         let mut b = Self {
             planner,
             plan,
             steps: Vec::new(),
             run: None,
+            runs,
             capacity: BTreeMap::new(),
             shown: plan.shown().map(|(_, s)| &s.item.id).collect(),
             short_of_time: false,
@@ -99,7 +102,8 @@ impl<'p, 'a> Builder<'p, 'a> {
     }
 
     fn breaks_run(&self, step: &Step) -> bool {
-        step.phase.counts_in_runs()
+        self.runs
+            && step.phase.counts_in_runs()
             && matches!(&self.run, Some((kc, n)) if *kc == step.kc && *n >= self.planner.params.max_run)
     }
 
@@ -400,22 +404,20 @@ impl<'a> Planner<'a> {
                     End::ItemsExhausted
                 };
             }
-            let active = self.active_learns(s, plan, now);
-            if active.is_empty() {
-                // Mastered ones leave without a reason of their own.
+            if self.active_learns(s, plan, now).is_empty() {
                 let held = plan.learn.iter().any(|l| {
                     plan.deferred(&l.kc) || self.ready(s, &l.kc, now) < self.params.ready_min
                 });
-                if held {
+                return if held {
                     End::KcDeferred
                 } else {
-                    End::NoPartner
-                }
-            } else if active.iter().all(|l| plan.block_closed(&l.kc)) {
-                End::NoPartner
-            } else {
+                    End::KcMastered
+                };
+            }
+            match self.alone(s, plan, now) {
+                Some(l) if plan.interleaved_done(&l.kc) >= self.params.alone_cap => End::KcCap,
                 // Steps were wanted, but no unseen item was left for them.
-                End::ItemsExhausted
+                _ => End::ItemsExhausted,
             }
         });
         plan.steps = steps;
@@ -473,6 +475,27 @@ impl<'a> Planner<'a> {
         out
     }
 
+    /// Nothing besides the learning KCs can get a step: no review left and
+    /// no partner with an unseen item.
+    fn nothing_else(&self, s: &State, plan: &Plan, now: Timestamp) -> bool {
+        plan.pending_reviews().is_empty()
+            && !self
+                .partners(s, plan, now)
+                .iter()
+                .any(|kc| self.has_unseen(plan, kc, false))
+    }
+
+    /// The learning KC that goes on alone: the only one that may still be
+    /// given, with nothing else that can get a step. The run rule is off
+    /// for it, and it gets at most `alone_cap` interleaved steps in the
+    /// session.
+    fn alone<'p>(&self, s: &State, plan: &'p Plan, now: Timestamp) -> Option<&'p Learn> {
+        let [only] = self.active_learns(s, plan, now)[..] else {
+            return None;
+        };
+        self.nothing_else(s, plan, now).then_some(only)
+    }
+
     /// Rule 6: with one learning KC whose block is closed (or which is
     /// mastered), no review left and no partner that can get a step, a
     /// second one opens: the best start candidate by V^learn now, drawn
@@ -485,11 +508,7 @@ impl<'a> Planner<'a> {
         if p.learn_max < 2
             || plan.deferred(&first.kc)
             || !(plan.block_closed(&first.kc) || self.is_mastered(s, &first.kc, now))
-            || !plan.pending_reviews().is_empty()
-            || self
-                .partners(s, plan, now)
-                .iter()
-                .any(|kc| self.has_unseen(plan, kc, false))
+            || !self.nothing_else(s, plan, now)
         {
             return None;
         }
@@ -539,7 +558,9 @@ impl<'a> Planner<'a> {
             }
         }
         let mut main_left = budget * (1.0 - p.final_share) - used_main;
-        let mut out = Builder::new(self, plan);
+        let learns = self.active_learns(s, plan, now);
+        let alone = self.alone(s, plan, now);
+        let mut out = Builder::new(self, plan, alone.is_none());
 
         if let Some(Done {
             rule: Some(Rule::PrerequisiteCheck { kc }),
@@ -555,7 +576,6 @@ impl<'a> Planner<'a> {
         // Blocked first: the lesson and block of a learning KC whose block
         // is open (one at a time: rule 6 opens the second after the first
         // closed).
-        let learns = self.active_learns(s, plan, now);
         for learn in &learns {
             let kc = &learn.kc;
             if plan.block_closed(kc) {
@@ -610,7 +630,7 @@ impl<'a> Planner<'a> {
         let mut left = main_left - f64::from(reviews.iter().map(|r| r.seconds).sum::<u32>());
 
         // Interleaved after: the learning KCs, in turn, with reviews,
-        // contrasts and other started KCs.
+        // contrasts and other started KCs; a KC alone, up to its cap.
         if learns.is_empty() {
             for r in reviews {
                 out.push(Step::new(&r.kc, Phase::Review, false, r.seconds));
@@ -619,7 +639,8 @@ impl<'a> Planner<'a> {
             let learning: Vec<&KcId> = learns.iter().map(|l| &l.kc).collect();
             let partners = self.partners(s, plan, now);
             let partners: Vec<&KcId> = partners.iter().collect();
-            self.interleave(&mut out, &learning, &partners, &reviews, &mut left);
+            let cap = alone.map(|l| p.alone_cap.saturating_sub(plan.interleaved_done(&l.kc)));
+            self.interleave(&mut out, &learning, &partners, &reviews, cap, &mut left);
         }
 
         let mut final_left = budget * p.final_share - used_final;
@@ -646,17 +667,20 @@ impl<'a> Planner<'a> {
 
     /// Other, learning KC, other, …; the learning KCs take their turns in
     /// order, «other» alternates a review and a partner (a contrast or
-    /// another started KC), reviews once each, partners round. Stops when
-    /// neither turn can add a step.
+    /// another started KC), reviews once each, partners round. The
+    /// learning KCs get at most `cap` steps (a KC going on alone). Stops
+    /// when neither turn can add a step.
     fn interleave(
         &self,
         b: &mut Builder<'_, 'a>,
         learning: &[&KcId],
         contrasts: &[&KcId],
         reviews: &[&PlannedReview],
+        cap: Option<u32>,
         left: &mut f64,
     ) {
         let (mut next_review, mut next_contrast, mut next_learn) = (0usize, 0usize, 0usize);
+        let mut learn_left = cap.unwrap_or(u32::MAX);
         let mut review_turn = true;
         let mut other_turn = true;
         let mut idle = 0;
@@ -701,6 +725,8 @@ impl<'a> Planner<'a> {
                 } else {
                     try_review(b)
                 }
+            } else if learn_left == 0 {
+                false
             } else {
                 let mut pushed = false;
                 for k in 0..learning.len() {
@@ -713,6 +739,7 @@ impl<'a> Planner<'a> {
                     if b.push(Step::new(kc, Phase::Interleaved, false, seconds)) {
                         *left -= f64::from(seconds);
                         next_learn += k + 1;
+                        learn_left -= 1;
                         pushed = true;
                         break;
                     }

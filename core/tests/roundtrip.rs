@@ -1062,7 +1062,7 @@ fn quality_events_wire_shape() {
         "violations": ["too-many-new-kcs"],
         "dominant": "memory",
         "trigger": "block_closed",
-        "end": "no_partner",
+        "end": "kc_cap",
     });
     let mentor = |kind: serde_json::Value| {
         serde_json::json!({
