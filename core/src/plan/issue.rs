@@ -5,12 +5,12 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use super::build::Start;
+use super::build::{Opened, Start};
 use super::values::{LearnValue, ReviewValue};
-use super::{Plan, Planner, Rule};
+use super::{Plan, Planner, Rule, SECOND_KC};
 use crate::event::{PlanAction, PlanCandidate, PlanFactor, PlanIssuedEvent, PlanScope};
 use crate::model::{LearnerModel, State};
-use crate::value::{Finite, Timestamp, UnitInterval};
+use crate::value::{Finite, Seed, Timestamp, UnitInterval};
 
 /// A named multiplier; every planner value is finite by construction.
 pub(super) fn factor(name: &str, value: f64) -> PlanFactor {
@@ -60,6 +60,7 @@ enum Chosen<'v> {
 }
 
 impl Planner<'_> {
+    /// A session event; `end` is the plan's, if it has ended.
     #[allow(clippy::too_many_arguments)] // the parts of one event
     fn session_event(
         &self,
@@ -69,8 +70,8 @@ impl Planner<'_> {
         learn: &[LearnValue],
         reviews: &[ReviewValue],
         chosen: Option<Chosen<'_>>,
-        propensity: f64,
-        trigger: Option<&Rule>,
+        (propensity, seed): (f64, Seed),
+        trigger: Option<&str>,
     ) -> Option<PlanIssuedEvent> {
         let chosen = chosen?;
         let with_break = matches!(chosen, Chosen::Break);
@@ -101,10 +102,11 @@ impl Planner<'_> {
             candidates,
             chosen: u16::try_from(index).unwrap_or(u16::MAX),
             propensity: UnitInterval::new(propensity).expect("a probability"),
-            seed: plan.seed,
+            seed,
             violations: self.violation_codes(plan, s, now),
             dominant: String::from(dominant),
-            trigger: trigger.map(|r| String::from(r.code())),
+            trigger: trigger.map(String::from),
+            end: plan.end.map(|e| String::from(e.code())),
         })
     }
 
@@ -127,43 +129,97 @@ impl Planner<'_> {
             &start.learn,
             &start.due,
             chosen,
-            propensity,
+            (propensity, plan.seed),
             None,
         )
     }
 
-    /// The event of a plan changed by `rule`: the learning KC and the
-    /// pending reviews with their values now. Under the deferral rule the
-    /// chosen candidate is the deferred KC: the next sessions read it from
-    /// the log ([`super::History`]).
+    /// The event of a plan changed by `rule`, or of a plan that ended with
+    /// no rule: the learning KCs still given and the pending reviews with
+    /// their values now; once the plan has ended, all of the session's
+    /// learning KCs and reviews. Under the deferral rule the chosen
+    /// candidate is the deferred KC: the next sessions read it from the log
+    /// ([`super::History`]).
     pub(super) fn issue_replan(
         &self,
         s: &State,
         plan: &Plan,
-        rule: &Rule,
+        rule: Option<&Rule>,
         now: Timestamp,
     ) -> Option<PlanIssuedEvent> {
-        let learn_kc = if *rule == Rule::KcDeferred {
-            plan.learn.as_ref()
+        let unlocks = self.unlock(s, now);
+        let ended = plan.end.is_some();
+        let learn: Vec<LearnValue> = if rule == Some(&Rule::KcDeferred) {
+            plan.done
+                .last()
+                .map(|d| self.learn_value(s, &d.step.kc, now, &unlocks))
+                .into_iter()
+                .collect()
+        } else if ended {
+            plan.learn
+                .iter()
+                .map(|l| self.learn_value(s, &l.kc, now, &unlocks))
+                .collect()
         } else {
-            self.active_learn(s, plan, now)
+            self.active_learns(s, plan, now)
+                .iter()
+                .map(|l| self.learn_value(s, &l.kc, now, &unlocks))
+                .collect()
         };
-        let learn: Vec<LearnValue> = learn_kc
-            .map(|l| self.learn_value(s, &l.kc, now, &self.unlock(s, now)))
-            .into_iter()
-            .collect();
-        let reviews: Vec<ReviewValue> = plan
-            .pending_reviews()
-            .iter()
-            .filter_map(|r| self.review_value(s, &r.kc, now))
-            .collect();
-        let chosen = if *rule == Rule::RapidGuesses {
+        let reviews: Vec<ReviewValue> = if ended {
+            plan.reviews
+                .iter()
+                .filter_map(|r| self.review_value_any(s, &r.kc, now))
+                .collect()
+        } else {
+            plan.pending_reviews()
+                .iter()
+                .filter_map(|r| self.review_value(s, &r.kc, now))
+                .collect()
+        };
+        let chosen = if rule == Some(&Rule::RapidGuesses) {
             Some(Chosen::Break)
         } else if let Some(v) = learn.first() {
             Some(Chosen::Learn(0, v))
         } else {
             (!reviews.is_empty()).then_some(Chosen::Review)
         };
-        self.session_event(s, plan, now, &learn, &reviews, chosen, 1.0, Some(rule))
+        self.session_event(
+            s,
+            plan,
+            now,
+            &learn,
+            &reviews,
+            chosen,
+            (1.0, plan.seed),
+            rule.map(Rule::code),
+        )
+    }
+
+    /// The event of rule 6: the candidates for the second learning KC by
+    /// V^learn now and the pending reviews; the opened KC with the
+    /// propensity and seed of its draw.
+    pub(super) fn issue_second(
+        &self,
+        s: &State,
+        plan: &Plan,
+        opened: &Opened,
+        now: Timestamp,
+    ) -> Option<PlanIssuedEvent> {
+        let reviews: Vec<ReviewValue> = plan
+            .pending_reviews()
+            .iter()
+            .filter_map(|r| self.review_value(s, &r.kc, now))
+            .collect();
+        self.session_event(
+            s,
+            plan,
+            now,
+            &opened.values,
+            &reviews,
+            Some(Chosen::Learn(opened.index, &opened.values[opened.index])),
+            (opened.propensity, opened.seed),
+            Some(SECOND_KC),
+        )
     }
 }

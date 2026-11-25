@@ -220,6 +220,7 @@ impl<'a> Planner<'a> {
             violations: self.choice_violation_codes(plan, step, &item, slot, s, now),
             dominant: String::from(self.item_dominant(s, plan, step, &chosen.slot, now)),
             trigger: None,
+            end: None,
         };
         Next::Item(Choice { item, slot, issued })
     }
@@ -244,11 +245,13 @@ impl<'a> Planner<'a> {
         if diagnoses.iter().any(|m| active.contains(m)) {
             return "misconception";
         }
-        if plan.learn.as_ref().is_some_and(|l| l.kc == step.kc) {
+        if plan.is_learn(&step.kc) {
             self.learn_value(s, &step.kc, now, &self.unlock(s, now))
                 .dominant()
-        } else {
+        } else if plan.learn.iter().any(|l| l.contrasts.contains(&step.kc)) {
             "contrast"
+        } else {
+            "interleaving"
         }
     }
 }

@@ -32,7 +32,7 @@ use crate::value::{Finite, MAX_SAFE_INTEGER, Seed, Timestamp, UnitInterval, Valu
 /// existing payload, a new field (required or not), a changed meaning. Older
 /// cores then see such events as unknown by version, while the server and
 /// newer cores lift old versions through `UPCASTERS`.
-pub const CURRENT_SCHEMA_VERSION: u16 = 1;
+pub const CURRENT_SCHEMA_VERSION: u16 = 2;
 
 /// An upcaster lifts the JSON of an event from version `n` to `n + 1`.
 type Upcaster = fn(Value) -> Result<Value, DecodeError>;
@@ -40,7 +40,24 @@ type Upcaster = fn(Value) -> Result<Value, DecodeError>;
 /// `UPCASTERS[i]` lifts version `i + 1` to `i + 2`. Its length is always
 /// `CURRENT_SCHEMA_VERSION - 1`; a schema change appends one function here and
 /// bumps the constant. Existing upcasters are never edited.
-const UPCASTERS: &[Upcaster] = &[];
+const UPCASTERS: &[Upcaster] = &[plan_issued_end];
+
+/// 1 → 2: `plan_issued` gains `end`, the reason the session ended
+/// (`docs/02-layer1-content.md`); an event of version 1 has none. Other
+/// payloads are unchanged.
+#[allow(clippy::unnecessary_wraps)] // the `Upcaster` signature
+fn plan_issued_end(mut value: Value) -> Result<Value, DecodeError> {
+    if let Some(payload) = value.get_mut("payload").and_then(Value::as_object_mut)
+        && payload.get("type").and_then(Value::as_str) == Some("plan_issued")
+        && !payload.contains_key("end")
+    {
+        payload.insert(String::from("end"), Value::Null);
+    }
+    if let Some(event) = value.as_object_mut() {
+        event.insert(String::from("schema_version"), Value::from(2u16));
+    }
+    Ok(value)
+}
 
 const _: () = assert!(UPCASTERS.len() + 1 == CURRENT_SCHEMA_VERSION as usize);
 
@@ -349,6 +366,9 @@ pub struct PlanIssuedEvent {
     /// The adaptation rule that changed the plan; `None` for a plan built
     /// afresh and for a next-item choice.
     pub trigger: Option<String>,
+    /// Why the session ended, when no step is left after this decision
+    /// (`docs/04-placement-planner.md`, «Конец сессии»); schema version 2.
+    pub end: Option<String>,
 }
 
 /// [`PlanIssuedEvent`] as it arrives, before the `chosen` check.
@@ -364,6 +384,7 @@ struct PlanIssuedUnchecked {
     violations: Vec<String>,
     dominant: String,
     trigger: Option<String>,
+    end: Option<String>,
 }
 
 impl TryFrom<PlanIssuedUnchecked> for PlanIssuedEvent {
@@ -383,6 +404,7 @@ impl TryFrom<PlanIssuedUnchecked> for PlanIssuedEvent {
             violations: p.violations,
             dominant: p.dominant,
             trigger: p.trigger,
+            end: p.end,
         })
     }
 }
@@ -511,6 +533,9 @@ pub const RESPONSE_KINDS: &[&str] = &["option", "text"];
 /// The fold must skip [`Decoded::Unknown`] and mark the learner state as
 /// incomplete; after a core update the state is recomputed from all stored
 /// events, unknown ones included (`docs/13-sync-versions.md`, «Неизвестные события»).
+// Nearly every element of a log is `Known`: boxing it would add an
+// allocation per event and save no memory.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Decoded {
     Known(Event),

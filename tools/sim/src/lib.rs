@@ -717,6 +717,7 @@ fn plan_issued(kc: &KcId, tail: u64) -> EventPayload {
         violations: Vec::new(),
         dominant: "gap".into(),
         trigger: None,
+        end: None,
     })
 }
 

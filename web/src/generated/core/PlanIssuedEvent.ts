@@ -40,4 +40,9 @@ dominant: string,
  * The adaptation rule that changed the plan; `None` for a plan built
  * afresh and for a next-item choice.
  */
-trigger: string | null, };
+trigger: string | null, 
+/**
+ * Why the session ended, when no step is left after this decision
+ * (`docs/04-placement-planner.md`, «Конец сессии»); schema version 2.
+ */
+end: string | null, };

@@ -147,9 +147,11 @@ fn session(
             Next::Finished { .. } => break,
             Next::Lesson { kc, explanation } => {
                 track.lesson(learner, &kc, &explanation);
-                plan = planner
-                    .adapt(&track.state, &plan, &Outcome::Lesson, track.now())
-                    .plan;
+                let adapted = planner.adapt(&track.state, &plan, &Outcome::Lesson, track.now());
+                for ev in adapted.issued {
+                    track.plan_issued(ev);
+                }
+                plan = adapted.plan;
             }
             Next::Item(choice) => {
                 track.plan_issued(choice.issued);
@@ -211,7 +213,7 @@ fn session(
                     &Outcome::Answer(Answered::new(&a, &outcome)),
                     track.now(),
                 );
-                if let Some(ev) = adapted.issued {
+                for ev in adapted.issued {
                     track.plan_issued(ev);
                 }
                 plan = adapted.plan;

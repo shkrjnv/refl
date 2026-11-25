@@ -204,12 +204,21 @@ impl<'a> Planner<'a> {
 
     /// V^rev of a KC with a card whose R is below r*; `None` otherwise.
     pub fn review_value(&self, s: &State, kc: &KcId, now: Timestamp) -> Option<ReviewValue> {
+        self.review_value_any(s, kc, now)
+            .filter(|v| v.below_target > 0.0)
+    }
+
+    /// V^rev of `kc` with a card, due or not: a KC reviewed in this session
+    /// gets `below_target` 0. The end of a session lists its reviews by it.
+    pub(super) fn review_value_any(
+        &self,
+        s: &State,
+        kc: &KcId,
+        now: Timestamp,
+    ) -> Option<ReviewValue> {
         let p = self.params;
         let card = s.kcs.get(kc)?.card.as_ref()?;
         let r = self.model.recall(Some(card), now);
-        if r >= p.target_recall {
-            return None;
-        }
         #[allow(clippy::cast_possible_truncation)] // a horizon of days fits i64 ms
         let later = Timestamp(now.0 + (p.review_horizon_days * DAY_MS) as i64);
         let below_target = (p.target_recall - r).max(0.0);

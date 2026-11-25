@@ -694,6 +694,11 @@ pub fn session_ours(
             Next::Lesson { kc, explanation } => {
                 track.lesson(learner, &kc, &explanation);
                 let adapted = planner.adapt(&track.state, &plan, &Outcome::Lesson, track.now());
+                for ev in adapted.issued {
+                    r.check(ev.violations.iter().cloned());
+                    r.issued.push(ev.clone());
+                    track.plan_issued(ev);
+                }
                 plan = adapted.plan;
             }
             Next::Item(choice) => {
@@ -710,7 +715,7 @@ pub fn session_ours(
                 if let Some(rule) = &adapted.rule {
                     *r.rules.entry(rule.code()).or_insert(0) += 1;
                 }
-                if let Some(ev) = adapted.issued {
+                for ev in adapted.issued {
                     r.check(ev.violations.iter().cloned());
                     r.issued.push(ev.clone());
                     track.plan_issued(ev);
@@ -852,7 +857,8 @@ pub fn session_fsrs(
             budget,
             started: track.now(),
             seed: Seed::new(0).expect("small"),
-            learn: None,
+            learn: Vec::new(),
+            candidates: Vec::new(),
             reviews: Vec::new(),
             done: Vec::new(),
             steps: Vec::new(),

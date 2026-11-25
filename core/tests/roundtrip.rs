@@ -191,6 +191,7 @@ fn user() -> impl Strategy<Value = UserId> {
 }
 
 /// `plan_issued`, `mentor_override`, `writing_scored` (docs/11).
+#[allow(clippy::too_many_lines)] // one strategy for each payload, in order
 fn quality_payload() -> impl Strategy<Value = EventPayload> {
     let action = prop_oneof![
         slug(KcId::new).prop_map(|kc| PlanAction::Learn { kc }),
@@ -217,7 +218,11 @@ fn quality_payload() -> impl Strategy<Value = EventPayload> {
         proptest::collection::vec(candidate, 1..5),
         (any::<u16>(), unit(), seed()),
         proptest::collection::vec(text(), 0..3),
-        (text(), proptest::option::of(text())),
+        (
+            text(),
+            proptest::option::of(text()),
+            proptest::option::of(text()),
+        ),
     )
         .prop_map(
             |(
@@ -226,7 +231,7 @@ fn quality_payload() -> impl Strategy<Value = EventPayload> {
                 candidates,
                 (chosen, propensity, seed),
                 violations,
-                (dominant, trigger),
+                (dominant, trigger, end),
             )| {
                 // A valid plan chooses one of its candidates.
                 let chosen = chosen % u16::try_from(candidates.len()).unwrap();
@@ -241,6 +246,7 @@ fn quality_payload() -> impl Strategy<Value = EventPayload> {
                     violations,
                     dominant,
                     trigger,
+                    end,
                 })
             },
         );
@@ -732,9 +738,29 @@ const V4: &str = "019aa5b4-0000-4000-8000-000000000000";
 
 #[test]
 fn decodes_current_version_byte_exact() {
-    let json = sample_event_json(1, V7);
+    let json = sample_event_json(u64::from(CURRENT_SCHEMA_VERSION), V7);
     let e = known(&json);
     assert_eq!(encode_event(&e), json, "canonical form must be stable");
+}
+
+#[test]
+fn version_1_is_lifted_to_2() {
+    // Any payload: only the version changes.
+    let e = known(&sample_event_json(1, V7));
+    assert_eq!(e.schema_version, 2);
+    assert_eq!(encode_event(&e), sample_event_json(2, V7));
+    // plan_issued gains an empty `end`.
+    let plan = serde_json::json!({
+        "type": "plan_issued", "planner_version": "p1", "model_version": "m1",
+        "scope": "session",
+        "candidates": [{ "action": { "kind": "break" }, "value_per_minute": 0.0, "factors": [] }],
+        "chosen": 0, "propensity": 1.0, "seed": 1, "violations": [],
+        "dominant": "rapid_guesses", "trigger": "rapid_guesses",
+    });
+    let e = known(&sample_with_payload(1, &plan));
+    let mut lifted = plan.clone();
+    lifted["end"] = serde_json::Value::Null;
+    assert_eq!(serde_json::to_value(&e.payload).unwrap(), lifted);
 }
 
 fn sample_with_payload(schema_version: u64, payload: &serde_json::Value) -> String {
@@ -788,8 +814,9 @@ fn newer_events_decode_as_unknown_with_raw_preserved() {
     );
     assert_unknown(&new_response, 1);
     // A future schema version is unknown whatever its payload looks like.
-    let future = sample_with_payload(2, &serde_json::json!({ "anything": [] }));
-    assert_unknown(&future, 2);
+    let next = u64::from(CURRENT_SCHEMA_VERSION) + 1;
+    let future = sample_with_payload(next, &serde_json::json!({ "anything": [] }));
+    assert_unknown(&future, next);
     assert_unknown(&sample_event_json(MAX_SAFE_INTEGER, V7), MAX_SAFE_INTEGER);
 }
 
@@ -1035,6 +1062,7 @@ fn quality_events_wire_shape() {
         "violations": ["too-many-new-kcs"],
         "dominant": "memory",
         "trigger": "block_closed",
+        "end": "no_partner",
     });
     let mentor = |kind: serde_json::Value| {
         serde_json::json!({
@@ -1054,7 +1082,7 @@ fn quality_events_wire_shape() {
         mentor(serde_json::json!({ "kind": "dispute_verdict", "event": V7 })),
         writing_scored(13),
     ] {
-        let json = sample_with_payload(1, &payload);
+        let json = sample_with_payload(u64::from(CURRENT_SCHEMA_VERSION), &payload);
         let e = known(&json);
         assert_eq!(serde_json::to_value(&e.payload).unwrap(), payload);
         // Not derived: no uniqueness key (docs/02, «События контроля качества»).

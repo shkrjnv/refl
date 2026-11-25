@@ -22,8 +22,9 @@ pub enum Violation {
     /// A lesson, block or interleaved step ahead on a KC with Ready below
     /// the threshold.
     BlockedKc,
-    /// More than one KC with lesson or block steps, or a not-started KC
-    /// other than the learning one in the interleaved part.
+    /// More learning KCs, or KCs with lesson or block steps, than a session
+    /// may have, or a not-started KC other than a learning one in the
+    /// interleaved part.
     NewKcs,
     /// Learning while reviews do not fit their share.
     ReviewDebt,
@@ -88,13 +89,12 @@ impl Planner<'_> {
             .filter(|st| matches!(st.phase, Phase::Lesson | Phase::Block))
             .map(|st| &st.kc)
             .collect();
-        let learn_kc = plan.learn.as_ref().map(|l| &l.kc);
         let new_interleaved = plan.steps.iter().any(|st| {
             st.phase == Phase::Interleaved
-                && Some(&st.kc) != learn_kc
+                && !plan.is_learn(&st.kc)
                 && self.progress(s, &st.kc, now) == KcProgress::NotStarted
         });
-        if block_kcs.len() > 1 || new_interleaved {
+        if plan.learn.len() > p.learn_max || block_kcs.len() > p.learn_max || new_interleaved {
             out.push(Violation::NewKcs);
         }
 

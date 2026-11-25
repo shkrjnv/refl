@@ -1,6 +1,7 @@
 //! The plan after each answer (`docs/04-placement-planner.md`, «Сборка
 //! сессии в прототипе», «Адаптация»): the first rule that fires is recorded
-//! with the answer, then the steps ahead are recomputed.
+//! with the answer, then the steps ahead are recomputed, which may open a
+//! second learning KC (rule 6).
 
 use alloc::vec::Vec;
 
@@ -18,7 +19,7 @@ impl Planner<'_> {
         let unchanged = || Adapted {
             plan: plan.clone(),
             rule: None,
-            issued: None,
+            issued: Vec::new(),
         };
         let Some(step) = plan.steps.first() else {
             return unchanged();
@@ -56,10 +57,27 @@ impl Planner<'_> {
         if let Some(d) = next.done.last_mut() {
             d.rule.clone_from(&rule);
         }
-        self.replan(s, &mut next, now);
-        let issued = rule
+        let opened = self.replan(s, &mut next, now);
+        let mut issued: Vec<_> = rule
             .as_ref()
-            .and_then(|r| self.issue_replan(s, &next, r, now));
+            .and_then(|r| self.issue_replan(s, &next, Some(r), now))
+            .into_iter()
+            .collect();
+        issued.extend(
+            opened
+                .as_ref()
+                .and_then(|o| self.issue_second(s, &next, o, now)),
+        );
+        // The end goes on the last event of this decision, or its own.
+        if next.end.is_some() {
+            if issued.is_empty() {
+                issued.extend(self.issue_replan(s, &next, None, now));
+            }
+            let last = issued.len().saturating_sub(1);
+            for ev in &mut issued[..last] {
+                ev.end = None;
+            }
+        }
         Adapted {
             plan: next,
             rule,
@@ -79,11 +97,7 @@ impl Planner<'_> {
             .filter(|(st, sh)| &st.kc == kc && !sh.rapid)
             .map(|(_, sh)| sh)
             .collect();
-        if let Some(l) = &plan.learn
-            && &l.kc == kc
-            && !plan.block_closed()
-            && !plan.deferred()
-        {
+        if plan.is_learn(kc) && !plan.block_closed(kc) && !plan.deferred(kc) {
             let correct = answers.iter().filter(|a| a.correct).count();
             let production = answers.iter().any(|a| a.correct && a.kind.is_production());
             if !shown.rapid && shown.correct && correct >= p.close_correct as usize && production {

@@ -453,7 +453,7 @@ async fn unknown_events_are_rejected(c: &Cluster) {
     );
     let mut future: serde_json::Value =
         serde_json::from_str(&event(event_id(3), &lesson_started())).unwrap();
-    future["schema_version"] = 2.into();
+    future["schema_version"] = (refl_core::CURRENT_SCHEMA_VERSION + 1).into();
     for json in [new_type, new_response, future.to_string()] {
         let err = insert(&db, &json).await.unwrap_err();
         assert!(matches!(err, InsertError::Unknown), "{json}: {err}");

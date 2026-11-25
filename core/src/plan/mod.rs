@@ -33,7 +33,7 @@ pub use validate::Violation;
 pub use values::{LearnValue, ReviewValue};
 
 /// Version of the session rules; part of every `plan_issued`.
-const PLANNER_NAME: &str = "session-prototype-1";
+const PLANNER_NAME: &str = "session-prototype-2";
 
 /// Parameters of the prototype session builder with their starting values
 /// (`docs/04-placement-planner.md`, «Сборка сессии в прототипе»). They are
@@ -70,6 +70,8 @@ pub struct Params {
     pub close_correct: u32,
     /// Items on the learning KC without closing the block before it is deferred.
     pub kc_cap: u32,
+    /// Learning KCs a session may have: the first and one opened by rule 6.
+    pub learn_max: usize,
     /// At most this many steps in a row on one KC after the block.
     pub max_run: usize,
     /// p* of the block, the interleaved part and the final, a prerequisite check.
@@ -110,6 +112,7 @@ impl Default for Params {
             block_items: 4,
             close_correct: 3,
             kc_cap: 12,
+            learn_max: 2,
             max_run: 3,
             p_block: 0.80,
             p_interleaved: 0.70,
@@ -237,7 +240,12 @@ impl Rule {
     }
 }
 
-/// The learning KC of a session.
+/// `trigger` of the `plan_issued` that opens a second learning KC
+/// (`docs/04-placement-planner.md`, «Адаптация», rule 6). It is decided in
+/// the replan, not by the last answer, so it is not a [`Rule`].
+pub const SECOND_KC: &str = "second_kc";
+
+/// A learning KC of a session.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Learn {
     pub kc: KcId,
@@ -261,7 +269,12 @@ pub struct Plan {
     pub started: Timestamp,
     /// Seed of the session decision.
     pub seed: Seed,
-    pub learn: Option<Learn>,
+    /// At most `learn_max`: the one picked at the start, then one opened by
+    /// rule 6.
+    pub learn: Vec<Learn>,
+    /// The learning candidates at the start, by V^learn: the pool of the
+    /// second learning KC and of the started KCs interleaved.
+    pub candidates: Vec<KcId>,
     /// In V^rev order.
     pub reviews: Vec<PlannedReview>,
     pub done: Vec<Done>,
@@ -286,8 +299,9 @@ pub enum End {
     NothingDue,
     /// No learning KC, and the reviews are done.
     ReviewsDone,
-    /// The learning KC's block is closed and nothing is left to interleave.
-    BlockClosed,
+    /// The learning KCs' blocks are closed (or they are mastered), nothing
+    /// is left to interleave, and no second learning KC can be opened.
+    NoPartner,
     /// The learning KC was deferred, or its Ready fell below the threshold.
     KcDeferred,
     /// The steps left have no unseen item.
@@ -300,7 +314,7 @@ impl End {
             Self::Budget => "budget",
             Self::NothingDue => "nothing_due",
             Self::ReviewsDone => "reviews_done",
-            Self::BlockClosed => "block_closed",
+            Self::NoPartner => "no_partner",
             Self::KcDeferred => "kc_deferred",
             Self::ItemsExhausted => "items_exhausted",
         }
@@ -315,14 +329,25 @@ impl Plan {
             .filter_map(|d| d.shown.as_ref().map(|s| (&d.step, s)))
     }
 
-    /// The learning KC's block is closed.
-    fn block_closed(&self) -> bool {
-        self.done.iter().any(|d| d.rule == Some(Rule::BlockClosed))
+    /// The block of learning KC `kc` is closed.
+    fn block_closed(&self, kc: &KcId) -> bool {
+        self.fired_on(kc, &Rule::BlockClosed)
     }
 
-    /// The learning KC was deferred to the next session.
-    fn deferred(&self) -> bool {
-        self.done.iter().any(|d| d.rule == Some(Rule::KcDeferred))
+    /// Learning KC `kc` was deferred to the next session.
+    fn deferred(&self, kc: &KcId) -> bool {
+        self.fired_on(kc, &Rule::KcDeferred)
+    }
+
+    fn fired_on(&self, kc: &KcId, rule: &Rule) -> bool {
+        self.done
+            .iter()
+            .any(|d| &d.step.kc == kc && d.rule.as_ref() == Some(rule))
+    }
+
+    /// `kc` is a learning KC of this session.
+    fn is_learn(&self, kc: &KcId) -> bool {
+        self.learn.iter().any(|l| &l.kc == kc)
     }
 }
 
@@ -391,12 +416,14 @@ pub enum Outcome {
     Answer(Answered),
 }
 
-/// The plan after an outcome; `issued` when a rule changed it.
+/// The plan after an outcome and its `plan_issued`, in order: one for a
+/// rule that changed it, one for a second learning KC it opened, and the
+/// reason it ended on the last of them (or on its own event).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Adapted {
     pub plan: Plan,
     pub rule: Option<Rule>,
-    pub issued: Option<PlanIssuedEvent>,
+    pub issued: Vec<PlanIssuedEvent>,
 }
 
 /// What the planner reads from the learner's log before the session: when
@@ -594,6 +621,17 @@ impl<'a> Planner<'a> {
         });
         format!("{PLANNER_NAME}+{short}")
     }
+}
+
+/// The seed of the second learning KC's draw: the second output of
+/// `SplitMix64(seed)`, 53 bits; the first one drew the first learning KC.
+///
+/// # Panics
+/// Never: 53 bits are a valid seed.
+fn second_seed(seed: Seed) -> Seed {
+    let mut rng = crate::rng::SplitMix64::new(seed.get());
+    rng.next_u64();
+    Seed::new(rng.next_u64() >> 11).expect("53 bits")
 }
 
 /// The index `⌊u·n⌋` among `n` admissible candidates, u the first uniform of

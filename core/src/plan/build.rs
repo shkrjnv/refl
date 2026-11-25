@@ -7,7 +7,7 @@ use alloc::vec::Vec;
 use super::values::{LearnValue, ReviewValue};
 use super::{
     Budget, Done, End, History, Learn, Phase, Plan, PlannedReview, Planner, Rule, Session, Step,
-    draw,
+    draw, second_seed,
 };
 use crate::bundle::KcStatus;
 use crate::content::EdgeKind;
@@ -44,6 +44,16 @@ pub(super) struct Start {
     pub learn: Vec<LearnValue>,
     /// Index into `learn` and its propensity.
     pub pick: Option<(usize, f64)>,
+}
+
+/// A second learning KC opened by rule 6, with the draw that picked it.
+pub(super) struct Opened {
+    pub learn: Learn,
+    /// The candidates by V^learn now; `learn` is `values[index]`.
+    pub values: Vec<LearnValue>,
+    pub index: usize,
+    pub propensity: f64,
+    pub seed: Seed,
 }
 
 /// Steps ahead as they are planned: the run rule and the unseen items of
@@ -325,19 +335,17 @@ impl<'a> Planner<'a> {
                 seconds: r.seconds,
             });
         }
-        let learn = start.pick.map(|(i, _)| {
-            let kc = &start.learn[i].kc;
-            Learn {
-                kc: kc.clone(),
-                contrasts: self.contrasts(s, kc, now, &reviews),
-                lesson: !s.explained.contains(kc) && self.lesson_explanation(kc, lang).is_some(),
-            }
-        });
+        let learn: Vec<Learn> = start
+            .pick
+            .map(|(i, _)| self.new_learn(s, &start.learn[i].kc, now, &reviews, lang))
+            .into_iter()
+            .collect();
         let mut plan = Plan {
             budget,
             started: now,
             seed,
             learn,
+            candidates: start.learn.iter().map(|v| v.kc.clone()).collect(),
             reviews,
             done: Vec::new(),
             steps: Vec::new(),
@@ -345,42 +353,170 @@ impl<'a> Planner<'a> {
             lang,
             end: None,
         };
-        self.replan(s, &mut plan, now);
+        // Rule 6 needs a closed block, so it cannot open a KC before any
+        // answer.
+        let opened = self.replan(s, &mut plan, now);
+        debug_assert!(opened.is_none(), "rule 6 before any answer");
         let issued = self.issue_start(s, &plan, &start, now);
         Session { plan, issued }
     }
 
-    /// Recomputes the steps ahead and, when none is left, why the session
-    /// ends (`docs/04-placement-planner.md`, «Конец сессии»).
-    pub(super) fn replan(&self, s: &State, plan: &mut Plan, now: Timestamp) {
+    /// A learning KC with its contrasts and whether it starts with a lesson.
+    fn new_learn(
+        &self,
+        s: &State,
+        kc: &KcId,
+        now: Timestamp,
+        reviews: &[PlannedReview],
+        lang: Lang,
+    ) -> Learn {
+        Learn {
+            kc: kc.clone(),
+            contrasts: self.contrasts(s, kc, now, reviews),
+            lesson: !s.explained.contains(kc) && self.lesson_explanation(kc, lang).is_some(),
+        }
+    }
+
+    /// Opens a second learning KC when rule 6 fires, then recomputes the
+    /// steps ahead and, when none is left, why the session ends
+    /// (`docs/04-placement-planner.md`, «Конец сессии»). Returns the opened
+    /// KC with its draw.
+    pub(super) fn replan(&self, s: &State, plan: &mut Plan, now: Timestamp) -> Option<Opened> {
+        let opened = self.second_learn(s, plan, now);
+        if let Some(o) = &opened {
+            plan.learn.push(o.learn.clone());
+        }
         let (steps, short_of_time) = self.remaining(s, plan, now);
         plan.end = steps.is_empty().then(|| {
             if short_of_time {
                 return End::Budget;
             }
-            match &plan.learn {
-                None if plan.reviews.is_empty() => End::NothingDue,
-                None if plan.pending_reviews().is_empty() => End::ReviewsDone,
-                Some(_) if self.active_learn(s, plan, now).is_none() => End::KcDeferred,
-                Some(_) if plan.block_closed() => End::BlockClosed,
+            if plan.learn.is_empty() {
+                return if plan.reviews.is_empty() {
+                    End::NothingDue
+                } else if plan.pending_reviews().is_empty() {
+                    End::ReviewsDone
+                } else {
+                    End::ItemsExhausted
+                };
+            }
+            let active = self.active_learns(s, plan, now);
+            if active.is_empty() {
+                // Mastered ones leave without a reason of their own.
+                let held = plan.learn.iter().any(|l| {
+                    plan.deferred(&l.kc) || self.ready(s, &l.kc, now) < self.params.ready_min
+                });
+                if held {
+                    End::KcDeferred
+                } else {
+                    End::NoPartner
+                }
+            } else if active.iter().all(|l| plan.block_closed(&l.kc)) {
+                End::NoPartner
+            } else {
                 // Steps were wanted, but no unseen item was left for them.
-                None | Some(_) => End::ItemsExhausted,
+                End::ItemsExhausted
             }
         });
         plan.steps = steps;
+        opened
     }
 
-    /// The learning KC while it may still be given: not deferred, not blocked.
-    pub(super) fn active_learn<'p>(
+    /// The model counts `kc` mastered now.
+    fn is_mastered(&self, s: &State, kc: &KcId, now: Timestamp) -> bool {
+        matches!(
+            self.progress(s, kc, now),
+            KcProgress::Mastered | KcProgress::LongTerm
+        )
+    }
+
+    /// The learning KCs that may still be given: not deferred, not blocked,
+    /// not mastered in this session.
+    pub(super) fn active_learns<'p>(
         &self,
         s: &State,
         plan: &'p Plan,
         now: Timestamp,
-    ) -> Option<&'p Learn> {
+    ) -> Vec<&'p Learn> {
         plan.learn
-            .as_ref()
-            .filter(|_| !plan.deferred())
+            .iter()
+            .filter(|l| !plan.deferred(&l.kc))
             .filter(|l| self.ready(s, &l.kc, now) >= self.params.ready_min)
+            .filter(|l| !self.is_mastered(s, &l.kc, now))
+            .collect()
+    }
+
+    /// An eligible item of `kc` not shown in this session; a production
+    /// one if `production`.
+    fn has_unseen(&self, plan: &Plan, kc: &KcId, production: bool) -> bool {
+        let shown: BTreeSet<&ItemId> = plan.shown().map(|(_, sh)| &sh.item.id).collect();
+        self.slots(kc)
+            .iter()
+            .any(|c| !shown.contains(&c.item.id) && (!production || c.projection.is_production()))
+    }
+
+    /// What the learning KCs interleave with besides reviews: their
+    /// contrasts with Ready above the threshold, then the other started,
+    /// not mastered candidates of the session start, in V^learn order.
+    fn partners(&self, s: &State, plan: &Plan, now: Timestamp) -> Vec<KcId> {
+        let p = self.params;
+        let mut out: Vec<KcId> = Vec::new();
+        let contrasts = plan.learn.iter().flat_map(|l| &l.contrasts);
+        let started = plan.candidates.iter().filter(|kc| {
+            self.progress(s, kc, now) != KcProgress::NotStarted && !self.is_mastered(s, kc, now)
+        });
+        for kc in contrasts.chain(started) {
+            if !plan.is_learn(kc) && !out.contains(kc) && self.ready(s, kc, now) >= p.ready_min {
+                out.push(kc.clone());
+            }
+        }
+        out
+    }
+
+    /// Rule 6: with one learning KC whose block is closed (or which is
+    /// mastered), no review left and no partner that can get a step, a
+    /// second one opens: the best start candidate by V^learn now, drawn
+    /// like the first with the second seed.
+    fn second_learn(&self, s: &State, plan: &Plan, now: Timestamp) -> Option<Opened> {
+        let p = self.params;
+        let [first] = plan.learn.as_slice() else {
+            return None;
+        };
+        if p.learn_max < 2
+            || plan.deferred(&first.kc)
+            || !(plan.block_closed(&first.kc) || self.is_mastered(s, &first.kc, now))
+            || !plan.pending_reviews().is_empty()
+            || self
+                .partners(s, plan, now)
+                .iter()
+                .any(|kc| self.has_unseen(plan, kc, false))
+        {
+            return None;
+        }
+        let unlocks = self.unlock(s, now);
+        let mut values: Vec<LearnValue> = plan
+            .candidates
+            .iter()
+            .filter(|kc| !plan.is_learn(kc))
+            .filter(|kc| !self.is_mastered(s, kc, now))
+            .filter(|kc| self.ready(s, kc, now) >= p.ready_min)
+            .filter(|kc| self.has_unseen(plan, kc, true))
+            .map(|kc| self.learn_value(s, kc, now, &unlocks))
+            .collect();
+        values.sort_by(|a, b| b.value.total_cmp(&a.value).then_with(|| a.kc.cmp(&b.kc)));
+        let best = values.first()?;
+        let bar = p.tie_share * best.value;
+        let n = values.iter().take_while(|v| v.value >= bar).count();
+        let seed = second_seed(plan.seed);
+        let (index, propensity) = draw(seed, n);
+        let learn = self.new_learn(s, &values[index].kc, now, &plan.reviews, plan.lang);
+        Some(Opened {
+            learn,
+            values,
+            index,
+            propensity,
+            seed,
+        })
     }
 
     /// The steps ahead: a pending prerequisite check, the lesson and block of
@@ -416,44 +552,51 @@ impl<'a> Planner<'a> {
             }
         }
 
-        let learn = self.active_learn(s, plan, now);
-        if let Some(learn) = learn {
+        // Blocked first: the lesson and block of a learning KC whose block
+        // is open (one at a time: rule 6 opens the second after the first
+        // closed).
+        let learns = self.active_learns(s, plan, now);
+        for learn in &learns {
             let kc = &learn.kc;
+            if plan.block_closed(kc) {
+                continue;
+            }
             let explanation = self.lesson_explanation(kc, plan.lang);
             if let Some(e) = explanation
                 && learn.lesson
-                && plan.done.iter().all(|d| d.step.phase != Phase::Lesson)
+                && plan
+                    .done
+                    .iter()
+                    .all(|d| !(d.step.phase == Phase::Lesson && &d.step.kc == kc))
             {
                 let seconds = self.explanation_seconds(e);
                 out.push(Step::new(kc, Phase::Lesson, false, seconds));
                 main_left -= f64::from(seconds);
             }
-            if !plan.block_closed() {
-                let block_done = u32::try_from(
-                    plan.done
-                        .iter()
-                        .filter(|d| d.step.phase == Phase::Block)
-                        .count(),
-                )
+            let block_done = u32::try_from(
+                plan.done
+                    .iter()
+                    .filter(|d| d.step.phase == Phase::Block && &d.step.kc == kc)
+                    .count(),
+            )
+            .unwrap_or(u32::MAX);
+            let on_kc = u32::try_from(plan.shown().filter(|(st, _)| &st.kc == kc).count())
                 .unwrap_or(u32::MAX);
-                let on_kc = u32::try_from(plan.shown().filter(|(st, _)| &st.kc == kc).count())
-                    .unwrap_or(u32::MAX);
-                let block_left = p
-                    .block_items
-                    .saturating_sub(block_done)
-                    .max(1)
-                    .min(p.kc_cap.saturating_sub(on_kc));
-                let needs = !plan.shown().any(|(st, sh)| {
-                    &st.kc == kc && sh.correct && !sh.rapid && sh.kind.is_production()
-                });
-                let seconds = self.mean_seconds(kc);
-                for i in block_done + 1..=block_done + block_left {
-                    let production = needs && i >= p.block_items && i % 2 == 0;
-                    if !out.push(Step::new(kc, Phase::Block, production, seconds)) {
-                        break;
-                    }
-                    main_left -= f64::from(seconds);
+            let block_left = p
+                .block_items
+                .saturating_sub(block_done)
+                .max(1)
+                .min(p.kc_cap.saturating_sub(on_kc));
+            let needs = !plan
+                .shown()
+                .any(|(st, sh)| &st.kc == kc && sh.correct && !sh.rapid && sh.kind.is_production());
+            let seconds = self.mean_seconds(kc);
+            for i in block_done + 1..=block_done + block_left {
+                let production = needs && i >= p.block_items && i % 2 == 0;
+                if !out.push(Step::new(kc, Phase::Block, production, seconds)) {
+                    break;
                 }
+                main_left -= f64::from(seconds);
             }
         }
 
@@ -466,20 +609,17 @@ impl<'a> Planner<'a> {
         }
         let mut left = main_left - f64::from(reviews.iter().map(|r| r.seconds).sum::<u32>());
 
-        match learn {
-            Some(learn) => {
-                let contrasts: Vec<&KcId> = learn
-                    .contrasts
-                    .iter()
-                    .filter(|c| self.ready(s, c, now) >= p.ready_min)
-                    .collect();
-                self.interleave(&mut out, &learn.kc, &contrasts, &reviews, &mut left);
+        // Interleaved after: the learning KCs, in turn, with reviews,
+        // contrasts and other started KCs.
+        if learns.is_empty() {
+            for r in reviews {
+                out.push(Step::new(&r.kc, Phase::Review, false, r.seconds));
             }
-            None => {
-                for r in reviews {
-                    out.push(Step::new(&r.kc, Phase::Review, false, r.seconds));
-                }
-            }
+        } else {
+            let learning: Vec<&KcId> = learns.iter().map(|l| &l.kc).collect();
+            let partners = self.partners(s, plan, now);
+            let partners: Vec<&KcId> = partners.iter().collect();
+            self.interleave(&mut out, &learning, &partners, &reviews, &mut left);
         }
 
         let mut final_left = budget * p.final_share - used_final;
@@ -504,19 +644,19 @@ impl<'a> Planner<'a> {
         (out.finish(), short_of_time)
     }
 
-    /// Other, learning KC, other, …; «other» alternates a review and a
-    /// contrast, reviews once each, contrasts round. Stops when neither
-    /// turn can add a step.
+    /// Other, learning KC, other, …; the learning KCs take their turns in
+    /// order, «other» alternates a review and a partner (a contrast or
+    /// another started KC), reviews once each, partners round. Stops when
+    /// neither turn can add a step.
     fn interleave(
         &self,
         b: &mut Builder<'_, 'a>,
-        kc: &KcId,
+        learning: &[&KcId],
         contrasts: &[&KcId],
         reviews: &[&PlannedReview],
         left: &mut f64,
     ) {
-        let kc_seconds = self.mean_seconds(kc);
-        let (mut next_review, mut next_contrast) = (0usize, 0usize);
+        let (mut next_review, mut next_contrast, mut next_learn) = (0usize, 0usize, 0usize);
         let mut review_turn = true;
         let mut other_turn = true;
         let mut idle = 0;
@@ -562,16 +702,22 @@ impl<'a> Planner<'a> {
                     try_review(b)
                 }
             } else {
-                let fits = f64::from(kc_seconds) <= *left;
-                if !fits {
-                    b.short_of_time = true;
+                let mut pushed = false;
+                for k in 0..learning.len() {
+                    let kc = learning[(next_learn + k) % learning.len()];
+                    let seconds = self.mean_seconds(kc);
+                    if f64::from(seconds) > *left {
+                        b.short_of_time = true;
+                        continue;
+                    }
+                    if b.push(Step::new(kc, Phase::Interleaved, false, seconds)) {
+                        *left -= f64::from(seconds);
+                        next_learn += k + 1;
+                        pushed = true;
+                        break;
+                    }
                 }
-                if fits && b.push(Step::new(kc, Phase::Interleaved, false, kc_seconds)) {
-                    *left -= f64::from(kc_seconds);
-                    true
-                } else {
-                    false
-                }
+                pushed
             };
             idle = if pushed { 0 } else { idle + 1 };
             other_turn = !other_turn;

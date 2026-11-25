@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 
 use proptest::prelude::*;
 use refl_core::bundle::{Bundle, KcStatus};
+use refl_core::event::{PlanAction, PlanScope};
 use refl_core::ids::{FamilyId, KcId, SubjectId};
 use refl_core::model::{KnowledgeModel, Profile, State, replay};
 use refl_core::plan::{
@@ -137,6 +138,14 @@ proptest! {
             prop_assert!(r.end.is_some(), "day {day}");
             let plan = r.plan.as_ref().unwrap();
             prop_assert_eq!(plan.end.map(End::code), r.end);
+            prop_assert!(plan.learn.len() <= 2, "day {day}");
+            // The end is on the last session event, and only there.
+            let session: Vec<_> =
+                r.issued.iter().filter(|e| e.scope == PlanScope::Session).collect();
+            if let Some((last, rest)) = session.split_last() {
+                prop_assert_eq!(last.end.as_deref(), r.end, "day {}", day);
+                prop_assert!(rest.iter().all(|e| e.end.is_none()), "day {day}");
+            }
         }
     }
 
@@ -148,6 +157,49 @@ proptest! {
             prop_assert_eq!(&x.plan, &y.plan);
         }
     }
+}
+
+/// Rule 6: fresh learners on independent KCs have no partner once the
+/// first block closes, so a second learning KC opens, logged with its draw,
+/// and is interleaved with the first after its own block.
+#[test]
+fn a_closed_block_without_partners_opens_a_second_kc() {
+    let b = bundle(6, 12, &[]);
+    let model = KnowledgeModel::default();
+    let params = Params::default();
+    let mut opened = 0;
+    for seed in 0..20 {
+        let mut track = Track::new(&model, &b, refl_sim::T0, seed);
+        let mut learner = Learner::new(&b, seed);
+        let r = session_ours(&mut track, &params, &mut learner, Budget::TwentyFive);
+        assert!(r.violations.is_empty(), "seed {seed}: {:?}", r.violations);
+        let plan = r.plan.expect("a plan");
+        let second = r
+            .issued
+            .iter()
+            .filter(|e| e.trigger.as_deref() == Some(refl_core::plan::SECOND_KC))
+            .collect::<Vec<_>>();
+        assert!(second.len() <= 1);
+        let Some(ev) = second.first() else {
+            continue;
+        };
+        opened += 1;
+        assert_eq!(plan.learn.len(), 2);
+        let PlanAction::Learn { kc } = &ev.candidates[usize::from(ev.chosen)].action else {
+            panic!("rule 6 chooses a KC");
+        };
+        assert_eq!(kc, &plan.learn[1].kc);
+        assert_ne!(ev.seed, plan.seed);
+        // After the second block both learning KCs alternate.
+        let interleaved: Vec<&KcId> = plan
+            .done
+            .iter()
+            .filter(|d| d.step.phase == Phase::Interleaved)
+            .map(|d| &d.step.kc)
+            .collect();
+        assert!(interleaved.windows(4).all(|w| w.iter().any(|k| *k != w[0])));
+    }
+    assert!(opened > 0, "rule 6 never fired");
 }
 
 /// A learner after `events` synthetic events, `days_later` days on.
@@ -173,7 +225,8 @@ fn empty_plan(now: Timestamp, budget: Budget) -> Plan {
         budget,
         started: now,
         seed: Seed::new(0).unwrap(),
-        learn: None,
+        learn: Vec::new(),
+        candidates: Vec::new(),
         reviews: Vec::new(),
         done: Vec::new(),
         steps: Vec::new(),
@@ -215,10 +268,14 @@ fn the_validator_catches_every_rule() {
     plan.steps = vec![step(&k1, Phase::Interleaved, true, 10)];
     assert!(validate(&plan, &fresh, now).contains(&Violation::BlockedKc));
 
+    // Two learning KCs may have blocks; a not-started KC that is not one of
+    // them may not be interleaved.
     plan.steps = vec![
         step(&k0, Phase::Block, true, 10),
         step(&k4, Phase::Block, true, 10),
     ];
+    assert_eq!(validate(&plan, &fresh, now), Vec::<Violation>::new());
+    plan.steps = vec![step(&k4, Phase::Interleaved, true, 10)];
     assert_eq!(validate(&plan, &fresh, now), [Violation::NewKcs]);
 
     plan.steps = vec![step(&k0, Phase::Block, false, 10)];
@@ -284,7 +341,7 @@ fn review_debt_leaves_no_learning_kc() {
         Lang::Ru,
         Seed::new(3).unwrap(),
     );
-    assert_eq!(session.plan.learn, None);
+    assert_eq!(session.plan.learn, []);
     assert_ne!(session.plan.reviews.len(), 0);
     assert!(
         session
@@ -319,7 +376,7 @@ fn a_fresh_learner_starts_with_the_lesson_and_a_block() {
         Lang::Ru,
         Seed::new(9).unwrap(),
     );
-    let learn = session.plan.learn.clone().expect("a KC to learn");
+    let learn = session.plan.learn.first().cloned().expect("a KC to learn");
     // The 120-word explanation takes 72 s of the budget at 100 words a minute.
     assert_eq!(session.plan.steps[0].seconds, 72);
     let phases: Vec<Phase> = session.plan.steps.iter().map(|st| st.phase).collect();
@@ -413,7 +470,8 @@ fn a_deferred_kc_returns_the_next_day() {
             )
             .plan
             .learn
-            .map(|l| l.kc)
+            .first()
+            .map(|l| l.kc.clone())
     };
     let first = build(&History::default(), now).expect("a KC to learn");
     let deferred = refl_sim::event(
@@ -434,6 +492,7 @@ fn a_deferred_kc_returns_the_next_day() {
             violations: Vec::new(),
             dominant: "gap".into(),
             trigger: Some("kc_deferred".into()),
+            end: None,
         }),
     );
     let history = History::from_log(&b, [&deferred]);
