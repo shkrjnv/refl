@@ -74,6 +74,11 @@ p1 seed="1":
 p1b seed="1":
     cargo run --locked --release --quiet -p refl-sim --bin p1b -- content/bench/v2/bundle.json 200 30 {{seed}} target/p1b-seed{{seed}}
 
+# P1c: false mastery per KC and its evidence at mastery, on bundles v2 and v1 (tools/sim/bench/p1c); the cohort seed is the argument
+p1c seed="1":
+    cargo run --locked --release --quiet -p refl-sim --bin p1c -- content/bench/v2/bundle.json 200 30 {{seed}} > tools/sim/bench/p1c/bundle-v2-seed{{seed}}.txt
+    cargo run --locked --release --quiet -p refl-sim --bin p1c -- content/bench/v1/bundle.json 200 30 {{seed}} > tools/sim/bench/p1c/bundle-v1-seed{{seed}}.txt
+
 # M1: why the knowledge model lags (tools/sim/m1/REPORT.md); replays the bench v1 cohort through variants of the knowledge update, about 1 minute
 m1:
     cargo run --locked --release --quiet -p refl-sim --bin m1 -- content/bench/v1/bundle.json 200 30 1 > tools/sim/m1/output.txt
