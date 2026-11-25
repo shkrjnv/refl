@@ -368,27 +368,30 @@ fn the_review_queue_lists_drafts_by_language_with_a_line() {
 }
 
 /// The line is found from the text, also when the text came from a template.
+/// A fixture, not the real content: its review state changes with the
+/// author's work (docs/02, «Инструменты автора»).
 #[test]
 fn the_queue_finds_the_nearest_line_of_templated_text() {
-    let root = repo().join("content");
-    let (_, content) = content_build::build_with_content(&Options::new(&root)).unwrap();
+    let root = fixtures().join("templated");
+    let (out, content) = content_build::build_with_content(&Options::new(&root)).unwrap();
+    assert!(out.report.diagnostics.is_empty(), "{}", out.report);
     let files = content_build::review::review_files(&root, &content);
-    // The Articles tasks are one shared review: one hash per language.
-    for lang in ["uz", "ru", "en"] {
+    // The tasks are one shared review: one hash per language with text.
+    for lang in ["ru", "en"] {
         let line = files
             .hashes
             .lines()
-            .find(|l| l.starts_with(&format!("group:articles\t{lang}\t")))
+            .find(|l| l.starts_with(&format!("group:grp\t{lang}\t")))
             .unwrap_or_else(|| panic!("{}", files.hashes));
         assert_eq!(line.rsplit('\t').next().unwrap().len(), 64);
     }
-    // `*apple* здесь упоминается впервые…` is built from a template in items.ncl.
+    // `*dog* здесь упоминается впервые.` is built from a template.
     let line = files
         .queue
         .lines()
-        .find(|l| l.starts_with("art.fm.choice.dog#why,hint — ") && l.contains("items.ncl"))
-        .unwrap();
-    let source = std::fs::read_to_string(root.join("articles/items.ncl")).unwrap();
+        .find(|l| l.starts_with("it.t.dog#why,hint — ") && l.contains("content.ncl"))
+        .unwrap_or_else(|| panic!("{}", files.queue));
+    let source = std::fs::read_to_string(root.join("content.ncl")).unwrap();
     let place = line
         .rsplit_once("(≈ ")
         .unwrap()
@@ -398,29 +401,21 @@ fn the_queue_finds_the_nearest_line_of_templated_text() {
     let n: usize = place.rsplit(':').next().unwrap().parse().unwrap();
     assert!(
         source.lines().nth(n - 1).unwrap().contains("впервые")
-            || source.lines().nth(n - 1).unwrap().contains("birinchi")
             || source.lines().nth(n - 1).unwrap().contains("first time"),
         "line {n}: {}",
         source.lines().nth(n - 1).unwrap()
     );
 }
 
+/// The real content builds. Its review state, and so which KCs are live,
+/// changes with the author's work and is checked on fixtures only (docs/02,
+/// «Инструменты автора»).
 #[test]
-fn example_content_builds_with_computed_status() {
+fn example_content_builds() {
     let out = run(&repo().join("content"));
     assert!(!out.report.has_errors(), "{}", out.report);
     let bundle = out.bundle.expect("bundle");
-    let status = |id: &str| {
-        bundle
-            .content
-            .kcs
-            .iter()
-            .find(|k| k.kc.id.as_str() == id)
-            .map(|k| k.status)
-    };
-    // The Articles unit of the prototype (docs/15, «Состав темы») is live:
-    // its texts are reviewed in ru and en by Hara (content/reviews.lock;
-    // docs/02, «Вычитка и показ»), and every task is eligible for sessions.
+    // Every KC of the Articles unit (docs/15, «Состав темы») is in the bundle.
     for kc in [
         "en.gram.noun.countability",
         "en.gram.article.a-an-sound",
@@ -428,16 +423,11 @@ fn example_content_builds_with_computed_status() {
         "en.gram.article.second-mention",
         "en.gram.article.zero-general",
     ] {
-        assert_eq!(status(kc), Some(KcStatus::Live), "{kc}");
+        assert!(
+            bundle.content.kcs.iter().any(|k| k.kc.id.as_str() == kc),
+            "{kc}"
+        );
     }
-    for entry in &bundle.content.items {
-        assert!(entry.session_eligible, "{}", entry.item.id);
-        // uz is not reviewed yet, so it is never shown.
-        assert!(entry.item.review.is_shown(Lang::Ru) && entry.item.review.is_shown(Lang::En));
-        assert!(!entry.item.review.is_shown(Lang::Uz), "{}", entry.item.id);
-    }
-    // The shared spelling KC has no explanations or tasks yet.
-    assert_eq!(status("en.orth.spelling"), Some(KcStatus::Draft));
     assert_eq!(
         bundle.content.requires_closure
             [&refl_core::ids::KcId::new("en.gram.article.second-mention").unwrap()]
