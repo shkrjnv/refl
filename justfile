@@ -54,9 +54,21 @@ plan-speed:
 cohort learners="200" days="30" seed="1": content
     cargo run --locked --release --quiet -p refl-sim --bin cohort -- target/bundle.json {{learners}} {{days}} {{seed}}
 
-# K5 cohort benchmark v1 (tools/sim/bench/v1), frozen by the tag bench-v1: the report is identical there; on later commits a diff is the effect of a planner or model change
+# K5 cohort benchmark v1 (tools/sim/bench/v1): builds and runs the code of the tag bench-v1 in a temporary git worktree, not the current tree, and diffs its report against expected.txt of the tag; always identical unless the tag or the toolchain changed
 bench-v1:
-    cargo run --locked --release --quiet -p refl-sim --bin cohort -- content/bench/v1/bundle.json $(cat tools/sim/bench/v1/args) | diff -u tools/sim/bench/v1/expected.txt - && echo "benchmark v1: identical to tools/sim/bench/v1/expected.txt"
+    #!/usr/bin/env bash
+    set -euo pipefail
+    root="$PWD"
+    wt="$(mktemp -d)"
+    trap 'git -C "$root" worktree remove --force "$wt"' EXIT
+    git worktree add --detach --quiet "$wt" bench-v1
+    cd "$wt"
+    CARGO_TARGET_DIR="$root/target/bench-v1" cargo run --locked --release --quiet -p refl-sim --bin cohort -- content/bench/v1/bundle.json $(cat tools/sim/bench/v1/args) | diff -u tools/sim/bench/v1/expected.txt -
+    echo "benchmark v1: identical to tools/sim/bench/v1/expected.txt at the tag bench-v1"
+
+# P1: ours and only FSRS on the frozen bundle v2 (tools/sim/bench/p1), 200 learners x 30 days; the cohort seed is the argument
+p1 seed="1":
+    cargo run --locked --release --quiet -p refl-sim --bin p1 -- content/bench/v2/bundle.json 200 30 {{seed}}
 
 # M1: why the knowledge model lags (tools/sim/m1/REPORT.md); replays the bench v1 cohort through variants of the knowledge update, about 1 minute
 m1:

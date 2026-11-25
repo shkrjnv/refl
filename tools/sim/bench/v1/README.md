@@ -10,7 +10,7 @@ v1 is never edited. A change to the simulator, its arms or its metrics goes into
 nix develop -c just bench-v1
 ```
 
-It runs `cohort` (release) on the frozen bundle with the arguments in `args` and diffs its output against `expected.txt`; any difference fails. v1 is frozen by the local git tag `bench-v1` (commit `af51ab3`): the diff is identical at the tag, and on a later commit it differs by the measured effect of whatever planner, model or simulator change came since. The test `tools/sim/tests/bench_v1.rs` checks only the simulator's own determinism. The output is the same in debug and release builds.
+It runs `cohort` (release) on the frozen bundle with the arguments in `args` and diffs its output against `expected.txt`; any difference fails. v1 is frozen by the local git tag `bench-v1` (commit `af51ab3`). The recipe checks the tag out into a temporary git worktree, builds it there (cache in `target/bench-v1`) and runs it, so the result does not depend on the current tree: it is identical on every commit. The effect of a later planner or model change is measured by a new versioned run (P1: `tools/sim/bench/p1/`), never by this diff. The test `tools/sim/tests/bench_v1.rs` checks only the simulator's own determinism. The output is the same in debug and release builds.
 
 `AUDIT.md` is the audit of this run (item H): the F2 gain over «only FSRS» comes mostly from how the baseline was built.
 
@@ -31,6 +31,4 @@ It runs `cohort` (release) on the frozen bundle with the arguments in `args` and
 
 ## When the diff is not empty
 
-- The simulator changed: restore v1 behaviour and put the change into v2.
-- The planner or the model changed: the new output of v1 is the measured effect of that change. The planner and model versions above say which code `expected.txt` belongs to. A new reference result is a new versioned output that names its commit; v1 files are never edited (docs/11, «Версии симулятора»).
-- The bundle format changed and the frozen bundle no longer reads: v1 cannot run on the new format; use the tag.
+The diff runs the code of the tag, so it is empty on every commit. It is not empty only if the tag moved, the toolchain changed the floating-point or sorting behaviour, or the recipe broke; none of these is an effect of a planner or model change. Such effects go into a new versioned run that names its commit; v1 files are never edited (docs/11, «Версии симулятора»).
