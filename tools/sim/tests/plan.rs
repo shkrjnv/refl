@@ -230,6 +230,7 @@ fn empty_plan(now: Timestamp, budget: Budget) -> Plan {
         seed: Seed::new(0).unwrap(),
         learn: Vec::new(),
         candidates: Vec::new(),
+        deferred_today: Vec::new(),
         reviews: Vec::new(),
         done: Vec::new(),
         steps: Vec::new(),
@@ -562,14 +563,19 @@ fn a_kc_without_partners_goes_on_after_its_block() {
                 .iter()
                 .filter(|st| st.phase == Phase::Interleaved && st.kc == k0)
                 .count();
-            assert_eq!(on_k0, params.alone_cap as usize, "seed {seed}");
+            // Steps interleaved earlier with a second learning KC count too.
+            if plan.learn.len() == 1 {
+                assert_eq!(on_k0, params.alone_cap as usize, "seed {seed}");
+            } else {
+                assert!(on_k0 >= params.alone_cap as usize, "seed {seed}");
+            }
         }
     }
     assert!(alone > 0, "the root never went on alone");
 }
 
-/// P1b: rule 6 is checked on every replan. A start candidate whose Ready is
-/// below the threshold while the root goes on alone does not open; once it
+/// P1b, P1c: rule 6 is checked on every replan. A KC whose Ready is below
+/// the threshold while the root goes on alone does not open; once it
 /// reaches the threshold, it opens as the second learning KC, and
 /// three-in-a-row applies again, counting the run the root has built.
 #[test]
@@ -584,7 +590,7 @@ fn a_candidate_ready_mid_run_opens_the_second_kc() {
         .find(|(r, ..)| r.end == Some("kc_cap"))
         .expect("a session reaches the cap");
     // The plan after five interleaved steps of the root alone, one more
-    // ahead; k1 was a start candidate (its Ready fell after the start).
+    // ahead.
     let mut plan = r.plan.expect("a plan");
     let cut = plan
         .done
@@ -597,7 +603,6 @@ fn a_candidate_ready_mid_run_opens_the_second_kc() {
     plan.done.truncate(cut);
     plan.steps = vec![step(&k0, Phase::Interleaved, false, 10)];
     plan.end = None;
-    plan.candidates.push(k1.clone());
     let shown: Vec<&ItemId> = plan
         .done
         .iter()
@@ -658,6 +663,51 @@ fn a_candidate_ready_mid_run_opens_the_second_kc() {
     let ahead: Vec<&Step> = a.plan.steps.iter().collect();
     assert!(longest_run(&ahead, &k0) <= params.max_run);
     assert_eq!(planner.validate_plan(&a.plan, &high, now), []);
+}
+
+/// P1c on a graph with one root: learners placed a little higher start with
+/// only the root ready; practising it in the session lifts its child's
+/// Ready across the threshold, and the child, not a start candidate, opens
+/// as the second learning KC. Whether a run may pass three is checked on
+/// every decision by the validator's own reading (no violation): the child
+/// leaves the runs alone only while its Ready is above the threshold, and
+/// errors on the root can drop it below again.
+#[test]
+fn a_child_made_ready_in_the_session_opens() {
+    let b = bundle(4, 40, &[]);
+    let params = Params::default();
+    let model = KnowledgeModel::default();
+    let (k0, k1) = (kc_id(0), kc_id(1));
+    let mut opened = 0;
+    for (level, seed) in (0..4).flat_map(|l| (0..20).map(move |s| (l, s))) {
+        let mut track = Track::new(&model, &b, refl_sim::T0, seed);
+        track.state = State::new(profile(level));
+        let mut learner = Learner::new(&b, seed);
+        let r = session_ours(&mut track, &params, &mut learner, Budget::TwentyFive);
+        assert!(
+            r.violations.is_empty(),
+            "level {level} seed {seed}: {:?}",
+            r.violations
+        );
+        let plan = r.plan.expect("a plan");
+        if plan.learn.first().map(|l| &l.kc) != Some(&k0)
+            || plan.candidates.contains(&k1)
+            || plan.learn.get(1).map(|l| &l.kc) != Some(&k1)
+        {
+            continue;
+        }
+        opened += 1;
+        let ev = r
+            .issued
+            .iter()
+            .find(|e| e.trigger.as_deref() == Some(SECOND_KC))
+            .expect("rule 6 logged");
+        let PlanAction::Learn { kc } = &ev.candidates[usize::from(ev.chosen)].action else {
+            panic!("rule 6 chooses a KC");
+        };
+        assert_eq!(kc, &k1);
+    }
+    assert!(opened > 0, "no child opened in the session");
 }
 
 /// P1b: a single KC goes on alone to exactly `alone_cap` interleaved steps

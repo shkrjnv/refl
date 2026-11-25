@@ -33,7 +33,7 @@ pub use validate::Violation;
 pub use values::{LearnValue, ReviewValue};
 
 /// Version of the session rules; part of every `plan_issued`.
-const PLANNER_NAME: &str = "session-prototype-3";
+const PLANNER_NAME: &str = "session-prototype-4";
 
 /// Parameters of the prototype session builder with their starting values
 /// (`docs/04-placement-planner.md`, «Сборка сессии в прототипе»). They are
@@ -278,8 +278,11 @@ pub struct Plan {
     /// rule 6.
     pub learn: Vec<Learn>,
     /// The learning candidates at the start, by V^learn: the pool of the
-    /// second learning KC and of the started KCs interleaved.
+    /// started KCs interleaved.
     pub candidates: Vec<KcId>,
+    /// KCs deferred by the 12-items rule earlier on the UTC day the session
+    /// started, read from the log: rule 6 does not open them.
+    pub deferred_today: Vec<KcId>,
     /// In V^rev order.
     pub reviews: Vec<PlannedReview>,
     pub done: Vec<Done>,

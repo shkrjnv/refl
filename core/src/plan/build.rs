@@ -350,6 +350,19 @@ impl<'a> Planner<'a> {
             seed,
             learn,
             candidates: start.learn.iter().map(|v| v.kc.clone()).collect(),
+            deferred_today: self
+                .bundle
+                .content
+                .kcs
+                .iter()
+                .map(|e| &e.kc.id)
+                .filter(|kc| {
+                    history
+                        .last_deferred(kc)
+                        .is_some_and(|t| utc_day(t) == utc_day(now))
+                })
+                .cloned()
+                .collect(),
             reviews,
             done: Vec::new(),
             steps: Vec::new(),
@@ -485,21 +498,47 @@ impl<'a> Planner<'a> {
                 .any(|kc| self.has_unseen(plan, kc, false))
     }
 
+    /// The pool of rule 6 now: live KCs not mastered, with Ready above the
+    /// threshold, not deferred by rule 2 on the session's day or in it, not
+    /// a learning KC or review of the session, with an unseen eligible
+    /// production item; in bundle order.
+    fn second_candidates<'p>(&'p self, s: &State, plan: &Plan, now: Timestamp) -> Vec<&'p KcId> {
+        let shown: BTreeSet<&ItemId> = plan.shown().map(|(_, sh)| &sh.item.id).collect();
+        self.bundle
+            .content
+            .kcs
+            .iter()
+            .filter(|e| e.status == KcStatus::Live)
+            .map(|e| &e.kc.id)
+            .filter(|kc| !plan.is_learn(kc) && !plan.deferred_today.contains(kc))
+            .filter(|kc| plan.reviews.iter().all(|r| &r.kc != *kc))
+            .filter(|kc| !self.is_mastered(s, kc, now))
+            .filter(|kc| self.ready(s, kc, now) >= self.params.ready_min)
+            .filter(|kc| {
+                self.slots(kc)
+                    .iter()
+                    .any(|c| c.projection.is_production() && !shown.contains(&c.item.id))
+            })
+            .collect()
+    }
+
     /// The learning KC that goes on alone: the only one that may still be
-    /// given, with nothing else that can get a step. The run rule is off
-    /// for it, and it gets at most `alone_cap` interleaved steps in the
-    /// session.
+    /// given, with nothing else that can get a step and no candidate for
+    /// rule 6 while it may still open one. The run rule is off for it, and
+    /// it gets at most `alone_cap` interleaved steps in the session.
     fn alone<'p>(&self, s: &State, plan: &'p Plan, now: Timestamp) -> Option<&'p Learn> {
         let [only] = self.active_learns(s, plan, now)[..] else {
             return None;
         };
-        self.nothing_else(s, plan, now).then_some(only)
+        let may_open = plan.learn.len() < self.params.learn_max
+            && !self.second_candidates(s, plan, now).is_empty();
+        (self.nothing_else(s, plan, now) && !may_open).then_some(only)
     }
 
     /// Rule 6: with one learning KC whose block is closed (or which is
     /// mastered), no review left and no partner that can get a step, a
-    /// second one opens: the best start candidate by V^learn now, drawn
-    /// like the first with the second seed.
+    /// second one opens: the best of [`Self::second_candidates`] by V^learn
+    /// now, drawn like the first with the second seed.
     fn second_learn(&self, s: &State, plan: &Plan, now: Timestamp) -> Option<Opened> {
         let p = self.params;
         let [first] = plan.learn.as_slice() else {
@@ -513,13 +552,9 @@ impl<'a> Planner<'a> {
             return None;
         }
         let unlocks = self.unlock(s, now);
-        let mut values: Vec<LearnValue> = plan
-            .candidates
-            .iter()
-            .filter(|kc| !plan.is_learn(kc))
-            .filter(|kc| !self.is_mastered(s, kc, now))
-            .filter(|kc| self.ready(s, kc, now) >= p.ready_min)
-            .filter(|kc| self.has_unseen(plan, kc, true))
+        let mut values: Vec<LearnValue> = self
+            .second_candidates(s, plan, now)
+            .into_iter()
             .map(|kc| self.learn_value(s, kc, now, &unlocks))
             .collect();
         values.sort_by(|a, b| b.value.total_cmp(&a.value).then_with(|| a.kc.cmp(&b.kc)));

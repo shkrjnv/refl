@@ -859,6 +859,7 @@ pub fn session_fsrs(
             seed: Seed::new(0).expect("small"),
             learn: Vec::new(),
             candidates: Vec::new(),
+            deferred_today: Vec::new(),
             reviews: Vec::new(),
             done: Vec::new(),
             steps: Vec::new(),

@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use super::build::answered_production;
 use super::{Phase, Plan, Planner, Step};
+use crate::bundle::KcStatus;
 use crate::ids::{ItemId, ItemRef, KcId};
 use crate::item::KcRole;
 use crate::model::State;
@@ -204,7 +205,8 @@ impl Planner<'_> {
     /// one still given (not deferred, Ready above the threshold, not
     /// mastered) while no review is left and no contrast of the learning
     /// KCs or started, not mastered start candidate has Ready above the
-    /// threshold and an unseen eligible item. Written from the plan, the
+    /// threshold and an unseen eligible item, and no KC could open as the
+    /// second learning KC. Written from the plan, the
     /// state and the content rather than with the planner's predicate, so
     /// that the run rule is checked, not restated.
     fn alone_kc<'p>(&self, plan: &'p Plan, s: &State, now: Timestamp) -> Option<&'p KcId> {
@@ -241,7 +243,24 @@ impl Planner<'_> {
                 && self.ready(s, kc, now) >= p.ready_min
                 && self.slots(kc).iter().any(|c| !shown.contains(&c.item.id))
         });
-        (!review_left && !partner).then_some(only)
+        // A second learning KC rule 6 could still open: any live KC, not
+        // mastered, ready, not deferred today or in the session, not a
+        // learning KC or review here, with an unseen production item.
+        let may_open = plan.learn.len() < p.learn_max
+            && self.bundle.content.kcs.iter().any(|e| {
+                let kc = &e.kc.id;
+                e.status == KcStatus::Live
+                    && !plan.is_learn(kc)
+                    && !plan.deferred_today.contains(kc)
+                    && plan.reviews.iter().all(|r| &r.kc != kc)
+                    && !mastered(kc)
+                    && self.ready(s, kc, now) >= p.ready_min
+                    && self
+                        .slots(kc)
+                        .iter()
+                        .any(|c| c.projection.is_production() && !shown.contains(&c.item.id))
+            });
+        (!review_left && !partner && !may_open).then_some(only)
     }
 
     /// The item is the current, session-eligible version and the step's KC
