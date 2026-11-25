@@ -48,6 +48,8 @@
               # content-build tests build the example content and the negative fixtures.
               ./content
               ./tools/content-build/tests/fixtures
+              # The K5 benchmark v1 test compares the cohort report with the frozen one.
+              ./tools/sim/bench
               # sqlx::migrate! embeds the migrations at compile time.
               ./server/migrations
               # Committed TS bindings: the ts_bindings test checks they are current.

@@ -54,6 +54,10 @@ plan-speed:
 cohort learners="200" days="30" seed="1": content
     cargo run --locked --release --quiet -p refl-sim --bin cohort -- target/bundle.json {{learners}} {{days}} {{seed}}
 
+# K5 cohort benchmark v1 (tools/sim/bench/v1): the frozen bundle and seeds must give the recorded report byte for byte
+bench-v1:
+    cargo run --locked --release --quiet -p refl-sim --bin cohort -- content/bench/v1/bundle.json $(cat tools/sim/bench/v1/args) | diff -u tools/sim/bench/v1/expected.txt - && echo "benchmark v1: identical to tools/sim/bench/v1/expected.txt"
+
 # Review queue (by language, path:line) and all tasks as a learner sees them, in target/review/
 review:
     cargo run --locked --quiet -p content-build -- report --review --out target/review content
