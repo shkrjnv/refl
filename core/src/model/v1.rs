@@ -74,7 +74,8 @@ pub struct Params {
     pub baseline_mastery: f64,
     /// ...shrunk to 0 with this many virtual answers.
     pub baseline_n0: f64,
-    /// An item answered within this many days is not counted.
+    /// An item answered within this many days is not counted: the planner's
+    /// seen-family window ν (a prior, like the instruction rule).
     pub unseen_days: f64,
     /// Typing beyond this many times the learner's usual typing time counts
     /// as retrieval.
@@ -153,7 +154,7 @@ impl Default for Params {
             spread_window: 8,
             baseline_mastery: 0.8,
             baseline_n0: 20.0,
-            unseen_days: 14.0,
+            unseen_days: 3.0,
             typing_tolerance: 1.5,
             typing_window: 30,
             typing_n0: 5.0,
@@ -262,6 +263,15 @@ struct Observation<'a> {
     correct: bool,
     /// Counts as a real answer on these KCs (not propagation).
     direct: bool,
+}
+
+/// The parts of the answer's time exceed the whole: `first_input_ms`,
+/// `first_input_ms + typing_ms` or `hidden_ms` above `latency_ms`
+/// (`docs/03-layer2-learner-model.md`, «Согласованность времени»).
+fn timing_inconsistent(a: &AnswerEvent) -> bool {
+    let whole = u64::from(a.latency_ms);
+    let part = |ms: Option<u32>| u64::from(ms.unwrap_or(0));
+    part(a.first_input_ms) + part(a.typing_ms) > whole || part(a.hidden_ms) > whole
 }
 
 /// The fluency condition of one KC and its parts
@@ -639,15 +649,26 @@ impl KnowledgeModel {
         *last = (*last).max(t);
 
         // Fluency bookkeeping of every answer, rapid guesses included: the
-        // instruction of the previous answer and the items shown lately.
+        // instructions shown in this session and the items answered lately.
         let family = ctx.families.get(&item.family);
         let instruction = family.map(|f| &f.instruction);
-        let same_instruction = instruction.is_some() && s.last_instruction.as_ref() == instruction;
+        if s.session != ev.session_id {
+            s.session = ev.session_id;
+            s.session_instructions.clear();
+        }
+        // The first answer under an instruction in a session, and any answer
+        // outside a known session, does not count.
+        let known_instruction =
+            s.session.is_some() && instruction.is_some_and(|i| s.session_instructions.contains(i));
+        if let Some(i) = instruction {
+            s.session_instructions.insert(i.clone());
+        }
         let unseen = s
             .seen
             .get(&a.item.id)
             .is_none_or(|&at| days(at, shown) >= p.unseen_days);
-        s.last_instruction = instruction.cloned();
+        let inconsistent = timing_inconsistent(a);
+        s.timing_inconsistent += u32::from(inconsistent);
         s.seen.retain(|_, at| days(*at, shown) < p.unseen_days);
         let seen = s.seen.entry(a.item.id.clone()).or_insert(shown);
         *seen = (*seen).max(shown);
@@ -669,7 +690,8 @@ impl KnowledgeModel {
                     && a.hints == 0
                     && !rapid
                     && a.hidden_ms == Some(0)
-                    && same_instruction
+                    && !inconsistent
+                    && known_instruction
                     && unseen =>
             {
                 self.retrieval_seconds(s, a, item.typed_input()).map(|t| {
@@ -707,6 +729,7 @@ impl KnowledgeModel {
             predicted,
             correct,
             rapid,
+            timing_inconsistent: inconsistent,
             subject: item.subject.clone(),
             context: a.context,
             ladder: item.ladder(),

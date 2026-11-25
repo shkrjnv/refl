@@ -11,7 +11,7 @@ use sha2::{Digest, Sha256};
 use super::Profile;
 use super::fsrs::Card;
 use crate::event::InputDevice;
-use crate::ids::{EventId, InstructionId, ItemId, KcId, MisconceptionId, SubjectId};
+use crate::ids::{EventId, InstructionId, ItemId, KcId, MisconceptionId, SessionId, SubjectId};
 use crate::value::Timestamp;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -32,12 +32,15 @@ pub struct State {
     /// Time of the last answer per subject: the break threshold.
     pub last_answer: BTreeMap<SubjectId, Timestamp>,
     pub rapid: RapidStats,
-    /// Instruction of the family of the previous answer, of any subject;
-    /// `None` before the first answer or after one whose family is not in
-    /// the family table (`docs/03-layer2-learner-model.md`, «Беглость»).
-    pub last_instruction: Option<InstructionId>,
+    /// The session of the latest answer and the instructions shown in it
+    /// (`docs/03-layer2-learner-model.md`, «Беглость»).
+    pub session: Option<SessionId>,
+    pub session_instructions: BTreeSet<InstructionId>,
+    /// Answers whose parts of time exceed the whole: `timing-inconsistent`
+    /// of the quality report (`docs/11-quality.md`).
+    pub timing_inconsistent: u32,
     /// Display moment of the latest answer per item, any version, kept for
-    /// the unseen-days window only.
+    /// the item window only.
     pub seen: BTreeMap<ItemId, Timestamp>,
     /// Typing speeds of the latest counted typed answers per input device,
     /// characters per second, oldest first.
@@ -110,7 +113,9 @@ impl State {
             misconceptions: BTreeMap::new(),
             last_answer: BTreeMap::new(),
             rapid: RapidStats::default(),
-            last_instruction: None,
+            session: None,
+            session_instructions: BTreeSet::new(),
+            timing_inconsistent: 0,
             seen: BTreeMap::new(),
             typing: BTreeMap::new(),
             baseline: BTreeMap::new(),

@@ -144,6 +144,9 @@ pub struct AnswerOutcome {
     pub correct: bool,
     /// A rapid guess: changed nothing but the rapid-guess counters.
     pub rapid: bool,
+    /// The parts of the answer's time exceed the whole; counted as
+    /// `timing-inconsistent` in the quality report.
+    pub timing_inconsistent: bool,
     pub subject: SubjectId,
     pub context: AnswerContext,
     pub ladder: LadderLevel,

@@ -31,7 +31,7 @@ use refl_core::event::{
 };
 use refl_core::ids::{
     ContentVersion, DomainId, EventId, ExplanationId, FamilyId, InstructionId, ItemId, ItemRef,
-    ItemVersion, KcId, LearnerId, LessonId, MisconceptionId, SubjectId,
+    ItemVersion, KcId, LearnerId, LessonId, MisconceptionId, SessionId, SubjectId,
 };
 use refl_core::item::{
     AnswerPattern, AuthorDifficulty, ChoiceBody, ChoiceOption, EnglishCheck, ExpectedWrong,
@@ -453,13 +453,30 @@ pub fn event_id(at: Timestamp, tail: u64) -> EventId {
     EventId::new(Uuid::from_bytes(b)).expect("UUIDv7")
 }
 
-/// A known event of the synthetic learner at `at`.
+/// A known event of the synthetic learner at `at`, in no session.
 pub fn event(at: Timestamp, tail: u64, payload: EventPayload) -> Decoded {
+    event_in(None, at, tail, payload)
+}
+
+/// The session `n` of the synthetic learner.
+pub fn session(n: u128) -> SessionId {
+    SessionId(Uuid::from_u128(
+        0x0193_0000_0000_7000_8000_0000_0000_0000 + n,
+    ))
+}
+
+/// A known event of the synthetic learner at `at` in `session`.
+pub fn event_in(
+    session: Option<SessionId>,
+    at: Timestamp,
+    tail: u64,
+    payload: EventPayload,
+) -> Decoded {
     Decoded::Known(Event {
         schema_version: CURRENT_SCHEMA_VERSION,
         event_id: event_id(at, tail),
         learner_id: learner(),
-        session_id: None,
+        session_id: session,
         client_ts: at,
         server_ts: None,
         payload,

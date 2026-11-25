@@ -31,9 +31,11 @@ use std::process::ExitCode;
 
 use refl_core::bundle::{Bundle, KcStatus};
 use refl_core::event::{AnswerEvent, Decoded, EventPayload};
-use refl_core::ids::KcId;
+use refl_core::ids::{KcId, SessionId};
 use refl_core::item::KcRole;
-use refl_core::model::{Applied, Families, Fluency, FoldCtx, KnowledgeModel, LearnerModel, State};
+use refl_core::model::{
+    AnswerOutcome, Applied, Families, Fluency, FoldCtx, KnowledgeModel, LearnerModel, State,
+};
 use refl_core::plan::{Budget, Params, Planner, ReadingSpeed};
 use refl_core::rng::SplitMix64;
 use refl_core::value::Timestamp;
@@ -192,24 +194,31 @@ fn exclusion(
     bundle: &Bundle,
     before: &State,
     a: &AnswerEvent,
+    session: Option<SessionId>,
+    outcome: &AnswerOutcome,
     shown: Timestamp,
 ) -> &'static str {
     let instruction = bundle
         .projection(&a.item)
         .and_then(|p| families.get(&p.family))
         .map(|f| &f.instruction);
+    let known = session.is_some()
+        && session == before.session
+        && instruction.is_some_and(|i| before.session_instructions.contains(i));
     if a.attempt > 1 || a.hints > 0 {
         "attempt or hint"
     } else if a.hidden_ms != Some(0) {
         "page hidden"
-    } else if instruction.is_none() || before.last_instruction.as_ref() != instruction {
-        "first after a change of instruction"
+    } else if outcome.timing_inconsistent {
+        "timing inconsistent"
+    } else if !known {
+        "first under its instruction in the session"
     } else if before
         .seen
         .get(&a.item.id)
-        .is_some_and(|t| shown.0 - t.0 < 14 * DAY_MS)
+        .is_some_and(|t| shown.0 - t.0 < 3 * DAY_MS)
     {
-        "item seen within 14 days"
+        "item answered within 3 days"
     } else {
         "counted"
     }
@@ -277,7 +286,7 @@ fn run(
                 && o.correct
                 && !o.rapid
             {
-                let reason = exclusion(&families, bundle, &before, a, t);
+                let reason = exclusion(&families, bundle, &before, a, e.session_id, o, t);
                 *coverage.reasons.entry(reason).or_insert(0) += 1;
             }
             for (kc, k) in &state.kcs {

@@ -17,8 +17,8 @@ use refl_core::model::{
 use refl_core::projection::{ItemProjection, ItemVersionEntry};
 use refl_core::value::Timestamp;
 use refl_sim::{
-    BundleSpec, DAY_MS, LogSpec, SPELLING_KC, T0, answer, event, explanation_id, item_ref, kc_id,
-    misconception_id, synthetic_bundle, synthetic_log, unknown_event,
+    BundleSpec, DAY_MS, LogSpec, SPELLING_KC, T0, answer, event, event_in, explanation_id,
+    item_ref, kc_id, misconception_id, session, synthetic_bundle, synthetic_log, unknown_event,
 };
 
 fn bundle() -> Bundle {
@@ -358,9 +358,10 @@ fn answers_outside_the_bundle_are_counted_not_guessed() {
     assert!(s.kcs.is_empty());
 }
 
-/// Fast, sure, correct typed answers on k00 once a day: mastered, then
+/// Fast, sure, correct typed answers on k00, two a day in a session of their
+/// own (the first of a session does not count for fluency): mastered, then
 /// forgotten after a long break. Fifteen gap fills, so no item comes back
-/// within the 14 days fluency asks for.
+/// within the 3 days fluency asks for.
 #[test]
 fn mastery_statuses_and_the_return_check() {
     let b = synthetic_bundle(BundleSpec {
@@ -369,14 +370,21 @@ fn mastery_statuses_and_the_return_check() {
     });
     let model = KnowledgeModel::default();
     let subject = refl_core::ids::SubjectId::new("en").unwrap();
-    let events: Vec<Decoded> = (0..30)
-        .map(|d| {
-            let j = 1 + 2 * usize::try_from(d % 15).unwrap();
+    let events: Vec<Decoded> = (0..60_i64)
+        .map(|n| {
+            let (day, nth) = (n / 2, n % 2);
+            let j = 1 + 2 * usize::try_from(n % 15).unwrap();
             let mut a = typed(0, j, "the");
             a.context = AnswerContext::Review;
             a.confidence = Some(Confidence::Sure);
             a.latency_ms = 5_000;
-            ev(at(d, 0), u64::try_from(d).unwrap(), a)
+            a.first_input_ms = Some(5_000);
+            event_in(
+                Some(session(u128::try_from(day).unwrap() + 1)),
+                at(day, (nth - 1) * 60_000), // the day's last answer is on the hour
+                u64::try_from(n).unwrap(),
+                EventPayload::Answer(a),
+            )
         })
         .collect();
     let s = fold(&b, &events);

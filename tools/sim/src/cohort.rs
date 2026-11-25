@@ -18,7 +18,7 @@ use refl_core::event::{
 };
 use refl_core::event::{Decoded, PlanIssuedEvent};
 use refl_core::ids::ExplanationId;
-use refl_core::ids::{ItemRef, KcId, MisconceptionId};
+use refl_core::ids::{ItemRef, KcId, MisconceptionId, SessionId};
 use refl_core::item::KcRole;
 use refl_core::kind::ItemKind;
 use refl_core::model::derived::KcProgress;
@@ -34,7 +34,7 @@ use refl_core::rng::SplitMix64;
 use refl_core::value::Lang;
 use refl_core::value::{Seed, Timestamp};
 
-use crate::{DAY_MS, T0, event};
+use crate::{DAY_MS, T0, event_in, session};
 
 /// One reply of a learner to one slot.
 #[derive(Debug, Clone)]
@@ -558,6 +558,11 @@ pub struct Track<'a> {
     pub views: Vec<(ExplanationId, u32)>,
     /// Milliseconds; strictly increases with every event.
     pub clock: i64,
+    /// Session of the events folded now, and how many were begun; ids come
+    /// from the count, not from the random stream, so trajectories do not
+    /// depend on them.
+    session: Option<SessionId>,
+    sessions: u128,
     rng: SplitMix64,
     /// Non-rapid answers per KC where it is primary.
     pub answers: BTreeMap<KcId, u32>,
@@ -586,6 +591,8 @@ impl<'a> Track<'a> {
             history: History::default(),
             views: Vec::new(),
             clock: start.0,
+            session: None,
+            sessions: 0,
             rng: SplitMix64::new(seed),
             answers: BTreeMap::new(),
             to_mastery: BTreeMap::new(),
@@ -616,10 +623,16 @@ impl<'a> Track<'a> {
         self.clock += ms.max(1);
     }
 
+    /// Starts a session: the events from now on carry its id.
+    pub fn begin_session(&mut self) {
+        self.sessions += 1;
+        self.session = Some(session(self.sessions));
+    }
+
     /// Folds an event at the next millisecond.
     fn fold(&mut self, payload: EventPayload) -> (Applied, Decoded) {
         self.wait(1);
-        let ev = event(self.now(), self.rng.next_u64(), payload);
+        let ev = event_in(self.session, self.now(), self.rng.next_u64(), payload);
         self.history.record(self.bundle, &ev);
         let applied = self
             .model
@@ -792,6 +805,7 @@ pub fn session_ours(
     learner: &mut Learner,
     budget: Budget,
 ) -> SessionReport {
+    track.begin_session();
     let pace = track.speed(params);
     let planner = Planner::new(track.model, track.bundle, params, &pace);
     let mut r = SessionReport::default();
@@ -980,6 +994,7 @@ pub fn session_fsrs(
     params: &Params,
     ours: bool,
 ) -> SessionReport {
+    track.begin_session();
     let mut r = SessionReport::default();
     let started = track.clock;
     let bundle = track.bundle;

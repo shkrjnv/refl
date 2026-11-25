@@ -6,11 +6,15 @@
 
 use refl_core::bundle::Bundle;
 use refl_core::event::{AnswerEvent, Decoded, EventPayload, InputDevice, Response, Verdict};
-use refl_core::ids::{InstructionId, KcId};
-use refl_core::model::{Families, KnowledgeModel, Profile, State, replay};
+use refl_core::ids::{InstructionId, KcId, SessionId};
+use refl_core::model::{
+    Applied, Families, FoldCtx, KnowledgeModel, LearnerModel, Profile, State, replay,
+};
 use refl_core::value::Timestamp;
 use refl_core::{decode_event, encode_event};
-use refl_sim::{BundleSpec, DAY_MS, T0, answer, event, item_ref, kc_id, synthetic_bundle};
+use refl_sim::{
+    BundleSpec, DAY_MS, T0, answer, event_in, item_ref, kc_id, session, synthetic_bundle,
+};
 
 const LAMBDA: f64 = 0.2;
 
@@ -61,11 +65,16 @@ fn paced(b: &Bundle, i: usize, j: usize, factor: f64) -> AnswerEvent {
     )
 }
 
+/// An answer in session 1.
 fn ev(t: Timestamp, tail: u64, a: AnswerEvent) -> Decoded {
-    event(t, tail, EventPayload::Answer(a))
+    ev_in(Some(session(1)), t, tail, a)
 }
 
-/// A first answer, on KC 2: it sets the instruction and is never counted.
+fn ev_in(s: Option<SessionId>, t: Timestamp, tail: u64, a: AnswerEvent) -> Decoded {
+    event_in(s, t, tail, EventPayload::Answer(a))
+}
+
+/// A first answer, on KC 2: the first under the instruction, never counted.
 fn warm_up() -> Decoded {
     ev(at(0, 0), 0, correct(2, 0, 5_000))
 }
@@ -193,7 +202,7 @@ fn each_exclusion_rule_excludes() {
 }
 
 #[test]
-fn the_first_answer_after_a_change_of_instruction_is_not_counted() {
+fn only_the_first_answer_under_an_instruction_in_a_session_is_excluded() {
     let mut b = bundle(8);
     let other = InstructionId::new("en.instr.other").unwrap();
     for e in &mut b.content.items {
@@ -204,31 +213,94 @@ fn the_first_answer_after_a_change_of_instruction_is_not_counted() {
     let s = fold(
         &b,
         &[
-            warm_up(),
-            ev(at(0, 10), 1, correct(0, 0, 5_000)),
-            ev(at(0, 15), 2, correct(0, 2, 5_000)),
-            ev(at(0, 20), 3, correct(2, 2, 5_000)),
-            ev(at(0, 25), 4, correct(0, 4, 5_000)),
+            warm_up(),                                                   // KC 2, own instruction: first
+            ev(at(0, 10), 1, correct(0, 0, 5_000)),                      // `other`: first, excluded
+            ev(at(0, 15), 2, correct(2, 2, 5_000)),                      // KC 2: second, counts
+            ev(at(0, 20), 3, correct(0, 2, 5_000)), // `other`, after another kind: counts
+            ev(at(0, 25), 4, correct(0, 4, 5_000)), // counts
+            ev_in(Some(session(2)), at(0, 40), 5, correct(0, 6, 5_000)), // a new session: first again
+            ev_in(Some(session(2)), at(0, 45), 6, correct(2, 4, 5_000)), // first under KC 2's
+            ev_in(Some(session(2)), at(0, 50), 7, correct(0, 1, 5_000)), // `other` now known
         ],
     );
-    // k00 items: the first after KC 2 is not counted, the second is; back
-    // after KC 2 again, not counted.
-    assert_eq!(counted(&s, &kc_id(0)), 1);
-    assert_eq!(counted(&s, &kc_id(2)), 0);
+    assert_eq!(counted(&s, &kc_id(0)), 3, "items 2, 4 and 1");
+    assert_eq!(counted(&s, &kc_id(2)), 1, "item 2 only");
 }
 
 #[test]
-fn an_item_seen_within_14_days_is_not_counted() {
+fn an_answer_outside_a_session_is_not_counted() {
     let b = bundle(8);
-    let log = |day: i64| {
+    let log: Vec<Decoded> = (0..4_u64)
+        .map(|n| {
+            let j = usize::try_from(n).unwrap();
+            ev_in(
+                None,
+                at(0, 5 * i64::try_from(n).unwrap()),
+                n,
+                correct(0, j, 5_000),
+            )
+        })
+        .collect();
+    assert_eq!(counted(&fold(&b, &log), &kc_id(0)), 0);
+}
+
+#[test]
+fn an_item_answered_within_3_days_is_not_counted() {
+    let b = bundle(8);
+    let log = |minutes: i64| {
         vec![
             warm_up(),
             ev(at(0, 10), 1, correct(0, 0, 5_000)),
-            ev(at(day, 10), 2, correct(0, 0, 5_000)),
+            ev(at(0, 10 + minutes), 2, correct(0, 0, 5_000)),
         ]
     };
-    assert_eq!(counted(&fold(&b, &log(13)), &kc_id(0)), 1);
-    assert_eq!(counted(&fold(&b, &log(15)), &kc_id(0)), 2);
+    let three_days = 3 * 24 * 60;
+    // 3 days − 1 minute after the first display: excluded; 3 days + 1: counts.
+    assert_eq!(counted(&fold(&b, &log(three_days - 1)), &kc_id(0)), 1);
+    assert_eq!(counted(&fold(&b, &log(three_days + 1)), &kc_id(0)), 2);
+}
+
+#[test]
+fn inconsistent_timing_is_excluded_from_fluency_but_updates_knowledge_and_is_counted() {
+    let b = bundle(8);
+    let model = KnowledgeModel::default();
+    // Latency 5.5 s on a choice with a first input at 5 s is consistent.
+    let consistent = correct(0, 0, 5_000);
+    let mut early_page = correct(0, 0, 5_000);
+    early_page.latency_ms = 4_000; // first input after the answer
+    let mut typed = correct(0, 1, 4_000);
+    typed.typing_ms = Some(3_000);
+    typed.chars_typed = Some(3);
+    typed.latency_ms = 6_000; // 4 s + 3 s of typing in 6 s
+    let mut hidden = correct(0, 0, 3_000);
+    hidden.latency_ms = 6_000;
+    hidden.hidden_ms = Some(7_000); // hidden longer than the item was shown
+    let cases = [
+        (consistent, false),
+        (early_page, true),
+        (typed, true),
+        (hidden, true),
+    ];
+    for (n, (a, inconsistent)) in cases.into_iter().enumerate() {
+        let families = Families::of(&b);
+        let ctx = FoldCtx::new(&b, &families);
+        let mut s = model.init(&Profile::default());
+        model.apply(&mut s, &warm_up(), &ctx).unwrap();
+        // The warm-up reached KC 0 only as a prerequisite.
+        assert_eq!(s.kcs[&kc_id(0)].observations, 0);
+        let Ok(Applied::Answer(o)) = model.apply(&mut s, &ev(at(0, 10), 1, a), &ctx) else {
+            panic!("case {n}: an answer");
+        };
+        let k = &s.kcs[&kc_id(0)];
+        assert_eq!(o.timing_inconsistent, inconsistent, "case {n}");
+        assert_eq!(s.timing_inconsistent, u32::from(inconsistent), "case {n}");
+        assert_eq!(k.observations, 1, "case {n}: knowledge is updated");
+        assert!(
+            k.mu > model.prior(&s.profile, &b, &kc_id(0)).unwrap().0,
+            "case {n}"
+        );
+        assert_eq!(k.counted, u32::from(!inconsistent), "case {n}");
+    }
 }
 
 #[test]
