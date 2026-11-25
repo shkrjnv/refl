@@ -56,7 +56,7 @@ impl Planner<'_> {
         if let Some(d) = next.done.last_mut() {
             d.rule.clone_from(&rule);
         }
-        next.steps = self.remaining(s, &next, now);
+        self.replan(s, &mut next, now);
         let issued = rule
             .as_ref()
             .and_then(|r| self.issue_replan(s, &next, r, now));

@@ -133,7 +133,9 @@ impl Planner<'_> {
     }
 
     /// The event of a plan changed by `rule`: the learning KC and the
-    /// pending reviews with their values now.
+    /// pending reviews with their values now. Under the deferral rule the
+    /// chosen candidate is the deferred KC: the next sessions read it from
+    /// the log ([`super::History`]).
     pub(super) fn issue_replan(
         &self,
         s: &State,
@@ -141,8 +143,12 @@ impl Planner<'_> {
         rule: &Rule,
         now: Timestamp,
     ) -> Option<PlanIssuedEvent> {
-        let learn: Vec<LearnValue> = self
-            .active_learn(s, plan, now)
+        let learn_kc = if *rule == Rule::KcDeferred {
+            plan.learn.as_ref()
+        } else {
+            self.active_learn(s, plan, now)
+        };
+        let learn: Vec<LearnValue> = learn_kc
             .map(|l| self.learn_value(s, &l.kc, now, &self.unlock(s, now)))
             .into_iter()
             .collect();

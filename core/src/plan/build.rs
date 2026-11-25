@@ -5,13 +5,23 @@ use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::vec::Vec;
 
 use super::values::{LearnValue, ReviewValue};
-use super::{Budget, Done, Learn, Phase, Plan, PlannedReview, Planner, Rule, Session, Step, draw};
+use super::{
+    Budget, Done, End, History, Learn, Phase, Plan, PlannedReview, Planner, Rule, Session, Step,
+    draw,
+};
 use crate::bundle::KcStatus;
 use crate::content::EdgeKind;
 use crate::ids::{FamilyId, ItemId, KcId};
 use crate::model::State;
 use crate::model::derived::KcProgress;
-use crate::value::{Seed, Timestamp};
+use crate::value::{Lang, Seed, Timestamp};
+
+const DAY_MS: i64 = 86_400_000;
+
+/// The UTC day of a timestamp.
+fn utc_day(t: Timestamp) -> i64 {
+    t.0.div_euclid(DAY_MS)
+}
 
 impl Step {
     fn new(kc: &KcId, phase: Phase, production: bool, seconds: u32) -> Self {
@@ -47,6 +57,8 @@ struct Builder<'p, 'a> {
     /// Unseen eligible items per KC: all, and productions among them.
     capacity: BTreeMap<KcId, (u32, u32)>,
     shown: BTreeSet<&'p ItemId>,
+    /// A step of the main part was left out for lack of time.
+    short_of_time: bool,
 }
 
 impl<'p, 'a> Builder<'p, 'a> {
@@ -58,6 +70,7 @@ impl<'p, 'a> Builder<'p, 'a> {
             run: None,
             capacity: BTreeMap::new(),
             shown: plan.shown().map(|(_, s)| &s.item.id).collect(),
+            short_of_time: false,
         };
         for d in &plan.done {
             b.extend_run(&d.step);
@@ -196,8 +209,15 @@ impl<'a> Planner<'a> {
     }
 
     /// The session decision: the reviews that fit, the debt rule and the
-    /// learning KC.
-    pub(super) fn start(&self, s: &State, now: Timestamp, budget: Budget, seed: Seed) -> Start {
+    /// learning KC. A KC deferred on the UTC day of `now` waits for the next.
+    pub(super) fn start(
+        &self,
+        s: &State,
+        history: &History,
+        now: Timestamp,
+        budget: Budget,
+        seed: Seed,
+    ) -> Start {
         let p = self.params;
         let limit = p.review_share * f64::from(budget.seconds());
         let due = self.due(s, now);
@@ -218,10 +238,15 @@ impl<'a> Planner<'a> {
             .filter(|e| e.status == KcStatus::Live)
             .map(|e| &e.kc.id)
             .filter(|kc| {
-                matches!(
+                !matches!(
                     self.progress(s, kc, now),
-                    KcProgress::NotStarted | KcProgress::Learning
+                    KcProgress::Mastered | KcProgress::LongTerm
                 )
+            })
+            .filter(|kc| {
+                history
+                    .last_deferred(kc)
+                    .is_none_or(|t| utc_day(t) < utc_day(now))
             })
             .filter(|kc| due.iter().all(|r| &r.kc != *kc))
             .filter(|kc| self.ready(s, kc, now) >= p.ready_min)
@@ -274,9 +299,19 @@ impl<'a> Planner<'a> {
     }
 
     /// The plan of a session starting at `now` and its `plan_issued`.
-    pub fn build_session(&self, s: &State, now: Timestamp, budget: Budget, seed: Seed) -> Session {
+    /// `history` is read from the log before the session; `lang` is the
+    /// interface language, which picks the explanation a lesson shows.
+    pub fn build_session(
+        &self,
+        s: &State,
+        history: &History,
+        now: Timestamp,
+        budget: Budget,
+        lang: Lang,
+        seed: Seed,
+    ) -> Session {
         let p = self.params;
-        let start = self.start(s, now, budget, seed);
+        let start = self.start(s, history, now, budget, seed);
         let limit = p.review_share * f64::from(budget.seconds());
         let mut reviews = Vec::new();
         let mut used = 0u32;
@@ -295,7 +330,7 @@ impl<'a> Planner<'a> {
             Learn {
                 kc: kc.clone(),
                 contrasts: self.contrasts(s, kc, now, &reviews),
-                lesson: !s.explained.contains(kc),
+                lesson: !s.explained.contains(kc) && self.lesson_explanation(kc, lang).is_some(),
             }
         });
         let mut plan = Plan {
@@ -307,10 +342,32 @@ impl<'a> Planner<'a> {
             done: Vec::new(),
             steps: Vec::new(),
             break_suggested: false,
+            lang,
+            end: None,
         };
-        plan.steps = self.remaining(s, &plan, now);
+        self.replan(s, &mut plan, now);
         let issued = self.issue_start(s, &plan, &start, now);
         Session { plan, issued }
+    }
+
+    /// Recomputes the steps ahead and, when none is left, why the session
+    /// ends (`docs/04-placement-planner.md`, «Конец сессии»).
+    pub(super) fn replan(&self, s: &State, plan: &mut Plan, now: Timestamp) {
+        let (steps, short_of_time) = self.remaining(s, plan, now);
+        plan.end = steps.is_empty().then(|| {
+            if short_of_time {
+                return End::Budget;
+            }
+            match &plan.learn {
+                None if plan.reviews.is_empty() => End::NothingDue,
+                None if plan.pending_reviews().is_empty() => End::ReviewsDone,
+                Some(_) if self.active_learn(s, plan, now).is_none() => End::KcDeferred,
+                Some(_) if plan.block_closed() => End::BlockClosed,
+                // Steps were wanted, but no unseen item was left for them.
+                None | Some(_) => End::ItemsExhausted,
+            }
+        });
+        plan.steps = steps;
     }
 
     /// The learning KC while it may still be given: not deferred, not blocked.
@@ -329,17 +386,20 @@ impl<'a> Planner<'a> {
     /// The steps ahead: a pending prerequisite check, the lesson and block of
     /// the learning KC, reviews interleaved with it and its contrasts, the
     /// final. A pure function of the plan's fixed part, its answers, the
-    /// state and `now`.
+    /// state and `now`; also whether a step of the main part was left out
+    /// for lack of time.
     #[allow(clippy::too_many_lines)] // one ordered recipe
-    pub(super) fn remaining(&self, s: &State, plan: &Plan, now: Timestamp) -> Vec<Step> {
+    pub(super) fn remaining(&self, s: &State, plan: &Plan, now: Timestamp) -> (Vec<Step>, bool) {
         let p = self.params;
         let budget = f64::from(plan.budget.seconds());
         let (mut used_main, mut used_final) = (0.0, 0.0);
-        for (step, shown) in plan.shown() {
-            if step.phase == Phase::Final {
-                used_final += f64::from(shown.seconds);
+        for d in &plan.done {
+            // An item by its expected time, the lesson by its estimate.
+            let seconds = f64::from(d.shown.as_ref().map_or(d.step.seconds, |sh| sh.seconds));
+            if d.step.phase == Phase::Final {
+                used_final += seconds;
             } else {
-                used_main += f64::from(shown.seconds);
+                used_main += seconds;
             }
         }
         let mut main_left = budget * (1.0 - p.final_share) - used_main;
@@ -359,8 +419,14 @@ impl<'a> Planner<'a> {
         let learn = self.active_learn(s, plan, now);
         if let Some(learn) = learn {
             let kc = &learn.kc;
-            if learn.lesson && plan.done.iter().all(|d| d.step.phase != Phase::Lesson) {
-                out.push(Step::new(kc, Phase::Lesson, false, 0));
+            let explanation = self.lesson_explanation(kc, plan.lang);
+            if let Some(e) = explanation
+                && learn.lesson
+                && plan.done.iter().all(|d| d.step.phase != Phase::Lesson)
+            {
+                let seconds = self.explanation_seconds(e);
+                out.push(Step::new(kc, Phase::Lesson, false, seconds));
+                main_left -= f64::from(seconds);
             }
             if !plan.block_closed() {
                 let block_done = u32::try_from(
@@ -396,6 +462,7 @@ impl<'a> Planner<'a> {
         let mut reviews = plan.pending_reviews();
         while f64::from(reviews.iter().map(|r| r.seconds).sum::<u32>()) > main_left {
             reviews.pop();
+            out.short_of_time = true;
         }
         let mut left = main_left - f64::from(reviews.iter().map(|r| r.seconds).sum::<u32>());
 
@@ -433,7 +500,8 @@ impl<'a> Planner<'a> {
                 final_left -= f64::from(seconds);
             }
         }
-        out.finish()
+        let short_of_time = out.short_of_time;
+        (out.finish(), short_of_time)
     }
 
     /// Other, learning KC, other, …; «other» alternates a review and a
@@ -468,6 +536,7 @@ impl<'a> Planner<'a> {
                         let c = contrasts[(next_contrast + k) % contrasts.len()];
                         let seconds = self.mean_seconds(c);
                         if f64::from(seconds) > *left {
+                            b.short_of_time = true;
                             continue;
                         }
                         let production = !b.has_production(c);
@@ -494,6 +563,9 @@ impl<'a> Planner<'a> {
                 }
             } else {
                 let fits = f64::from(kc_seconds) <= *left;
+                if !fits {
+                    b.short_of_time = true;
+                }
                 if fits && b.push(Step::new(kc, Phase::Interleaved, false, kc_seconds)) {
                     *left -= f64::from(kc_seconds);
                     true

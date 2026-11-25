@@ -7,7 +7,7 @@ use alloc::vec::Vec;
 
 use super::issue::{factor, finite};
 use super::values::SlotRef;
-use super::{Choice, Next, Phase, Plan, Planner, Seen, Step, draw};
+use super::{Choice, End, History, Next, Phase, Plan, Planner, Step, draw};
 use crate::event::{PlanAction, PlanCandidate, PlanIssuedEvent, PlanScope};
 use crate::ids::{ItemId, MisconceptionId};
 use crate::item::LadderLevel;
@@ -67,7 +67,7 @@ impl<'a> Planner<'a> {
         s: &State,
         plan: &Plan,
         step: &Step,
-        seen: &Seen,
+        history: &History,
         now: Timestamp,
     ) -> Vec<Scored<'a>> {
         let p = self.params;
@@ -112,7 +112,7 @@ impl<'a> Planner<'a> {
                 let prob = self.model.predict(s, self.bundle, c.item, c.slot, now)?;
                 let family = &c.projection.family;
                 let seen = session_families.contains(family)
-                    || seen.last(family).is_some_and(|t| t >= window);
+                    || history.last_shown(family).is_some_and(|t| t >= window);
                 let expected = f64::from(c.projection.expected_time);
                 let information = if expected > 0.0 {
                     self.model
@@ -152,25 +152,36 @@ impl<'a> Planner<'a> {
         &self,
         s: &State,
         plan: &Plan,
-        recent: &Seen,
+        history: &History,
         now: Timestamp,
         seed: Seed,
     ) -> Next {
         let Some(step) = plan.steps.first() else {
-            return Next::Finished;
+            return Next::Finished {
+                end: plan.end.unwrap_or(End::ItemsExhausted),
+            };
         };
         if step.phase == Phase::Lesson {
-            return Next::Lesson {
-                kc: step.kc.clone(),
+            if let Some(e) = self.lesson_explanation(&step.kc, plan.lang) {
+                return Next::Lesson {
+                    kc: step.kc.clone(),
+                    explanation: e.id.clone(),
+                };
+            }
+            // `remaining` plans a lesson only with an explanation to show.
+            return Next::Finished {
+                end: End::ItemsExhausted,
             };
         }
-        let scored = self.scored(s, plan, step, recent, now);
+        let scored = self.scored(s, plan, step, history, now);
         // A step without a candidate never comes from `remaining`; the
         // validator reports such a plan as `ineligible`.
         let Some(best) = scored.first() else {
-            return Next::Finished;
+            return Next::Finished {
+                end: End::ItemsExhausted,
+            };
         };
-        let bar = best.score + libm::log(1.0 / self.params.tie_share);
+        let bar = best.score + self.params.tie_epsilon;
         let n = scored.iter().take_while(|c| c.score <= bar).count();
         let (index, propensity) = draw(seed, n);
         let chosen = &scored[index];

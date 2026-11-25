@@ -12,8 +12,8 @@ use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
 use refl_core::model::{KnowledgeModel, Profile, replay};
-use refl_core::plan::{Budget, Next, Params, Planner, Seen};
-use refl_core::value::{Seed, Timestamp};
+use refl_core::plan::{Budget, ExplanationTimes, History, Next, Params, Planner};
+use refl_core::value::{Lang, Seed, Timestamp};
 use refl_sim::cohort::{Learner, Track, session_ours};
 use refl_sim::{BundleSpec, DAY_MS, LogSpec, event_time, synthetic_bundle, synthetic_log};
 use sha2::{Digest, Sha256};
@@ -43,22 +43,23 @@ fn time(kcs: usize, items_per_kc: usize) {
     );
     let model = KnowledgeModel::default();
     let params = Params::default();
-    let planner = Planner::new(&model, &bundle, &params);
+    let times = ExplanationTimes::from_log(&log);
+    let planner = Planner::new(&model, &bundle, &params, &times);
     let state = replay(&model, &Profile::default(), &bundle, &log);
-    let recent = Seen::from_log(&bundle, &log);
+    let history = History::from_log(&bundle, &log);
     let now = Timestamp(event_time(&log) + DAY_MS);
     let seed = Seed::new(1).expect("small");
+    let build_plan =
+        || planner.build_session(&state, &history, now, Budget::TwentyFive, Lang::Ru, seed);
     let build = best_of(20, || {
-        std::hint::black_box(planner.build_session(&state, now, Budget::TwentyFive, seed));
+        std::hint::black_box(build_plan());
     });
-    let plan = planner
-        .build_session(&state, now, Budget::TwentyFive, seed)
-        .plan;
+    let plan = build_plan().plan;
     let calls = 200u32;
     let next = best_of(5, || {
         for i in 0..calls {
             let choice_seed = Seed::new(u64::from(i)).expect("small");
-            let n = planner.next_item(&state, &plan, &recent, now, choice_seed);
+            let n = planner.next_item(&state, &plan, &history, now, choice_seed);
             std::hint::black_box(matches!(n, Next::Item(_)));
         }
     }) / calls;
@@ -94,11 +95,10 @@ fn main() -> ExitCode {
     );
     let model = KnowledgeModel::default();
     let params = Params::default();
-    let planner = Planner::new(&model, &bundle, &params);
     let start = Timestamp(event_time(&log) + DAY_MS);
     let mut track = Track::new(&model, &bundle, start, seed);
     track.state = replay(&model, &Profile::default(), &bundle, &log);
-    track.seen = Seen::from_log(&bundle, &log);
+    track.history = History::from_log(&bundle, &log);
     let mut learner = Learner::new(&bundle, seed);
 
     let mut hasher = Sha256::new();
@@ -106,7 +106,7 @@ fn main() -> ExitCode {
     let sessions = 3;
     for day in 0..sessions {
         track.clock = track.clock.max(start.0 + day * DAY_MS);
-        let r = session_ours(&mut track, &planner, &mut learner, Budget::TwentyFive);
+        let r = session_ours(&mut track, &params, &mut learner, Budget::TwentyFive);
         decisions += r.issued.len();
         violations += r.violations.values().sum::<u32>();
         for ev in &r.issued {
@@ -122,9 +122,10 @@ fn main() -> ExitCode {
         time(40, 12);
         time(200, 15);
     }
+    let times = track.times();
     println!(
         "sessions={sessions} decisions={decisions} violations={violations} planner={} state={} hash={hash}",
-        planner.version(),
+        Planner::new(&model, &bundle, &params, &times).version(),
         track.state.hash()
     );
     if violations > 0 {

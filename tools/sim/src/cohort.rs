@@ -15,6 +15,7 @@ use refl_core::bundle::Bundle;
 use refl_core::content::{ExplanationDepth, ExplanationTarget};
 use refl_core::event::PlanIssuedEvent;
 use refl_core::event::{AnswerContext, AnswerEvent, Confidence, EventPayload, Response, Verdict};
+use refl_core::ids::ExplanationId;
 use refl_core::ids::{ItemRef, KcId, MisconceptionId};
 use refl_core::item::KcRole;
 use refl_core::kind::ItemKind;
@@ -23,8 +24,12 @@ use refl_core::model::math::sigmoid;
 use refl_core::model::{
     AnswerOutcome, Applied, FoldCtx, KnowledgeModel, LearnerModel, Profile, State,
 };
-use refl_core::plan::{Answered, Budget, Next, Outcome, Phase, Plan, Planner, Seen};
+use refl_core::plan::{
+    Answered, Budget, Done, ExplanationTimes, History, Next, Outcome, Params, Phase, Plan, Planner,
+    Shown, Step,
+};
 use refl_core::rng::SplitMix64;
+use refl_core::value::Lang;
 use refl_core::value::{Seed, Timestamp};
 
 use crate::{DAY_MS, T0, event};
@@ -207,6 +212,18 @@ impl Learner {
         k.last = Some(t);
     }
 
+    /// Seconds this learner takes to read `words`: 100 words a minute at
+    /// their pace, with noise; at least 10.
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss
+    )] // positive and bounded
+    pub fn reading_seconds(&mut self, words: usize) -> u32 {
+        let s = words as f64 * 0.6 * self.pace * libm::exp(0.3 * self.rng.next_normal());
+        s.clamp(10.0, 1800.0) as u32
+    }
+
     /// The learner reads the explanation of `kc`.
     pub fn lesson(&mut self, kc: &KcId, at: Timestamp) {
         self.practise(kc, at, 0.8);
@@ -377,7 +394,10 @@ pub struct Track<'a> {
     pub model: &'a KnowledgeModel,
     pub bundle: &'a Bundle,
     pub state: State,
-    pub seen: Seen,
+    /// Families shown and KCs deferred, from every folded event.
+    pub history: History,
+    /// Seconds of every explanation view, for the lesson time.
+    pub views: Vec<(ExplanationId, u32)>,
     /// Milliseconds; strictly increases with every event.
     pub clock: i64,
     rng: SplitMix64,
@@ -393,12 +413,19 @@ impl<'a> Track<'a> {
             model,
             bundle,
             state: model.init(&Profile::default()),
-            seen: Seen::default(),
+            history: History::default(),
+            views: Vec::new(),
             clock: start.0,
             rng: SplitMix64::new(seed),
             answers: BTreeMap::new(),
             to_mastery: BTreeMap::new(),
         }
+    }
+
+    /// Explanation times from this learner's own views: the device's
+    /// calibration before server statistics exist (docs/04).
+    pub fn times(&self) -> ExplanationTimes {
+        ExplanationTimes::from_views(self.views.iter().map(|(id, s)| (id, *s)))
     }
 
     pub fn now(&self) -> Timestamp {
@@ -419,6 +446,7 @@ impl<'a> Track<'a> {
     fn fold(&mut self, payload: EventPayload) -> Applied {
         self.wait(1);
         let ev = event(self.now(), self.rng.next_u64(), payload);
+        self.history.record(self.bundle, &ev);
         self.model
             .apply(&mut self.state, &ev, &FoldCtx::new(self.bundle))
             .expect("events are folded in order")
@@ -428,24 +456,32 @@ impl<'a> Track<'a> {
         self.fold(EventPayload::PlanIssued(ev));
     }
 
-    /// The learner views the explanation of `kc`.
-    fn lesson(&mut self, learner: &mut Learner, kc: &KcId) {
-        learner.lesson(kc, self.now());
-        let explanation = self
+    /// The learner reads `explanation` of `kc` at their own pace.
+    fn lesson(&mut self, learner: &mut Learner, kc: &KcId, explanation: &ExplanationId) {
+        let e = self
             .bundle
             .content
             .explanations
             .iter()
-            .filter(|e| e.target == ExplanationTarget::Kc(kc.clone()))
-            .min_by_key(|e| (e.depth != ExplanationDepth::Short, e.id.clone()));
-        if let Some(e) = explanation {
-            self.fold(EventPayload::ExplanationViewed {
-                explanation: e.id.clone(),
-                depth: e.depth,
-                seconds: 90,
-            });
-        }
-        self.wait(90_000);
+            .find(|e| &e.id == explanation)
+            .expect("the lesson's explanation is in the bundle");
+        let words = e.body.split_whitespace().count()
+            + e.l1_contrast
+                .as_deref()
+                .map_or(0, |t| t.split_whitespace().count())
+            + e.examples
+                .iter()
+                .map(|x| x.text.split_whitespace().count())
+                .sum::<usize>();
+        let seconds = learner.reading_seconds(words);
+        self.wait(i64::from(seconds) * 1000);
+        learner.lesson(kc, self.now());
+        self.fold(EventPayload::ExplanationViewed {
+            explanation: e.id.clone(),
+            depth: e.depth,
+            seconds,
+        });
+        self.views.push((e.id.clone(), seconds));
     }
 
     /// The learner answers; the answer is folded and counted.
@@ -478,7 +514,6 @@ impl<'a> Track<'a> {
             panic!("the answer's item is in the bundle");
         };
         let projection = self.bundle.projection(item).expect("in the bundle");
-        self.seen.record(&projection.family, self.now());
         if !outcome.rapid {
             for k in &projection.slots[usize::from(slot)].kcs {
                 if k.role == KcRole::Primary {
@@ -512,6 +547,9 @@ pub struct SessionReport {
     pub rules: BTreeMap<&'static str, u32>,
     pub issued: Vec<PlanIssuedEvent>,
     pub plan: Option<Plan>,
+    /// Why the session ended; `None` if only the simulation's time guard
+    /// stopped it.
+    pub end: Option<&'static str>,
     window: Vec<bool>,
 }
 
@@ -553,14 +591,23 @@ fn minutes_since(track: &Track<'_>, started: i64) -> f64 {
 /// validated.
 pub fn session_ours(
     track: &mut Track<'_>,
-    planner: &Planner<'_>,
+    params: &Params,
     learner: &mut Learner,
     budget: Budget,
 ) -> SessionReport {
+    let times = track.times();
+    let planner = Planner::new(track.model, track.bundle, params, &times);
     let mut r = SessionReport::default();
     let started = track.clock;
     let seed = track.seed();
-    let session = planner.build_session(&track.state, track.now(), budget, seed);
+    let session = planner.build_session(
+        &track.state,
+        &track.history,
+        track.now(),
+        budget,
+        Lang::Ru,
+        seed,
+    );
     r.check(
         planner
             .validate_plan(&session.plan, &track.state, track.now())
@@ -576,10 +623,13 @@ pub fn session_ours(
     let limit = 3 * i64::from(budget.seconds()) * 1000;
     while track.clock - started < limit {
         let seed = track.seed();
-        match planner.next_item(&track.state, &plan, &track.seen, track.now(), seed) {
-            Next::Finished => break,
-            Next::Lesson { kc } => {
-                track.lesson(learner, &kc);
+        match planner.next_item(&track.state, &plan, &track.history, track.now(), seed) {
+            Next::Finished { end } => {
+                r.end = Some(end.code());
+                break;
+            }
+            Next::Lesson { kc, explanation } => {
+                track.lesson(learner, &kc, &explanation);
                 let adapted = planner.adapt(&track.state, &plan, &Outcome::Lesson, track.now());
                 plan = adapted.plan;
             }
@@ -620,32 +670,29 @@ pub fn session_ours(
     r
 }
 
-/// One session of the «только FSRS» baseline (`docs/11-quality.md`, «К5»):
-/// due reviews by FSRS, lowest R first, up to the same review share, then
-/// the first KC in prerequisite order the model has not yet mastered, with
-/// its explanation once and random eligible items until the budget is
-/// spent. No ladder, target difficulty, blocks, root causes or final.
-#[allow(clippy::too_many_lines)] // one session recipe
-pub fn session_fsrs(
-    track: &mut Track<'_>,
-    learner: &mut Learner,
-    budget: Budget,
-    review_share: f64,
-) -> SessionReport {
-    let mut r = SessionReport::default();
-    let started = track.clock;
-    let bundle = track.bundle;
-    let model = track.model;
-    let mut shown: Vec<ItemRef> = Vec::new();
-    let mut used = 0.0;
-    let total = f64::from(budget.seconds());
-    let eligible = |kc: &KcId, shown: &[ItemRef]| -> Vec<(ItemRef, u16, u32)> {
+/// The items a baseline session shows and how it picks them: at random, or
+/// by our `next_item` on a one-step plan of the same KC and phase.
+struct Baseline<'p> {
+    /// Our next-item choice; `None` for the random pick.
+    planner: Option<Planner<'p>>,
+    /// The answered items as plan steps, so `next_item` skips them.
+    plan: Plan,
+}
+
+impl Baseline<'_> {
+    /// Eligible unseen slots where `kc` is primary.
+    fn eligible(&self, bundle: &Bundle, kc: &KcId) -> Vec<(ItemRef, u16)> {
         let Some(refs) = bundle.content.items_by_kc.get(kc) else {
             return Vec::new();
         };
         let mut out = Vec::new();
         for item in &refs.primary {
-            if shown.iter().any(|s| s.id == item.id) {
+            let seen = self
+                .plan
+                .done
+                .iter()
+                .any(|d| d.shown.as_ref().is_some_and(|s| s.item.id == item.id));
+            if seen {
                 continue;
             }
             let p = bundle.projection(item).expect("in the bundle");
@@ -654,12 +701,106 @@ pub fn session_fsrs(
                     .iter()
                     .any(|k| &k.kc == kc && k.role == KcRole::Primary)
                 {
-                    out.push((item.clone(), slot, p.expected_time));
+                    out.push((item.clone(), slot));
                 }
             }
         }
         out
+    }
+
+    /// The next item on `kc` in `phase`; `None` when none is left.
+    fn pick(&mut self, track: &mut Track<'_>, kc: &KcId, phase: Phase) -> Option<(ItemRef, u16)> {
+        let options = self.eligible(track.bundle, kc);
+        if options.is_empty() {
+            return None;
+        }
+        let Some(planner) = &self.planner else {
+            return Some(options[pick(&mut track.rng, options.len())].clone());
+        };
+        self.plan.steps = vec![Step {
+            kc: kc.clone(),
+            phase,
+            production: false,
+            family: None,
+            seconds: 0,
+        }];
+        let seed = track.seed();
+        match planner.next_item(&track.state, &self.plan, &track.history, track.now(), seed) {
+            Next::Item(c) => Some((c.item, c.slot)),
+            Next::Lesson { .. } | Next::Finished { .. } => None,
+        }
+    }
+
+    fn record(
+        &mut self,
+        bundle: &Bundle,
+        kc: &KcId,
+        phase: Phase,
+        a: &AnswerEvent,
+        o: &AnswerOutcome,
+    ) {
+        let p = bundle.projection(&a.item).expect("in the bundle");
+        self.plan.done.push(Done {
+            step: Step {
+                kc: kc.clone(),
+                phase,
+                production: false,
+                family: None,
+                seconds: p.expected_time,
+            },
+            shown: Some(Shown {
+                item: a.item.clone(),
+                slot: a.slot,
+                family: p.family.clone(),
+                kind: p.kind,
+                seconds: p.expected_time,
+                correct: o.correct,
+                rapid: o.rapid,
+                sure_error: false,
+            }),
+            rule: None,
+        });
+    }
+}
+
+/// One session of the «только FSRS» baseline (`docs/11-quality.md`, «К5»):
+/// due reviews by FSRS, lowest R first, up to the same review share, then
+/// the first KC in prerequisite order the model has not yet mastered, with
+/// its explanation once and eligible items until the budget is spent. No
+/// blocks, root causes or final. With `ours`, every item is picked by our
+/// `next_item` (ladder, target difficulty, family freshness): the
+/// «только FSRS + наш выбор задания» arm; without, at random.
+#[allow(clippy::too_many_lines)] // one session recipe
+pub fn session_fsrs(
+    track: &mut Track<'_>,
+    learner: &mut Learner,
+    budget: Budget,
+    params: &Params,
+    ours: bool,
+) -> SessionReport {
+    let mut r = SessionReport::default();
+    let started = track.clock;
+    let bundle = track.bundle;
+    let model = track.model;
+    let times = track.times();
+    let mut base = Baseline {
+        planner: ours.then(|| Planner::new(model, bundle, params, &times)),
+        plan: Plan {
+            budget,
+            started: track.now(),
+            seed: Seed::new(0).expect("small"),
+            learn: None,
+            reviews: Vec::new(),
+            done: Vec::new(),
+            steps: Vec::new(),
+            break_suggested: false,
+            lang: Lang::Ru,
+            end: None,
+        },
     };
+    let mut used = 0.0;
+    let total = f64::from(budget.seconds());
+    let review_share = params.review_share;
 
     let now = track.now();
     let mut due: Vec<(f64, &KcId)> = bundle
@@ -673,20 +814,23 @@ pub fn session_fsrs(
         })
         .collect();
     due.sort_by(|a, b| a.0.total_cmp(&b.0).then_with(|| a.1.cmp(b.1)));
+    let reviewed = !due.is_empty();
     for (_, kc) in due {
-        let options = eligible(kc, &shown);
-        if options.is_empty() {
+        let Some((item, slot)) = base.pick(track, kc, Phase::Review) else {
             continue;
-        }
-        let (item, slot, seconds) = options[pick(&mut track.rng, options.len())].clone();
+        };
+        let seconds = bundle
+            .projection(&item)
+            .expect("in the bundle")
+            .expected_time;
         if used + f64::from(seconds) > review_share * total {
             break;
         }
         used += f64::from(seconds);
         let minutes = minutes_since(track, started);
-        let (_, outcome) = track.answer(learner, &item, slot, AnswerContext::Review, minutes);
+        let (a, outcome) = track.answer(learner, &item, slot, AnswerContext::Review, minutes);
         r.answered(outcome.correct);
-        shown.push(item);
+        base.record(bundle, kc, Phase::Review, &a, &outcome);
     }
 
     // Prerequisite order: depth in `requires`, then id.
@@ -694,7 +838,13 @@ pub fn session_fsrs(
         .content
         .kcs
         .iter()
-        .filter(|e| !eligible(&e.kc.id, &[]).is_empty())
+        .filter(|e| {
+            bundle
+                .content
+                .items_by_kc
+                .get(&e.kc.id)
+                .is_some_and(|r| !r.primary.is_empty())
+        })
         .map(|e| {
             let depth = bundle
                 .content
@@ -711,26 +861,41 @@ pub fn session_fsrs(
         .into_iter()
         .map(|(_, kc)| kc)
         .find(|kc| track.state.kcs.get(*kc).is_none_or(|k| !k.ever_mastered));
-    if let Some(kc) = topic {
-        if !track.state.explained.contains(kc) {
-            track.lesson(learner, kc);
-        }
-        loop {
-            let options = eligible(kc, &shown);
-            if options.is_empty() {
-                break;
+    r.end = Some(match topic {
+        None if reviewed => "reviews_done",
+        None => "nothing_due",
+        Some(kc) => {
+            if !track.state.explained.contains(kc)
+                && let Some(e) = bundle.content.explanations.iter().find(|e| {
+                    e.target == ExplanationTarget::Kc(kc.clone())
+                        && e.depth == ExplanationDepth::Short
+                        && e.review.is_shown()
+                })
+            {
+                let id = e.id.clone();
+                track.lesson(learner, kc, &id);
+                used += f64::from(track.views.last().map_or(0, |v| v.1));
             }
-            let (item, slot, seconds) = options[pick(&mut track.rng, options.len())].clone();
-            if used + f64::from(seconds) > total {
-                break;
+            loop {
+                let Some((item, slot)) = base.pick(track, kc, Phase::Block) else {
+                    break "items_exhausted";
+                };
+                let seconds = bundle
+                    .projection(&item)
+                    .expect("in the bundle")
+                    .expected_time;
+                if used + f64::from(seconds) > total {
+                    break "budget";
+                }
+                used += f64::from(seconds);
+                let minutes = minutes_since(track, started);
+                let (a, outcome) =
+                    track.answer(learner, &item, slot, AnswerContext::Lesson, minutes);
+                r.answered(outcome.correct);
+                base.record(bundle, kc, Phase::Block, &a, &outcome);
             }
-            used += f64::from(seconds);
-            let minutes = minutes_since(track, started);
-            let (_, outcome) = track.answer(learner, &item, slot, AnswerContext::Lesson, minutes);
-            r.answered(outcome.correct);
-            shown.push(item);
         }
-    }
+    });
     #[allow(clippy::cast_precision_loss)] // within a day
     {
         r.seconds = (track.clock - started) as f64 / 1000.0;
@@ -743,7 +908,22 @@ pub fn session_fsrs(
 pub enum Policy {
     Ours,
     FsrsOnly,
+    /// «Только FSRS» sessions with our next-item choice.
+    FsrsNextItem,
 }
+
+impl Policy {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Ours => "ours",
+            Self::FsrsOnly => "only FSRS",
+            Self::FsrsNextItem => "only FSRS + our next_item",
+        }
+    }
+}
+
+/// Sessions of days 1–5 and of days 6 on.
+pub const DAY_GROUPS: [&str; 2] = ["days 1-5", "days 6-30"];
 
 /// Size and seed of a cohort run.
 #[derive(Debug, Clone, Copy)]
@@ -777,6 +957,10 @@ pub struct CohortReport {
     /// Per learner at the end: KCs with true recall of at least 0.8,
     /// whatever the model thinks.
     pub known: Vec<usize>,
+    /// Session minutes per [`DAY_GROUPS`] group.
+    pub minutes: [Vec<f64>; 2],
+    /// Sessions per end reason, per [`DAY_GROUPS`] group.
+    pub ends: [BTreeMap<&'static str, u32>; 2],
 }
 
 /// Runs `spec.learners` learners for `spec.days` daily sessions under
@@ -784,11 +968,10 @@ pub struct CohortReport {
 pub fn cohort(
     model: &KnowledgeModel,
     bundle: &Bundle,
-    params: &refl_core::plan::Params,
+    params: &Params,
     spec: CohortSpec,
     policy: Policy,
 ) -> CohortReport {
-    let planner = Planner::new(model, bundle, params);
     let mut report = CohortReport {
         policy,
         learners: spec.learners,
@@ -804,6 +987,8 @@ pub fn cohort(
         mastered_now: Vec::new(),
         retention: Vec::new(),
         known: Vec::new(),
+        minutes: [Vec::new(), Vec::new()],
+        ends: [BTreeMap::new(), BTreeMap::new()],
     };
     let mut seeds = SplitMix64::new(spec.seed);
     for _ in 0..spec.learners {
@@ -820,11 +1005,19 @@ pub fn cohort(
                 + i64::try_from(jitter.next_u64() % 7_200_000).expect("small");
             track.clock = track.clock.max(start);
             let s = match policy {
-                Policy::Ours => session_ours(&mut track, &planner, &mut learner, spec.budget),
+                Policy::Ours => session_ours(&mut track, params, &mut learner, spec.budget),
                 Policy::FsrsOnly => {
-                    session_fsrs(&mut track, &mut learner, spec.budget, params.review_share)
+                    session_fsrs(&mut track, &mut learner, spec.budget, params, false)
+                }
+                Policy::FsrsNextItem => {
+                    session_fsrs(&mut track, &mut learner, spec.budget, params, true)
                 }
             };
+            let group = usize::from(day >= 5);
+            report.minutes[group].push(s.seconds / 60.0);
+            *report.ends[group]
+                .entry(s.end.unwrap_or("time_guard"))
+                .or_insert(0) += 1;
             report.sessions += 1;
             report.answers += s.answers;
             report.seconds += s.seconds;

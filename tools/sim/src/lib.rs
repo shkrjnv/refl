@@ -93,8 +93,8 @@ pub struct BundleSpec {
 /// Grammar KCs `en.gram.kNN` in chains of four (`k(i)` requires `k(i−1)`
 /// unless `i % 4 == 0`) with an extra edge to `k(i−2)` when `i % 5 == 0`,
 /// and `k(i)` contrasting with `k(i−1)` when `i % 4 == 2`; level rank
-/// `1 + i % 3` (A1–B1), all live. Per KC: two misconceptions, a short
-/// explanation, and items alternating choice (three options: two diagnosed,
+/// `1 + i % 3` (A1–B1), all live. Per KC: two misconceptions, a shown short
+/// explanation in en of 120 words, and items alternating choice (three options: two diagnosed,
 /// one noise) and gap fill (two expected errors); every fifth item also
 /// needs the previous KC as secondary. Plus the spelling KC. Every item is
 /// session-eligible and indexed by KC.
@@ -190,12 +190,15 @@ pub fn synthetic_bundle(spec: BundleSpec) -> Bundle {
             target: ExplanationTarget::Kc(kc_id(i)),
             depth: ExplanationDepth::Short,
             lang: refl_core::value::Lang::En,
-            body: String::new(),
+            // 120 words: a two-minute read at 100 words a minute.
+            body: "word ".repeat(120),
             l1_contrast: None,
             examples: Vec::new(),
+            // Shown, so a lesson has something to show; no text hash: the
+            // fixture never goes through content-build.
             review: Review {
-                status: ReviewStatus::Draft,
-                by: None,
+                status: ReviewStatus::Reviewed,
+                by: Some("synthetic".into()),
                 hash: None,
             },
         });

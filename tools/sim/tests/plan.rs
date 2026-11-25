@@ -9,8 +9,10 @@ use proptest::prelude::*;
 use refl_core::bundle::{Bundle, KcStatus};
 use refl_core::ids::{FamilyId, KcId, SubjectId};
 use refl_core::model::{KnowledgeModel, Profile, State, replay};
-use refl_core::plan::{Budget, Next, Params, Phase, Plan, Planner, Seen, Step, Violation};
-use refl_core::value::{Finite, Seed, Timestamp};
+use refl_core::plan::{
+    Budget, End, ExplanationTimes, History, Next, Params, Phase, Plan, Planner, Step, Violation,
+};
+use refl_core::value::{Finite, Lang, Seed, Timestamp};
 use refl_sim::cohort::{Learner, SessionReport, Track, session_ours};
 use refl_sim::{
     BundleSpec, DAY_MS, LogSpec, SPELLING_KC, SUBJECT, TextReview, event_time, kc_id, reindex,
@@ -107,11 +109,10 @@ fn run(c: &Case) -> Vec<SessionReport> {
     );
     let model = KnowledgeModel::default();
     let params = Params::default();
-    let planner = Planner::new(&model, &bundle, &params);
     let start = event_time(&log) + DAY_MS;
     let mut track = Track::new(&model, &bundle, Timestamp(start), c.seed);
     track.state = replay(&model, &profile(c.level), &bundle, &log);
-    track.seen = Seen::from_log(&bundle, &log);
+    track.history = History::from_log(&bundle, &log);
     let mut learner = Learner::new(&bundle, c.seed);
     if c.impatient {
         learner = learner.impatient();
@@ -119,7 +120,7 @@ fn run(c: &Case) -> Vec<SessionReport> {
     (0..c.days)
         .map(|day| {
             track.clock = track.clock.max(start + day * DAY_MS);
-            session_ours(&mut track, &planner, &mut learner, c.budget)
+            session_ours(&mut track, &params, &mut learner, c.budget)
         })
         .collect()
 }
@@ -132,6 +133,10 @@ proptest! {
         for (day, r) in run(&c).iter().enumerate() {
             prop_assert!(r.violations.is_empty(), "day {day}: {:?}", r.violations);
             prop_assert!(r.checks > 0);
+            // Every session ends by a plan, with its reason.
+            prop_assert!(r.end.is_some(), "day {day}");
+            let plan = r.plan.as_ref().unwrap();
+            prop_assert_eq!(plan.end.map(End::code), r.end);
         }
     }
 
@@ -173,7 +178,20 @@ fn empty_plan(now: Timestamp, budget: Budget) -> Plan {
         done: Vec::new(),
         steps: Vec::new(),
         break_suggested: false,
+        lang: Lang::Ru,
+        end: None,
     }
+}
+
+/// A planner without explanation views: lessons take the word prior.
+fn planner<'a>(model: &'a KnowledgeModel, b: &'a Bundle, params: &'a Params) -> Planner<'a> {
+    static NO_VIEWS: std::sync::OnceLock<ExplanationTimes> = std::sync::OnceLock::new();
+    Planner::new(
+        model,
+        b,
+        params,
+        NO_VIEWS.get_or_init(ExplanationTimes::default),
+    )
 }
 
 #[test]
@@ -184,7 +202,7 @@ fn the_validator_catches_every_rule() {
     });
     let model = KnowledgeModel::default();
     let params = Params::default();
-    let planner = Planner::new(&model, &b, &params);
+    let planner = planner(&model, &b, &params);
     let fresh = State::new(Profile::default());
     let now = Timestamp(refl_sim::T0.0);
     let validate = |plan: &Plan, s: &State, t: Timestamp| planner.validate_plan(plan, s, t);
@@ -236,7 +254,7 @@ fn the_validator_catches_every_rule() {
         kcs: 40,
         items_per_kc: 12,
     });
-    let planner = Planner::new(&model, &big, &params);
+    let planner = self::planner(&model, &big, &params);
     let (s, later) = state_after(&big, 4000, 30);
     let mut plan = empty_plan(later, Budget::Ten);
     plan.steps = vec![step(&k0, Phase::Block, true, 10)];
@@ -256,8 +274,16 @@ fn review_debt_leaves_no_learning_kc() {
     let (s, later) = state_after(&b, 4000, 30);
     let model = KnowledgeModel::default();
     let params = Params::default();
-    let planner = Planner::new(&model, &b, &params);
-    let session = planner.build_session(&s, later, Budget::Ten, Seed::new(3).unwrap());
+    let planner = planner(&model, &b, &params);
+    let history = History::default();
+    let session = planner.build_session(
+        &s,
+        &history,
+        later,
+        Budget::Ten,
+        Lang::Ru,
+        Seed::new(3).unwrap(),
+    );
     assert_eq!(session.plan.learn, None);
     assert_ne!(session.plan.reviews.len(), 0);
     assert!(
@@ -281,11 +307,21 @@ fn a_fresh_learner_starts_with_the_lesson_and_a_block() {
     });
     let model = KnowledgeModel::default();
     let params = Params::default();
-    let planner = Planner::new(&model, &b, &params);
+    let planner = planner(&model, &b, &params);
     let s = State::new(Profile::default());
     let now = Timestamp(refl_sim::T0.0);
-    let session = planner.build_session(&s, now, Budget::TwentyFive, Seed::new(9).unwrap());
+    let history = History::default();
+    let session = planner.build_session(
+        &s,
+        &history,
+        now,
+        Budget::TwentyFive,
+        Lang::Ru,
+        Seed::new(9).unwrap(),
+    );
     let learn = session.plan.learn.clone().expect("a KC to learn");
+    // The 120-word explanation takes 72 s of the budget at 100 words a minute.
+    assert_eq!(session.plan.steps[0].seconds, 72);
     let phases: Vec<Phase> = session.plan.steps.iter().map(|st| st.phase).collect();
     assert_eq!(
         phases[..5],
@@ -308,7 +344,146 @@ fn a_fresh_learner_starts_with_the_lesson_and_a_block() {
         .position(|c| matches!(&c.action, refl_core::event::PlanAction::Learn { kc } if *kc == learn.kc))
         .unwrap());
     assert!(matches!(
-        planner.next_item(&s, &session.plan, &Seen::default(), now, Seed::new(1).unwrap()),
-        Next::Lesson { kc } if kc == learn.kc
+        planner.next_item(&s, &session.plan, &history, now, Seed::new(1).unwrap()),
+        Next::Lesson { kc, .. } if kc == learn.kc
     ));
+}
+
+/// Views shrink the word prior towards their median: n₀ = 5 prior views
+/// of 72 s and 5 real ones of 132 s make 102 s.
+#[test]
+fn explanation_time_follows_its_views() {
+    let b = synthetic_bundle(BundleSpec {
+        kcs: 8,
+        items_per_kc: 12,
+    });
+    let model = KnowledgeModel::default();
+    let params = Params::default();
+    let s = State::new(Profile::default());
+    let now = Timestamp(refl_sim::T0.0);
+    let history = History::default();
+    let lesson_seconds = |times: &ExplanationTimes| {
+        let planner = Planner::new(&model, &b, &params, times);
+        let session = planner.build_session(
+            &s,
+            &history,
+            now,
+            Budget::TwentyFive,
+            Lang::Ru,
+            Seed::new(9).unwrap(),
+        );
+        assert_eq!(session.plan.steps[0].phase, Phase::Lesson);
+        session.plan.steps[0].seconds
+    };
+    assert_eq!(lesson_seconds(&ExplanationTimes::default()), 72);
+    let ids: Vec<_> = b
+        .content
+        .explanations
+        .iter()
+        .map(|e| e.id.clone())
+        .collect();
+    let views: Vec<_> = ids
+        .iter()
+        .flat_map(|id| [120, 125, 132, 140, 150].map(|s| (id, s)))
+        .collect();
+    assert_eq!(
+        lesson_seconds(&ExplanationTimes::from_views(
+            views.iter().map(|(id, s)| (*id, *s))
+        )),
+        102
+    );
+}
+
+/// A KC deferred by the 12-items rule waits for the next UTC day; the
+/// deferral is read from the rule's `plan_issued` in the log.
+#[test]
+fn a_deferred_kc_returns_the_next_day() {
+    let b = synthetic_bundle(BundleSpec {
+        kcs: 8,
+        items_per_kc: 12,
+    });
+    let model = KnowledgeModel::default();
+    let params = Params::default();
+    let planner = planner(&model, &b, &params);
+    let s = State::new(Profile::default());
+    // 18:00 UTC of a day.
+    let now = Timestamp(refl_sim::T0.0 + 18 * 3_600_000);
+    let build = |history: &History, at: Timestamp| {
+        planner
+            .build_session(
+                &s,
+                history,
+                at,
+                Budget::TwentyFive,
+                Lang::Ru,
+                Seed::new(9).unwrap(),
+            )
+            .plan
+            .learn
+            .map(|l| l.kc)
+    };
+    let first = build(&History::default(), now).expect("a KC to learn");
+    let deferred = refl_sim::event(
+        now,
+        1,
+        refl_core::event::EventPayload::PlanIssued(refl_core::event::PlanIssuedEvent {
+            planner_version: planner.version(),
+            model_version: "m".into(),
+            scope: refl_core::event::PlanScope::Session,
+            candidates: vec![refl_core::event::PlanCandidate {
+                action: refl_core::event::PlanAction::Learn { kc: first.clone() },
+                value_per_minute: Finite::new(1.0).unwrap(),
+                factors: Vec::new(),
+            }],
+            chosen: 0,
+            propensity: refl_core::value::UnitInterval::new(1.0).unwrap(),
+            seed: Seed::new(1).unwrap(),
+            violations: Vec::new(),
+            dominant: "gap".into(),
+            trigger: Some("kc_deferred".into()),
+        }),
+    );
+    let history = History::from_log(&b, [&deferred]);
+    assert_eq!(history.last_deferred(&first), Some(now));
+    // Later the same day: another KC.
+    let later = Timestamp(now.0 + 3_600_000);
+    assert_ne!(build(&history, later), Some(first.clone()));
+    // The next day it is a candidate again.
+    assert_eq!(build(&history, Timestamp(now.0 + DAY_MS)), Some(first));
+}
+
+/// A plan with nothing to give ends at once and says why.
+#[test]
+fn an_empty_session_records_nothing_due() {
+    let b = synthetic_bundle(BundleSpec {
+        kcs: 2,
+        items_per_kc: 4,
+    });
+    let mut b = b;
+    for e in &mut b.content.kcs {
+        e.status = KcStatus::Draft;
+    }
+    reindex(&mut b, TextReview::Ignored);
+    let model = KnowledgeModel::default();
+    let params = Params::default();
+    let planner = planner(&model, &b, &params);
+    let s = State::new(Profile::default());
+    let now = Timestamp(refl_sim::T0.0);
+    let history = History::default();
+    let session = planner.build_session(
+        &s,
+        &history,
+        now,
+        Budget::TwentyFive,
+        Lang::Ru,
+        Seed::new(1).unwrap(),
+    );
+    assert_eq!(session.plan.end, Some(End::NothingDue));
+    assert_eq!(session.issued, None);
+    assert_eq!(
+        planner.next_item(&s, &session.plan, &history, now, Seed::new(2).unwrap()),
+        Next::Finished {
+            end: End::NothingDue
+        }
+    );
 }

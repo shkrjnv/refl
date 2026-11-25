@@ -23,11 +23,11 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::bundle::Bundle;
-use crate::event::{AnswerEvent, Confidence, Decoded, EventPayload, PlanIssuedEvent};
-use crate::ids::{FamilyId, ItemRef, KcId};
+use crate::event::{AnswerEvent, Confidence, Decoded, EventPayload, PlanAction, PlanIssuedEvent};
+use crate::ids::{ExplanationId, FamilyId, ItemRef, KcId};
 use crate::item::ItemKindTag;
 use crate::model::{AnswerOutcome, KnowledgeModel};
-use crate::value::{Seed, Timestamp};
+use crate::value::{Lang, Seed, Timestamp};
 
 pub use validate::Violation;
 pub use values::{LearnValue, ReviewValue};
@@ -54,8 +54,16 @@ pub struct Params {
     pub goal_weight: f64,
     /// ζ: weight of unlocking in V^learn.
     pub zeta: f64,
-    /// Micro-randomisation: candidates within this share of the best.
+    /// Micro-randomisation of the learning KC: candidates within this share
+    /// of the best V^learn.
     pub tie_share: f64,
+    /// ε: next-item candidates within this of the best score, in |p − p*|
+    /// units.
+    pub tie_epsilon: f64,
+    /// Expert prior of explanation time: words read per minute.
+    pub reading_words_per_minute: f64,
+    /// n₀: views the prior of explanation time weighs as.
+    pub explanation_n0: f64,
     /// Planned length of the block.
     pub block_items: u32,
     /// Correct answers that close the block, a correct production among them.
@@ -96,6 +104,9 @@ impl Default for Params {
             goal_weight: 1.0,
             zeta: 0.3,
             tie_share: 0.95,
+            tie_epsilon: 0.05,
+            reading_words_per_minute: 100.0,
+            explanation_n0: 5.0,
             block_items: 4,
             close_correct: 3,
             kc_cap: 12,
@@ -258,6 +269,42 @@ pub struct Plan {
     pub steps: Vec<Step>,
     /// The rapid-guess rule fired in this session.
     pub break_suggested: bool,
+    /// The interface language: the explanation a lesson shows.
+    pub lang: Lang,
+    /// Why the session ended; set when no step is left.
+    pub end: Option<End>,
+}
+
+/// Why a session ended (`docs/04-placement-planner.md`, «Конец сессии»).
+/// T is an upper bound, not a target.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum End {
+    /// The next step of the main part does not fit the time left.
+    Budget,
+    /// Neither reviews nor a learning KC.
+    NothingDue,
+    /// No learning KC, and the reviews are done.
+    ReviewsDone,
+    /// The learning KC's block is closed and nothing is left to interleave.
+    BlockClosed,
+    /// The learning KC was deferred, or its Ready fell below the threshold.
+    KcDeferred,
+    /// The steps left have no unseen item.
+    ItemsExhausted,
+}
+
+impl End {
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::Budget => "budget",
+            Self::NothingDue => "nothing_due",
+            Self::ReviewsDone => "reviews_done",
+            Self::BlockClosed => "block_closed",
+            Self::KcDeferred => "kc_deferred",
+            Self::ItemsExhausted => "items_exhausted",
+        }
+    }
 }
 
 impl Plan {
@@ -289,14 +336,17 @@ pub struct Session {
 /// What to show next.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Next {
-    /// The explanation of this KC; then [`Planner::adapt`] with
-    /// [`Outcome::Lesson`].
+    /// The explanation of this KC, the record the learner's language gets;
+    /// then [`Planner::adapt`] with [`Outcome::Lesson`].
     Lesson {
         kc: KcId,
+        explanation: ExplanationId,
     },
     Item(Choice),
-    /// No steps left.
-    Finished,
+    /// No steps left, and why.
+    Finished {
+        end: End,
+    },
 }
 
 /// The chosen item and the `plan_issued` of the choice.
@@ -349,35 +399,114 @@ pub struct Adapted {
     pub issued: Option<PlanIssuedEvent>,
 }
 
-/// When each item family was last shown, from the log before the session:
-/// the «seen» of the next-item score.
+/// What the planner reads from the learner's log before the session: when
+/// each item family was last shown (the «seen» of the next-item score) and
+/// when each KC was last deferred by the 12-items rule.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Seen(BTreeMap<FamilyId, Timestamp>);
+pub struct History {
+    families: BTreeMap<FamilyId, Timestamp>,
+    deferred: BTreeMap<KcId, Timestamp>,
+}
 
-impl Seen {
-    /// Records a showing of `family` at `at`.
-    pub fn record(&mut self, family: &FamilyId, at: Timestamp) {
-        let t = self.0.entry(family.clone()).or_insert(at);
-        *t = (*t).max(at);
-    }
-
-    /// From the answers of a log, in any order; answers whose item version
-    /// the bundle lacks are skipped.
-    pub fn from_log<'a>(bundle: &Bundle, events: impl IntoIterator<Item = &'a Decoded>) -> Self {
-        let mut seen = Self::default();
-        for ev in events {
-            if let Decoded::Known(e) = ev
-                && let EventPayload::Answer(a) = &e.payload
-                && let Some(p) = bundle.projection(&a.item)
-            {
-                seen.record(&p.family, e.client_ts);
+impl History {
+    /// Takes one event of the log, in any order: an answer records its
+    /// family, a `plan_issued` of the deferral rule its chosen KC. Answers
+    /// whose item version the bundle lacks are skipped.
+    pub fn record(&mut self, bundle: &Bundle, ev: &Decoded) {
+        let Decoded::Known(e) = ev else {
+            return;
+        };
+        match &e.payload {
+            EventPayload::Answer(a) => {
+                if let Some(p) = bundle.projection(&a.item) {
+                    latest(&mut self.families, &p.family, e.client_ts);
+                }
             }
+            EventPayload::PlanIssued(p)
+                if p.trigger.as_deref() == Some(Rule::KcDeferred.code()) =>
+            {
+                if let Some(PlanAction::Learn { kc }) =
+                    p.candidates.get(usize::from(p.chosen)).map(|c| &c.action)
+                {
+                    latest(&mut self.deferred, kc, e.client_ts);
+                }
+            }
+            _ => {}
         }
-        seen
     }
 
-    pub fn last(&self, family: &FamilyId) -> Option<Timestamp> {
-        self.0.get(family).copied()
+    pub fn from_log<'a>(bundle: &Bundle, events: impl IntoIterator<Item = &'a Decoded>) -> Self {
+        let mut history = Self::default();
+        for ev in events {
+            history.record(bundle, ev);
+        }
+        history
+    }
+
+    /// When `family` was last shown.
+    pub fn last_shown(&self, family: &FamilyId) -> Option<Timestamp> {
+        self.families.get(family).copied()
+    }
+
+    /// When `kc` was last deferred.
+    pub fn last_deferred(&self, kc: &KcId) -> Option<Timestamp> {
+        self.deferred.get(kc).copied()
+    }
+}
+
+fn latest<K: Ord + Clone>(map: &mut BTreeMap<K, Timestamp>, key: &K, at: Timestamp) {
+    let t = map.entry(key.clone()).or_insert(at);
+    *t = (*t).max(at);
+}
+
+/// Views of each explanation: how many, and the median seconds
+/// (`explanation_viewed.seconds`). The server counts them over all
+/// learners; until then the device counts its own log.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExplanationTimes(BTreeMap<ExplanationId, (u32, u32)>);
+
+impl ExplanationTimes {
+    /// From the `explanation_viewed` events of logs, in any order.
+    pub fn from_log<'a>(events: impl IntoIterator<Item = &'a Decoded>) -> Self {
+        Self::from_views(events.into_iter().filter_map(|ev| match ev {
+            Decoded::Known(e) => match &e.payload {
+                EventPayload::ExplanationViewed {
+                    explanation,
+                    seconds,
+                    ..
+                } => Some((explanation, *seconds)),
+                _ => None,
+            },
+            Decoded::Unknown(_) => None,
+        }))
+    }
+
+    /// From (explanation, seconds) views, in any order.
+    pub fn from_views<'a>(views: impl IntoIterator<Item = (&'a ExplanationId, u32)>) -> Self {
+        let mut by_id: BTreeMap<&ExplanationId, Vec<u32>> = BTreeMap::new();
+        for (id, seconds) in views {
+            by_id.entry(id).or_default().push(seconds);
+        }
+        let views = by_id;
+        Self(
+            views
+                .into_iter()
+                .map(|(id, mut s)| {
+                    s.sort_unstable();
+                    // The lower median of an even count: an integer, no float.
+                    let median = s[(s.len() - 1) / 2];
+                    (
+                        id.clone(),
+                        (u32::try_from(s.len()).unwrap_or(u32::MAX), median),
+                    )
+                })
+                .collect(),
+        )
+    }
+
+    /// Views and median seconds of one explanation; `None` without views.
+    pub fn get(&self, id: &ExplanationId) -> Option<(u32, u32)> {
+        self.0.get(id).copied()
     }
 }
 
@@ -387,14 +516,22 @@ pub struct Planner<'a> {
     pub model: &'a KnowledgeModel,
     pub bundle: &'a Bundle,
     pub params: &'a Params,
+    /// Views of the explanations, for the time of a lesson.
+    pub times: &'a ExplanationTimes,
 }
 
 impl<'a> Planner<'a> {
-    pub fn new(model: &'a KnowledgeModel, bundle: &'a Bundle, params: &'a Params) -> Self {
+    pub fn new(
+        model: &'a KnowledgeModel,
+        bundle: &'a Bundle,
+        params: &'a Params,
+        times: &'a ExplanationTimes,
+    ) -> Self {
         Self {
             model,
             bundle,
             params,
+            times,
         }
     }
 
