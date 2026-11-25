@@ -26,8 +26,8 @@ use refl_core::content::{
 };
 use refl_core::event::{
     AnswerContext, AnswerEvent, CURRENT_SCHEMA_VERSION, Confidence, Decoded, Event, EventPayload,
-    PlanAction, PlanCandidate, PlanIssuedEvent, PlanScope, ReclassifiedEvent, Response,
-    UnknownEvent, Verdict,
+    InputDevice, PlanAction, PlanCandidate, PlanIssuedEvent, PlanScope, ReclassifiedEvent,
+    Response, UnknownEvent, Verdict,
 };
 use refl_core::ids::{
     ContentVersion, DomainId, EventId, ExplanationId, FamilyId, InstructionId, ItemId, ItemRef,
@@ -494,7 +494,8 @@ pub fn unknown_event(at: Timestamp, tail: u64) -> Decoded {
 }
 
 /// An answer on slot 0 of `item`: first attempt, no hints, no confidence,
-/// in the foreground.
+/// on a touch screen, never hidden; the whole latency is retrieval (the
+/// first input comes at `latency_ms`, typing takes no time).
 pub fn answer(item: ItemRef, verdict: Verdict, response: Response, latency_ms: u32) -> AnswerEvent {
     AnswerEvent {
         item,
@@ -506,7 +507,12 @@ pub fn answer(item: ItemRef, verdict: Verdict, response: Response, latency_ms: u
         verdict,
         misconception: None,
         latency_ms,
-        backgrounded: false,
+        first_input_ms: Some(latency_ms),
+        typing_ms: Some(0),
+        chars_typed: Some(0),
+        edits: Some(0),
+        input_device: Some(InputDevice::Touch),
+        hidden_ms: Some(0),
         confidence: None,
         hints: 0,
         attempt: 1,
@@ -677,7 +683,34 @@ pub fn synthetic_log(bundle: &Bundle, spec: LogSpec) -> Vec<Decoded> {
             2 => AnswerContext::Review,
             _ => AnswerContext::Practice,
         };
-        a.backgrounded = one_in(&mut rng, 30);
+        // Timing: typed answers split the latency into the first input and
+        // typing; one answer in 30 had the page hidden, one in 40 has no
+        // timing at all, like an answer upcast from schema 1.
+        if typed {
+            let typing = latency_ms / 3;
+            a.first_input_ms = Some(latency_ms - typing);
+            a.typing_ms = Some(typing);
+            a.chars_typed = Some(3 + u32::from(one_in(&mut rng, 4)));
+            a.edits = Some(u32::from(one_in(&mut rng, 8)));
+        } else {
+            a.typing_ms = None;
+            a.chars_typed = None;
+            a.edits = None;
+        }
+        a.input_device = Some(if one_in(&mut rng, 3) {
+            InputDevice::Keyboard
+        } else {
+            InputDevice::Touch
+        });
+        a.hidden_ms = Some(if one_in(&mut rng, 30) { 4_000 } else { 0 });
+        if one_in(&mut rng, 40) {
+            a.first_input_ms = None;
+            a.typing_ms = None;
+            a.chars_typed = None;
+            a.edits = None;
+            a.input_device = None;
+            a.hidden_ms = None;
+        }
         a.confidence = match rng.next_u64() % 3 {
             0 => None,
             1 => Some(Confidence::Sure),

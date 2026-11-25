@@ -1,8 +1,9 @@
-//! Learner model version 1.2 (`docs/03-layer2-learner-model.md`; the v1
+//! Learner model version 1.3 (`docs/03-layer2-learner-model.md`; the v1
 //! readings are in «Уточнения версии 1»; 1.1 added the process noise q, 1.2
-//! applies it before the prediction): knowledge μ/σ with the observation
-//! model, FSRS-6 memory, automaticity, misconceptions, the rapid-guess
-//! filter and propagation of success down the `requires` graph.
+//! applies it before the prediction, 1.3 replaces automaticity by fluency
+//! from retrieval time): knowledge μ/σ with the observation model, FSRS-6
+//! memory, fluency, misconceptions, the rapid-guess filter and propagation
+//! of success down the `requires` graph.
 
 use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::format;
@@ -12,6 +13,7 @@ use core::fmt::Write as _;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+use super::fluency;
 use super::fsrs::{self, Card, Grade};
 use super::math::{self, KcTerm};
 use super::state::{KcState, MisconceptionState, State};
@@ -23,7 +25,8 @@ use crate::bundle::{Bundle, KcEntry};
 use crate::content::{Explanation, ExplanationTarget, Misconception};
 use crate::event::OverrideKind;
 use crate::event::{
-    AnswerContext, AnswerEvent, Confidence, Decoded, Event, EventPayload, Response, Verdict,
+    AnswerContext, AnswerEvent, Confidence, Decoded, Event, EventPayload, InputDevice, Response,
+    Verdict,
 };
 use crate::ids::{ExplanationId, ItemRef, KcId, MisconceptionId, SubjectId};
 use crate::item::KcRole;
@@ -57,9 +60,33 @@ pub struct Params {
     pub process_noise: f64,
     /// λ: smoothing of τ.
     pub lambda: f64,
-    /// τ at or above this is automatic.
+    /// Fluency, branch 1: τ at or above this.
     pub tau_threshold: f64,
-    /// Answer time is capped at this many expected times.
+    /// Fluency, branch 2: τ − bⱼ at or above this...
+    pub tau_relative_threshold: f64,
+    /// ...and the spread at most this.
+    pub spread_max: f64,
+    /// Counted answers on a KC before it can be fluent.
+    pub fluency_min_counted: u32,
+    /// Residuals of a KC the spread is taken over.
+    pub spread_window: usize,
+    /// bⱼ takes counted answers whose primary KCs all have M above this...
+    pub baseline_mastery: f64,
+    /// ...shrunk to 0 with this many virtual answers.
+    pub baseline_n0: f64,
+    /// An item answered within this many days is not counted.
+    pub unseen_days: f64,
+    /// Typing beyond this many times the learner's usual typing time counts
+    /// as retrieval.
+    pub typing_tolerance: f64,
+    /// Typing speed: samples kept per input device...
+    pub typing_window: usize,
+    /// ...shrunk to the prior with this many virtual samples (proposal)...
+    pub typing_n0: f64,
+    /// ...priors v₀, characters per second (proposal).
+    pub typing_v0_touch: f64,
+    pub typing_v0_keyboard: f64,
+    /// Retrieval time is capped at this many `exp(βᶠ)`.
     pub time_cap: f64,
     /// ρ: propagation of success to prerequisites.
     pub rho: f64,
@@ -92,7 +119,7 @@ pub struct Params {
     pub rapid_share: f64,
     /// ...and, for typed input, below this many milliseconds.
     pub rapid_typed_ms: u32,
-    /// FSRS grade: |ln(expected / actual)| beyond this is slow or fast.
+    /// FSRS grade: a counted answer's |r| beyond this is slow or fast.
     pub tempo_band: f64,
     /// FSRS-6 weights w₀…w₂₀.
     pub fsrs: [f64; 21],
@@ -120,6 +147,18 @@ impl Default for Params {
             process_noise: 0.02,
             lambda: 0.2,
             tau_threshold: -0.2,
+            tau_relative_threshold: -0.2,
+            spread_max: 0.35,
+            fluency_min_counted: 6,
+            spread_window: 8,
+            baseline_mastery: 0.8,
+            baseline_n0: 20.0,
+            unseen_days: 14.0,
+            typing_tolerance: 1.5,
+            typing_window: 30,
+            typing_n0: 5.0,
+            typing_v0_touch: 1.5,
+            typing_v0_keyboard: 3.0,
             time_cap: 5.0,
             rho: 0.3,
             w_secondary: 0.3,
@@ -225,11 +264,27 @@ struct Observation<'a> {
     direct: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Tempo {
-    Slow,
-    Normal,
-    Fast,
+/// The fluency condition of one KC and its parts
+/// (`docs/03-layer2-learner-model.md`, «Беглость: время извлечения»).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Fluency {
+    pub counted: u32,
+    pub tau: f64,
+    /// bⱼ of the KC's subject.
+    pub baseline: f64,
+    /// Over the KC's latest counted answers; `None` without any.
+    pub spread: Option<f64>,
+    /// Branch 1: enough counted answers and τ ≥ the threshold.
+    pub absolute: bool,
+    /// Branch 2: enough counted answers, τ − bⱼ ≥ its threshold and a small
+    /// spread.
+    pub relative: bool,
+}
+
+impl Fluency {
+    pub fn holds(&self) -> bool {
+        self.absolute || self.relative
+    }
 }
 
 impl KnowledgeModel {
@@ -374,7 +429,8 @@ impl KnowledgeModel {
                     observations: 0,
                     card: None,
                     tau: 0.0,
-                    timed: 0,
+                    counted: 0,
+                    residuals: Vec::new(),
                     production: Vec::new(),
                     ever_mastered: false,
                 },
@@ -418,7 +474,7 @@ impl KnowledgeModel {
 
     /// A mentor's mark «тема известна»: one correct observation of the KC at
     /// medium difficulty (b = 0, g = 0) with the secondary weight. Only μ and
-    /// σ change: no memory, automaticity, production, propagation or
+    /// σ change: no memory, fluency, production, propagation or
     /// misconception update, so a mark alone never masters a KC
     /// (`docs/03-layer2-learner-model.md`, «Уточнения версии 1»).
     fn mark_known(&self, s: &mut State, bundle: &Bundle, kc: &KcId, t: Timestamp) {
@@ -439,32 +495,73 @@ impl KnowledgeModel {
     }
 
     /// The criterion of «Когда тема считается освоенной»: confident
-    /// knowledge, automaticity and production.
-    pub fn is_mastered(&self, k: &KcState, now: Timestamp) -> bool {
+    /// knowledge, fluency and production. `false` for a KC without updates.
+    pub fn is_mastered(&self, s: &State, bundle: &Bundle, kc: &KcId, now: Timestamp) -> bool {
         let p = &self.params;
+        let Some(k) = s.kcs.get(kc) else {
+            return false;
+        };
         let belief = Belief {
             mu: k.mu,
             var: k.var + p.eta * days(k.var_at, now),
             r: self.recall(k.card.as_ref(), now),
         };
         self.mastery_probability(belief) >= p.mastery_confidence
-            && k.timed > 0
-            && k.tau >= p.tau_threshold
+            && self.fluency(s, bundle, kc).holds()
             && k.production.len() >= p.production_needed
     }
 
-    fn tempo(&self, a: &AnswerEvent, expected_ms: f64) -> Tempo {
-        if a.backgrounded || expected_ms <= 0.0 {
-            return Tempo::Normal;
+    /// bⱼ of `subject`: `Σr / (n + n₀)`, 0 without counted answers.
+    pub fn baseline(&self, s: &State, subject: &SubjectId) -> f64 {
+        s.baseline
+            .get(subject)
+            .map_or(0.0, |b| b.sum / (f64::from(b.n) + self.params.baseline_n0))
+    }
+
+    /// The fluency condition of `kc`; a KC without updates has no counted
+    /// answers and is not fluent.
+    pub fn fluency(&self, s: &State, bundle: &Bundle, kc: &KcId) -> Fluency {
+        let p = &self.params;
+        let baseline = kc_entry(bundle, kc).map_or(0.0, |e| self.baseline(s, &e.kc.subject));
+        let (counted, tau, spread) = s.kcs.get(kc).map_or((0, 0.0, None), |k| {
+            (k.counted, k.tau, fluency::spread(&k.residuals))
+        });
+        let enough = counted >= p.fluency_min_counted;
+        Fluency {
+            counted,
+            tau,
+            baseline,
+            spread,
+            absolute: enough && tau >= p.tau_threshold,
+            relative: enough
+                && tau - baseline >= p.tau_relative_threshold
+                && spread.is_some_and(|x| x <= p.spread_max),
         }
-        let x = libm::log(expected_ms / f64::from(a.latency_ms.max(1)));
-        if x < -self.params.tempo_band {
-            Tempo::Slow
-        } else if x > self.params.tempo_band {
-            Tempo::Fast
-        } else {
-            Tempo::Normal
+    }
+
+    /// vⱼ of `device` from the counted typed answers so far.
+    pub fn typing_speed(&self, s: &State, device: InputDevice) -> f64 {
+        let p = &self.params;
+        let v0 = match device {
+            InputDevice::Touch => p.typing_v0_touch,
+            InputDevice::Keyboard => p.typing_v0_keyboard,
+        };
+        let samples = s.typing.get(&device).map_or(&[][..], Vec::as_slice);
+        fluency::shrunk_speed(samples, v0, p.typing_n0)
+    }
+
+    /// `t_ret` in seconds, before the cap; `None` if the answer lacks a
+    /// timing field its kind needs.
+    fn retrieval_seconds(&self, s: &State, a: &AnswerEvent, typed: bool) -> Option<f64> {
+        let device = a.input_device?;
+        let first = f64::from(a.first_input_ms?) / 1000.0;
+        if !typed {
+            return Some(first);
         }
+        let typing = f64::from(a.typing_ms?) / 1000.0;
+        let chars = f64::from(a.chars_typed?);
+        let usual = self.params.typing_tolerance * chars / self.typing_speed(s, device);
+        Some(first + (typing - usual).max(0.0))
     }
 
     /// The misconception's state with decay applied up to `t`, created from
@@ -541,12 +638,56 @@ impl KnowledgeModel {
         let last = s.last_answer.entry(item.subject.clone()).or_insert(t);
         *last = (*last).max(t);
 
+        // Fluency bookkeeping of every answer, rapid guesses included: the
+        // instruction of the previous answer and the items shown lately.
+        let family = ctx.families.get(&item.family);
+        let instruction = family.map(|f| &f.instruction);
+        let same_instruction = instruction.is_some() && s.last_instruction.as_ref() == instruction;
+        let unseen = s
+            .seen
+            .get(&a.item.id)
+            .is_none_or(|&at| days(at, shown) >= p.unseen_days);
+        s.last_instruction = instruction.cloned();
+        s.seen.retain(|_, at| days(*at, shown) < p.unseen_days);
+        let seen = s.seen.entry(a.item.id.clone()).or_insert(shown);
+        *seen = (*seen).max(shown);
+
         let expected_ms = f64::from(item.expected_time) * 1000.0;
         let latency = f64::from(a.latency_ms);
-        let rapid = !a.backgrounded
+        let hidden = a.hidden_ms.is_some_and(|ms| ms > 0);
+        let rapid = !hidden
             && expected_ms > 0.0
             && latency < p.rapid_share * expected_ms
             && (!item.typed_input() || a.latency_ms < p.rapid_typed_ms);
+        // Fluency: the residual r = βᶠ − ln t_ret of a counted answer, and
+        // whether the slot's primary KCs were known at display, before any
+        // update of this answer (bⱼ).
+        let residual = match family {
+            Some(f)
+                if correct
+                    && a.attempt <= 1
+                    && a.hints == 0
+                    && !rapid
+                    && a.hidden_ms == Some(0)
+                    && same_instruction
+                    && unseen =>
+            {
+                self.retrieval_seconds(s, a, item.typed_input()).map(|t| {
+                    let cap = p.time_cap * libm::exp(f.beta);
+                    f.beta - libm::log(t.clamp(0.001, cap))
+                })
+            }
+            _ => None,
+        };
+        let known = residual.is_some()
+            && slot
+                .kcs
+                .iter()
+                .filter(|k| k.role == KcRole::Primary)
+                .all(|k| {
+                    self.belief(s, bundle, &k.kc, shown)
+                        .is_some_and(|b| self.mastery_probability(b) > p.baseline_mastery)
+                });
         // Process noise: the skill changes while the learner learns. σ²
         // grows by η·Δt + q at the start of processing, so the prediction
         // and the update below use the same σ². A rapid guess updates
@@ -654,12 +795,13 @@ impl KnowledgeModel {
             touched.insert(subject.spelling_kc.clone());
         }
 
-        // Memory, automaticity and production: the slot's primary KCs.
+        // Memory, fluency and production: the slot's primary KCs. The tempo
+        // of an answer not counted for fluency is unknown: Good.
         let grade = if correct {
-            let tempo = self.tempo(a, expected_ms);
-            if a.confidence == Some(Confidence::Unsure) || a.hints > 0 || tempo == Tempo::Slow {
+            let tempo = residual.unwrap_or(0.0);
+            if a.confidence == Some(Confidence::Unsure) || a.hints > 0 || tempo < -p.tempo_band {
                 Grade::Hard
-            } else if tempo == Tempo::Fast {
+            } else if tempo > p.tempo_band {
                 Grade::Easy
             } else {
                 Grade::Good
@@ -685,10 +827,13 @@ impl KnowledgeModel {
                 None if correct && may_start => k.card = Some(fsrs::start(&p.fsrs, grade, t)),
                 None => {}
             }
-            if correct && !a.backgrounded && expected_ms > 0.0 {
-                let time = latency.max(1.0).min(p.time_cap * expected_ms);
-                k.tau += p.lambda * (libm::log(expected_ms / time) - k.tau);
-                k.timed += 1;
+            if let Some(r) = residual {
+                k.tau += p.lambda * (r - k.tau);
+                k.counted += 1;
+                k.residuals.push(r);
+                if k.residuals.len() > p.spread_window {
+                    k.residuals.remove(0);
+                }
             }
             if correct
                 && item.is_production()
@@ -696,6 +841,27 @@ impl KnowledgeModel {
                 && !k.production.contains(&a.item.id)
             {
                 k.production.push(a.item.id.clone());
+            }
+        }
+        // A counted answer also feeds vⱼ (typed, with a measurable typing
+        // time) and, on known KCs, bⱼ.
+        if let Some(r) = residual {
+            if item.typed_input()
+                && let (Some(device), Some(ms), Some(chars)) =
+                    (a.input_device, a.typing_ms, a.chars_typed)
+                && ms > 0
+                && chars > 0
+            {
+                let samples = s.typing.entry(device).or_default();
+                samples.push(f64::from(chars) * 1000.0 / f64::from(ms));
+                if samples.len() > p.typing_window {
+                    samples.remove(0);
+                }
+            }
+            if known {
+                let b = s.baseline.entry(item.subject.clone()).or_default();
+                b.sum += r;
+                b.n += 1;
             }
         }
 
@@ -753,9 +919,7 @@ impl KnowledgeModel {
         }
 
         for kc in &touched {
-            if let Some(k) = s.kcs.get(kc)
-                && !k.ever_mastered
-                && self.is_mastered(k, t)
+            if s.kcs.get(kc).is_some_and(|k| !k.ever_mastered) && self.is_mastered(s, bundle, kc, t)
             {
                 s.kcs.get_mut(kc).expect("present").ever_mastered = true;
             }
@@ -774,7 +938,7 @@ impl LearnerModel for KnowledgeModel {
             let _ = write!(s, "{b:02x}");
             s
         });
-        format!("knowledge-v1.2+{short}")
+        format!("knowledge-v1.3+{short}")
     }
 
     fn init(&self, profile: &Profile) -> State {

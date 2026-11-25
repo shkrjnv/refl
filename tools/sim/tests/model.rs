@@ -11,7 +11,8 @@ use refl_core::ids::{ContentVersion, ItemVersion, KcId};
 use refl_core::item::AuthorDifficulty;
 use refl_core::model::derived::{KcProgress, MisconceptionStatus};
 use refl_core::model::{
-    Applied, FoldCtx, KcState, KnowledgeModel, LearnerModel, NeedsReplay, Profile, State, replay,
+    Applied, Families, FoldCtx, KcState, KnowledgeModel, LearnerModel, NeedsReplay, Profile, State,
+    replay,
 };
 use refl_core::projection::{ItemProjection, ItemVersionEntry};
 use refl_core::value::Timestamp;
@@ -80,9 +81,9 @@ fn correct_typed_answer_raises_spelling() {
     assert!(k.mu > prior_mu(1.0), "{}", k.mu);
     assert!(k.var < 2.25);
     assert_eq!(k.observations, 1);
-    // Never a slot KC: no memory, no automaticity.
+    // Never a slot KC: no memory, no fluency.
     assert!(k.card.is_none());
-    assert_eq!(k.timed, 0);
+    assert_eq!(k.counted, 0);
 }
 
 #[test]
@@ -167,7 +168,8 @@ fn unknown_event_marks_the_state_incomplete_and_changes_nothing_else() {
     assert_eq!(plain.kcs, with_unknown.kcs);
     let model = KnowledgeModel::default();
     let mut s = model.init(&Profile::default());
-    let ctx = FoldCtx::new(&b);
+    let families = Families::of(&b);
+    let ctx = FoldCtx::new(&b, &families);
     let applied = model.apply(&mut s, &unknown_event(at(0, 0), 3), &ctx);
     assert_eq!(applied, Ok(Applied::Unknown));
 }
@@ -281,7 +283,8 @@ fn the_fold_reports_the_prediction_made_at_display_time() {
     let b = bundle();
     let model = KnowledgeModel::default();
     let mut s = model.init(&Profile::default());
-    let ctx = FoldCtx::new(&b);
+    let families = Families::of(&b);
+    let ctx = FoldCtx::new(&b, &families);
     let first = ev(at(0, 0), 1, chosen(0, 0));
     model.apply(&mut s, &first, &ctx).unwrap();
     let a = typed(0, 1, "the");
@@ -320,7 +323,8 @@ fn reclassified_answer_is_refolded_with_the_new_verdict() {
     // Folded onto a state that already holds the wrong verdict: replay.
     let model = KnowledgeModel::default();
     let mut s = model.init(&Profile::default());
-    let ctx = FoldCtx::new(&b);
+    let families = Families::of(&b);
+    let ctx = FoldCtx::new(&b, &families);
     model.apply(&mut s, &original, &ctx).unwrap();
     assert_eq!(
         model.apply(&mut s, &fix, &ctx),
@@ -333,7 +337,8 @@ fn late_and_duplicate_events() {
     let b = bundle();
     let model = KnowledgeModel::default();
     let mut s = model.init(&Profile::default());
-    let ctx = FoldCtx::new(&b);
+    let families = Families::of(&b);
+    let ctx = FoldCtx::new(&b, &families);
     let later = ev(at(1, 0), 2, chosen(0, 0));
     model.apply(&mut s, &later, &ctx).unwrap();
     let before = s.clone();
@@ -354,15 +359,19 @@ fn answers_outside_the_bundle_are_counted_not_guessed() {
 }
 
 /// Fast, sure, correct typed answers on k00 once a day: mastered, then
-/// forgotten after a long break.
+/// forgotten after a long break. Fifteen gap fills, so no item comes back
+/// within the 14 days fluency asks for.
 #[test]
 fn mastery_statuses_and_the_return_check() {
-    let b = bundle();
+    let b = synthetic_bundle(BundleSpec {
+        kcs: 3,
+        items_per_kc: 30,
+    });
     let model = KnowledgeModel::default();
     let subject = refl_core::ids::SubjectId::new("en").unwrap();
     let events: Vec<Decoded> = (0..30)
         .map(|d| {
-            let j = [1, 3, 5][usize::try_from(d % 3).unwrap()];
+            let j = 1 + 2 * usize::try_from(d % 15).unwrap();
             let mut a = typed(0, j, "the");
             a.context = AnswerContext::Review;
             a.confidence = Some(Confidence::Sure);
@@ -375,14 +384,17 @@ fn mastery_statuses_and_the_return_check() {
     assert!(k.ever_mastered);
     assert!(k.production.len() == 2 && k.tau > 0.0);
     let last = at(29, 0);
-    let progress = model.progress(&s, &kc_id(0), last);
+    let progress = model.progress(&s, &b, &kc_id(0), last);
     assert!(
         matches!(progress, KcProgress::Mastered | KcProgress::LongTerm),
         "{progress:?}"
     );
-    assert_eq!(model.progress(&s, &kc_id(2), last), KcProgress::NotStarted);
     assert_eq!(
-        model.progress(&s, &kc_id(0), at(29 + 3_650, 0)),
+        model.progress(&s, &b, &kc_id(2), last),
+        KcProgress::NotStarted
+    );
+    assert_eq!(
+        model.progress(&s, &b, &kc_id(0), at(29 + 3_650, 0)),
         KcProgress::Forgetting
     );
 
@@ -427,7 +439,8 @@ fn level_counts_empty_lower_levels_as_covered() {
                 observations: 1,
                 card: None,
                 tau: 0.0,
-                timed: 1,
+                counted: 1,
+                residuals: vec![0.0],
                 production: Vec::new(),
                 ever_mastered: true,
             },
@@ -550,9 +563,9 @@ fn a_mentor_mark_is_one_weak_observation_of_mu_and_sigma() {
     assert!((k.var - 2.1043).abs() < 2e-3, "{}", k.var);
     assert!(k.mu > prior_mu(1.0) && k.var < 2.25);
     assert_eq!(k.observations, 1);
-    // No memory, no automaticity, no production credit.
+    // No memory, no fluency, no production credit.
     assert!(k.card.is_none());
-    assert_eq!((k.tau, k.timed), (0.0, 0));
+    assert_eq!((k.tau, k.counted), (0.0, 0));
     assert!(k.production.is_empty() && !k.ever_mastered);
     // No misconceptions, no spelling, no counters of answers.
     assert!(s.misconceptions.is_empty());
@@ -592,11 +605,11 @@ fn marks_alone_never_master_a_kc() {
     let s = fold(&b, &marks);
     let model = KnowledgeModel::default();
     let k = &s.kcs[&kc_id(0)];
-    // Belief is far above the threshold, yet production and automaticity are missing.
+    // Belief is far above the threshold, yet production and fluency are missing.
     assert!(k.mu > 1.5);
-    assert!(!k.ever_mastered && !model.is_mastered(k, at(0, 1_000)));
+    assert!(!k.ever_mastered && !model.is_mastered(&s, &b, &kc_id(0), at(0, 1_000)));
     assert_eq!(
-        model.progress(&s, &kc_id(0), at(0, 1_000)),
+        model.progress(&s, &b, &kc_id(0), at(0, 1_000)),
         KcProgress::Learning
     );
 }
@@ -619,7 +632,7 @@ fn process_noise_widens_the_belief_before_the_update_and_changes_the_version() {
         },
     };
     let v11 = KnowledgeModel::default();
-    assert!(v11.version().starts_with("knowledge-v1.2+"));
+    assert!(v11.version().starts_with("knowledge-v1.3+"));
     assert_ne!(v1.version(), v11.version());
     let first = ev(at(0, 0), 1, chosen(0, 0));
     let shown = Timestamp(at(0, 0).0 - 8_000);
@@ -628,7 +641,10 @@ fn process_noise_widens_the_belief_before_the_update_and_changes_the_version() {
         let before = m
             .predict(&s, &b, &item_ref(0, 0), 0, shown)
             .expect("in the bundle");
-        let applied = m.apply(&mut s, &first, &FoldCtx::new(&b)).unwrap();
+        let families = Families::of(&b);
+        let applied = m
+            .apply(&mut s, &first, &FoldCtx::new(&b, &families))
+            .unwrap();
         (s, before, applied)
     };
     let ((s1, _, _), (s11, before, applied)) = (run(&v1), run(&v11));

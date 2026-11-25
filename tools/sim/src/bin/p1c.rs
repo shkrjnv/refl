@@ -14,8 +14,10 @@
 //! - **False mastery**, per answer as in m1: the learner right after the
 //!   answer that mastered the KC, 7 days later without reviews, has a true
 //!   correct rate below 0.7 on the KC's items.
-//! - **Last condition**: the mastery conditions (confidence, τ, production)
-//!   that were false just before that answer.
+//! - **Last condition**: the mastery conditions (confidence, fluency,
+//!   production) that were false just before that answer.
+//! - **Fluency at mastery**: which branch of the fluency condition held
+//!   right after that answer (docs/03, «Беглость»).
 
 // A measurement binary: counts are small.
 #![allow(
@@ -31,7 +33,7 @@ use refl_core::bundle::Bundle;
 use refl_core::event::{Decoded, EventPayload};
 use refl_core::ids::KcId;
 use refl_core::item::KcRole;
-use refl_core::model::{Applied, FoldCtx, KnowledgeModel, LearnerModel, State};
+use refl_core::model::{Applied, Families, Fluency, FoldCtx, KnowledgeModel, LearnerModel, State};
 use refl_core::plan::{Budget, Params, Planner, ReadingSpeed};
 use refl_core::rng::SplitMix64;
 use refl_core::value::Timestamp;
@@ -77,6 +79,10 @@ struct Pair {
     recall_later: f64,
     last: String,
     bug: bool,
+    /// Index of the learner in the cohort.
+    learner: usize,
+    /// The fluency condition right after the mastering answer.
+    fluency: Fluency,
 }
 
 /// The learner's true correct rate on the KC's items at `t`.
@@ -145,17 +151,17 @@ fn primary_slots(bundle: &Bundle, kc: &KcId) -> u32 {
 }
 
 /// The mastery conditions false in `s` for `kc` at `t`.
-fn missing(planner: &Planner<'_>, s: &State, kc: &KcId, t: Timestamp) -> String {
+fn missing(planner: &Planner<'_>, bundle: &Bundle, s: &State, kc: &KcId, t: Timestamp) -> String {
     let p = &planner.model.params;
     let Some(k) = s.kcs.get(kc) else {
-        return String::from("confidence+τ+production");
+        return String::from("confidence+fluency+production");
     };
     let mut out = Vec::new();
     if planner.mastery(s, kc, t) < p.mastery_confidence {
         out.push("confidence");
     }
-    if k.timed == 0 || k.tau < p.tau_threshold {
-        out.push("τ");
+    if !planner.model.fluency(s, bundle, kc).holds() {
+        out.push("fluency");
     }
     if k.production.len() < p.production_needed {
         out.push("production");
@@ -177,7 +183,8 @@ fn run(
 ) -> Vec<Pair> {
     let speed = ReadingSpeed::default();
     let planner = Planner::new(model, bundle, params, &speed);
-    let ctx = FoldCtx::new(bundle);
+    let families = Families::of(bundle);
+    let ctx = FoldCtx::new(bundle, &families);
     let spelling: Vec<&KcId> = bundle
         .content
         .subjects
@@ -186,7 +193,7 @@ fn run(
         .collect();
     let mut pairs = Vec::new();
     let mut seeds = SplitMix64::new(seed);
-    for _ in 0..learners {
+    for index in 0..learners {
         let learner_seed = seeds.next_u64();
         let track_seed = seeds.next_u64();
         let mut learner = Learner::new(bundle, learner_seed);
@@ -278,8 +285,10 @@ fn run(
                         days: a.first.map_or(0.0, |f| (t.0 - f.0) as f64 / DAY_MS as f64),
                         stability: k.card.map_or(0.0, |c| c.stability),
                         recall_later: model.recall(k.card.as_ref(), later),
-                        last: missing(&planner, &before, kc, t),
+                        last: missing(&planner, bundle, &before, kc, t),
                         bug: logged.learner.bug(kc) > 0.0,
+                        learner: index,
+                        fluency: model.fluency(&state, bundle, kc),
                     });
                 }
             }
@@ -422,6 +431,58 @@ fn print(bundle: &Bundle, pairs: &[Pair]) {
             .collect();
         println!("| {kc} | {label} | {} |", cells.join(" | "));
     });
+
+    println!("\n## Fluency at mastery\n");
+    println!(
+        "Right after the answer that mastered the KC. Branch 1: τ ≥ −0.2; branch 2: τ − bⱼ ≥ −0.2 and spread ≤ 0.35; both need 6 counted answers. «fluency last»: fluency was among the conditions still false just before.\n"
+    );
+    println!(
+        "| KC | pairs | n | counted | τ | bⱼ | spread | fluency last | branch 2 only | learners with a branch-2-only pair |"
+    );
+    println!("| --- | --- | --: | --: | --: | --: | --: | --: | --: | --: |");
+    groups(pairs, &kcs, |kc, label, of| {
+        let m = |f: &dyn Fn(&Pair) -> f64| mean(of.iter().map(|p| f(p)));
+        let last = of.iter().filter(|p| p.last.contains("fluency")).count();
+        let only2: Vec<&&Pair> = of
+            .iter()
+            .filter(|p| p.fluency.relative && !p.fluency.absolute)
+            .collect();
+        let mut learners: Vec<usize> = only2.iter().map(|p| p.learner).collect();
+        learners.sort_unstable();
+        learners.dedup();
+        println!(
+            "| {kc} | {label} | {} | {:.1} | {:+.2} | {:+.2} | {:.2} | {last} ({:.0}%) | {} | {} |",
+            of.len(),
+            m(&|p| f64::from(p.fluency.counted)),
+            m(&|p| p.fluency.tau),
+            m(&|p| p.fluency.baseline),
+            m(&|p| p.fluency.spread.unwrap_or(f64::NAN)),
+            100.0 * last as f64 / of.len() as f64,
+            only2.len(),
+            learners.len()
+        );
+    });
+    let mut all: Vec<usize> = pairs
+        .iter()
+        .filter(|p| p.fluency.relative && !p.fluency.absolute)
+        .map(|p| p.learner)
+        .collect();
+    all.sort_unstable();
+    all.dedup();
+    let fluent_last = pairs.iter().filter(|p| p.last.contains("fluency")).count();
+    println!(
+        "\n- fluency among the last conditions: {fluent_last} of {} pairs ({:.1}%)",
+        pairs.len(),
+        100.0 * fluent_last as f64 / pairs.len().max(1) as f64
+    );
+    println!(
+        "- learners with at least one KC fluent only by branch 2: {} ({} pairs)",
+        all.len(),
+        pairs
+            .iter()
+            .filter(|p| p.fluency.relative && !p.fluency.absolute)
+            .count()
+    );
 }
 
 /// Calls `row` for the false and the true pairs of each KC, then of all.

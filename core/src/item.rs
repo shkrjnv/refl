@@ -415,7 +415,7 @@ pub struct Item {
     pub family: FamilyId,
     pub instruction: InstructionId,
     pub difficulty: AuthorDifficulty,
-    /// Seconds; for automaticity and session planning.
+    /// Seconds; for the fluency prior βᶠ and session planning.
     pub expected_time: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "ts", ts(optional))]

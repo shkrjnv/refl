@@ -10,7 +10,8 @@ use sha2::{Digest, Sha256};
 
 use super::Profile;
 use super::fsrs::Card;
-use crate::ids::{EventId, ItemId, KcId, MisconceptionId, SubjectId};
+use crate::event::InputDevice;
+use crate::ids::{EventId, InstructionId, ItemId, KcId, MisconceptionId, SubjectId};
 use crate::value::Timestamp;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -31,9 +32,28 @@ pub struct State {
     /// Time of the last answer per subject: the break threshold.
     pub last_answer: BTreeMap<SubjectId, Timestamp>,
     pub rapid: RapidStats,
+    /// Instruction of the family of the previous answer, of any subject;
+    /// `None` before the first answer or after one whose family is not in
+    /// the family table (`docs/03-layer2-learner-model.md`, «Беглость»).
+    pub last_instruction: Option<InstructionId>,
+    /// Display moment of the latest answer per item, any version, kept for
+    /// the unseen-days window only.
+    pub seen: BTreeMap<ItemId, Timestamp>,
+    /// Typing speeds of the latest counted typed answers per input device,
+    /// characters per second, oldest first.
+    pub typing: BTreeMap<InputDevice, Vec<f64>>,
+    /// bⱼ per subject: residuals of counted answers on known KCs.
+    pub baseline: BTreeMap<SubjectId, Baseline>,
 }
 
-/// One KC: knowledge, memory, automaticity and the mastery counters.
+/// Sum and count of the residuals behind a learner's baseline speed bⱼ.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Baseline {
+    pub sum: f64,
+    pub n: u32,
+}
+
+/// One KC: knowledge, memory, fluency and the mastery counters.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct KcState {
     /// μ in logits.
@@ -45,10 +65,13 @@ pub struct KcState {
     pub observations: u32,
     /// FSRS memory; `None` until the first success that may start it.
     pub card: Option<Card>,
-    /// τ: how much faster than expected, ln(expected / actual), smoothed.
+    /// τ: how much faster than the family's βᶠ the learner retrieves,
+    /// residuals `r = βᶠ − ln t_ret`, smoothed.
     pub tau: f64,
-    /// Correct answers whose time was used for τ.
-    pub timed: u32,
+    /// Counted answers, those that updated τ.
+    pub counted: u32,
+    /// r of the latest counted answers, oldest first: the spread.
+    pub residuals: Vec<f64>,
     /// Distinct production items answered correctly, at most two.
     pub production: Vec<ItemId>,
     /// The mastery criterion held at some event.
@@ -87,6 +110,10 @@ impl State {
             misconceptions: BTreeMap::new(),
             last_answer: BTreeMap::new(),
             rapid: RapidStats::default(),
+            last_instruction: None,
+            seen: BTreeMap::new(),
+            typing: BTreeMap::new(),
+            baseline: BTreeMap::new(),
         }
     }
 

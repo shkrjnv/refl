@@ -5,7 +5,7 @@ use refl_core::content::{
     Edge, EdgeKind, Kc, L1Prior, L1Set, LangReviews, Misconception, MisconceptionOrigin,
 };
 use refl_core::event::{
-    AnswerContext, AnswerEvent, Confidence, CriterionScore, EventPayload, HalfBands,
+    AnswerContext, AnswerEvent, Confidence, CriterionScore, EventPayload, HalfBands, InputDevice,
     MentorOverrideEvent, OverrideKind, OverrideReason, PlanAction, PlanCandidate, PlanFactor,
     PlanIssuedEvent, PlanScope, ReclassifiedEvent, Response, Verdict, WritingScoredEvent,
 };
@@ -102,6 +102,32 @@ fn item_ref() -> impl Strategy<Value = ItemRef> {
         })
 }
 
+/// The timing fields of an answer, schema 2: first input, typing,
+/// characters, edits, device, hidden time.
+#[allow(clippy::type_complexity)]
+fn timing() -> impl Strategy<
+    Value = (
+        Option<u32>,
+        Option<u32>,
+        Option<u32>,
+        Option<u32>,
+        Option<InputDevice>,
+        Option<u32>,
+    ),
+> {
+    (
+        any::<Option<u32>>(),
+        any::<Option<u32>>(),
+        any::<Option<u32>>(),
+        any::<Option<u32>>(),
+        proptest::option::of(prop_oneof![
+            Just(InputDevice::Touch),
+            Just(InputDevice::Keyboard)
+        ]),
+        any::<Option<u32>>(),
+    )
+}
+
 fn payload() -> impl Strategy<Value = EventPayload> {
     let answer = (
         (item_ref(), any::<u16>(), any::<u8>(), any::<bool>()),
@@ -120,7 +146,7 @@ fn payload() -> impl Strategy<Value = EventPayload> {
         ],
         verdict(),
         proptest::option::of(slug(MisconceptionId::new)),
-        (any::<u32>(), any::<bool>()),
+        (any::<u32>(), timing()),
         proptest::option::of(prop_oneof![
             Just(Confidence::Sure),
             Just(Confidence::Unsure)
@@ -134,7 +160,10 @@ fn payload() -> impl Strategy<Value = EventPayload> {
                 response,
                 verdict,
                 misconception,
-                (latency_ms, backgrounded),
+                (
+                    latency_ms,
+                    (first_input_ms, typing_ms, chars_typed, edits, input_device, hidden_ms),
+                ),
                 confidence,
                 (hints, attempt),
             )| {
@@ -148,7 +177,12 @@ fn payload() -> impl Strategy<Value = EventPayload> {
                     verdict,
                     misconception,
                     latency_ms,
-                    backgrounded,
+                    first_input_ms,
+                    typing_ms,
+                    chars_typed,
+                    edits,
+                    input_device,
+                    hidden_ms,
                     confidence,
                     hints,
                     attempt,
@@ -761,6 +795,73 @@ fn version_1_is_lifted_to_2() {
     let mut lifted = plan.clone();
     lifted["end"] = serde_json::Value::Null;
     assert_eq!(serde_json::to_value(&e.payload).unwrap(), lifted);
+    // An answer loses `backgrounded` (true or not) and gains empty timing
+    // fields: fluency never counts it.
+    for backgrounded in [false, true] {
+        let mut answer = answer_payload(&serde_json::json!({ "kind": "option", "value": 1 }));
+        answer["backgrounded"] = backgrounded.into();
+        let e = known(&sample_with_payload(1, &answer));
+        let EventPayload::Answer(a) = &e.payload else {
+            panic!("not an answer");
+        };
+        let timing = (
+            a.first_input_ms,
+            a.typing_ms,
+            a.chars_typed,
+            a.edits,
+            a.input_device,
+            a.hidden_ms,
+        );
+        assert_eq!(timing, (None, None, None, None, None, None));
+        let written = serde_json::to_value(&e.payload).unwrap();
+        assert!(written.get("backgrounded").is_none());
+        for field in [
+            "first_input_ms",
+            "typing_ms",
+            "chars_typed",
+            "edits",
+            "input_device",
+            "hidden_ms",
+        ] {
+            assert_eq!(written[field], serde_json::Value::Null, "{field}");
+        }
+    }
+}
+
+#[test]
+fn answer_timing_fields_of_schema_2_round_trip() {
+    let mut answer = answer_payload(&serde_json::json!({ "kind": "text", "value": "an apple" }));
+    let fields = answer.as_object_mut().unwrap();
+    fields.remove("backgrounded");
+    fields.insert("first_input_ms".into(), 2_400.into());
+    fields.insert("typing_ms".into(), 3_100.into());
+    fields.insert("chars_typed".into(), 9.into());
+    fields.insert("edits".into(), 1.into());
+    fields.insert("input_device".into(), "keyboard".into());
+    fields.insert("hidden_ms".into(), 0.into());
+    let e = known(&sample_with_payload(2, &answer));
+    let EventPayload::Answer(a) = &e.payload else {
+        panic!("not an answer");
+    };
+    assert_eq!(
+        (a.first_input_ms, a.typing_ms, a.chars_typed, a.edits),
+        (Some(2_400), Some(3_100), Some(9), Some(1))
+    );
+    assert_eq!(
+        (a.input_device, a.hidden_ms),
+        (Some(InputDevice::Keyboard), Some(0))
+    );
+    let written = serde_json::to_value(&e.payload).unwrap();
+    for field in [
+        "first_input_ms",
+        "typing_ms",
+        "chars_typed",
+        "edits",
+        "input_device",
+        "hidden_ms",
+    ] {
+        assert_eq!(written[field], answer[field], "{field}");
+    }
 }
 
 fn sample_with_payload(schema_version: u64, payload: &serde_json::Value) -> String {

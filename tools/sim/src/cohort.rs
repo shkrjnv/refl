@@ -13,7 +13,9 @@ use std::collections::BTreeMap;
 
 use refl_core::bundle::Bundle;
 use refl_core::content::{ExplanationDepth, ExplanationTarget};
-use refl_core::event::{AnswerContext, AnswerEvent, Confidence, EventPayload, Response, Verdict};
+use refl_core::event::{
+    AnswerContext, AnswerEvent, Confidence, EventPayload, InputDevice, Response, Verdict,
+};
 use refl_core::event::{Decoded, PlanIssuedEvent};
 use refl_core::ids::ExplanationId;
 use refl_core::ids::{ItemRef, KcId, MisconceptionId};
@@ -22,7 +24,7 @@ use refl_core::kind::ItemKind;
 use refl_core::model::derived::KcProgress;
 use refl_core::model::math::sigmoid;
 use refl_core::model::{
-    AnswerOutcome, Applied, FoldCtx, KnowledgeModel, LearnerModel, Profile, State,
+    AnswerOutcome, Applied, Families, FoldCtx, KnowledgeModel, LearnerModel, Profile, State,
 };
 use refl_core::plan::{
     Answered, Budget, Done, History, Next, Outcome, Params, Phase, Plan, Planner, ReadingSpeed,
@@ -41,7 +43,121 @@ pub struct Reply {
     pub verdict: Verdict,
     pub misconception: Option<MisconceptionId>,
     pub latency_ms: u32,
+    pub first_input_ms: u32,
+    /// Typed input only, as the timing fields of the event.
+    pub typing_ms: Option<u32>,
+    pub chars_typed: Option<u32>,
+    pub edits: Option<u32>,
+    pub hidden_ms: u32,
     pub confidence: Option<Confidence>,
+}
+
+/// How a learner's time splits into reading, retrieval and typing. Drawn
+/// from a stream of its own, so the other draws of a learner are those of
+/// the generator before the timing fields existed.
+#[derive(Debug, Clone)]
+struct Timing {
+    rng: SplitMix64,
+    device: InputDevice,
+    /// Characters per second.
+    typing_speed: f64,
+}
+
+impl Timing {
+    /// Seed offset of the timing stream.
+    const STREAM: u64 = 0x7131_4E00_F1E5_0001;
+    /// Share of items during which the page is hidden for a while.
+    const HIDDEN_SHARE: f64 = 0.02;
+
+    fn new(seed: u64) -> Self {
+        let mut rng = SplitMix64::new(seed ^ Self::STREAM);
+        let (device, typing_speed) = if rng.next_f64() < 0.3 {
+            (InputDevice::Keyboard, 2.0 + 3.0 * rng.next_f64())
+        } else {
+            (InputDevice::Touch, 1.0 + 1.5 * rng.next_f64())
+        };
+        Self {
+            rng,
+            device,
+            typing_speed,
+        }
+    }
+
+    /// Splits a reply of `latency_ms` in total: for typed `text`, typing at
+    /// the learner's speed (one deletion now and then) and the first input
+    /// before it, at least 300 ms after display; now and then the page is
+    /// hidden before the first input, which lengthens both.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // positive, bounded
+    #[allow(clippy::cast_precision_loss)] // short texts
+    fn split(&mut self, latency_ms: u32, text: Option<&str>) -> Split {
+        let mut s = match text {
+            Some(text) => {
+                let edits = u32::from(self.rng.next_f64() < 0.1);
+                let chars = u32::try_from(text.chars().count()).expect("short answer") + edits;
+                let seconds =
+                    f64::from(chars) / self.typing_speed * libm::exp(0.2 * self.rng.next_normal());
+                let typing = (seconds * 1000.0) as u32;
+                let first = latency_ms.saturating_sub(typing).max(300);
+                Split {
+                    latency_ms: first + typing,
+                    first_input_ms: first,
+                    typing_ms: Some(typing),
+                    chars_typed: Some(chars),
+                    edits: Some(edits),
+                    hidden_ms: 0,
+                }
+            }
+            None => Split {
+                latency_ms,
+                first_input_ms: latency_ms,
+                typing_ms: None,
+                chars_typed: None,
+                edits: None,
+                hidden_ms: 0,
+            },
+        };
+        if self.rng.next_f64() < Self::HIDDEN_SHARE {
+            let hidden = 5_000 + (55_000.0 * self.rng.next_f64()) as u32;
+            s.hidden_ms = hidden;
+            s.latency_ms += hidden;
+            s.first_input_ms += hidden;
+        }
+        s
+    }
+}
+
+/// The timing fields of one reply.
+#[derive(Debug, Clone, Copy)]
+struct Split {
+    latency_ms: u32,
+    first_input_ms: u32,
+    typing_ms: Option<u32>,
+    chars_typed: Option<u32>,
+    edits: Option<u32>,
+    hidden_ms: u32,
+}
+
+impl Reply {
+    fn new(
+        response: Response,
+        verdict: Verdict,
+        misconception: Option<MisconceptionId>,
+        split: Split,
+        confidence: Confidence,
+    ) -> Self {
+        Self {
+            response,
+            verdict,
+            misconception,
+            latency_ms: split.latency_ms,
+            first_input_ms: split.first_input_ms,
+            typing_ms: split.typing_ms,
+            chars_typed: split.chars_typed,
+            edits: split.edits,
+            hidden_ms: split.hidden_ms,
+            confidence: Some(confidence),
+        }
+    }
 }
 
 /// Hidden state of one KC of a learner.
@@ -69,6 +185,7 @@ pub struct Learner {
     fatigue: f64,
     /// Latency multiplier.
     pace: f64,
+    timing: Timing,
     kcs: BTreeMap<KcId, TrueKc>,
     /// The learner's own prerequisites: (KC, what it needs).
     requires: Vec<(KcId, KcId)>,
@@ -162,9 +279,15 @@ impl Learner {
             rapid,
             fatigue,
             pace,
+            timing: Timing::new(seed),
             kcs,
             requires,
         }
+    }
+
+    /// The input device of this learner.
+    pub fn device(&self) -> InputDevice {
+        self.timing.device
     }
 
     /// The same learner, guessing rapidly half the time: exercises the
@@ -322,13 +445,12 @@ impl Learner {
                     )
                 }
             };
-            return Reply {
-                response,
-                verdict,
-                misconception,
-                latency_ms,
-                confidence: Some(Confidence::Unsure),
+            let text = match &response {
+                Response::Text(t) => Some(t.as_str()),
+                Response::Option(_) => None,
             };
+            let split = self.timing.split(latency_ms, text);
+            return Reply::new(response, verdict, misconception, split, Confidence::Unsure);
         }
 
         let bug = primary
@@ -411,13 +533,13 @@ impl Learner {
                 k.bug *= 0.85;
             }
         }
-        Reply {
-            response,
-            verdict,
-            misconception,
-            latency_ms: latency as u32,
-            confidence: Some(confidence),
-        }
+        // The time model above gives the whole reply; typing comes out of it.
+        let text = match &response {
+            Response::Text(t) => Some(t.as_str()),
+            Response::Option(_) => None,
+        };
+        let split = self.timing.split(latency as u32, text);
+        Reply::new(response, verdict, misconception, split, confidence)
     }
 }
 
@@ -427,6 +549,8 @@ impl Learner {
 pub struct Track<'a> {
     pub model: &'a KnowledgeModel,
     pub bundle: &'a Bundle,
+    /// The bundle's family table, built once.
+    pub families: Families,
     pub state: State,
     /// Families shown and KCs deferred, from every folded event.
     pub history: History,
@@ -457,6 +581,7 @@ impl<'a> Track<'a> {
         Self {
             model,
             bundle,
+            families: Families::of(bundle),
             state: model.init(&Profile::default()),
             history: History::default(),
             views: Vec::new(),
@@ -498,7 +623,11 @@ impl<'a> Track<'a> {
         self.history.record(self.bundle, &ev);
         let applied = self
             .model
-            .apply(&mut self.state, &ev, &FoldCtx::new(self.bundle))
+            .apply(
+                &mut self.state,
+                &ev,
+                &FoldCtx::new(self.bundle, &self.families),
+            )
             .expect("events are folded in order");
         (applied, ev)
     }
@@ -567,7 +696,12 @@ impl<'a> Track<'a> {
             verdict: reply.verdict,
             misconception: reply.misconception,
             latency_ms: reply.latency_ms,
-            backgrounded: false,
+            first_input_ms: Some(reply.first_input_ms),
+            typing_ms: reply.typing_ms,
+            chars_typed: reply.chars_typed,
+            edits: reply.edits,
+            input_device: Some(learner.device()),
+            hidden_ms: Some(reply.hidden_ms),
             confidence: reply.confidence,
             hints: 0,
             attempt: 1,
@@ -1119,7 +1253,7 @@ pub fn cohort(
                 .keys()
                 .filter(|kc| {
                     matches!(
-                        model.progress(&track.state, kc, end),
+                        model.progress(&track.state, track.bundle, kc, end),
                         KcProgress::Mastered | KcProgress::LongTerm
                     )
                 })

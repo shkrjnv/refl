@@ -130,7 +130,7 @@ impl<'a> Planner<'a> {
     }
 
     pub(super) fn progress(&self, s: &State, kc: &KcId, now: Timestamp) -> KcProgress {
-        self.model.progress(s, kc, now)
+        self.model.progress(s, self.bundle, kc, now)
     }
 
     fn unmastered(&self, s: &State, kc: &KcId, now: Timestamp) -> bool {

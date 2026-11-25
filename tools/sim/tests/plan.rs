@@ -332,7 +332,10 @@ fn review_debt_leaves_no_learning_kc() {
         kcs: 12,
         items_per_kc: 12,
     });
-    let (s, later) = state_after(&b, 4000, 30);
+    // Two months later: since model v1.3 most synthetic answers have no
+    // known tempo (their items recur within 14 days) and are graded Good, so
+    // a month no longer makes enough reviews due.
+    let (s, later) = state_after(&b, 4000, 60);
     let model = KnowledgeModel::default();
     let params = Params::default();
     let planner = planner(&model, &b, &params);

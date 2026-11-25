@@ -188,7 +188,7 @@ fn run(
                 .filter(|kc| {
                     use refl_core::model::derived::KcProgress;
                     matches!(
-                        model.progress(&track.state, kc, end),
+                        model.progress(&track.state, track.bundle, kc, end),
                         KcProgress::Mastered | KcProgress::LongTerm
                     )
                 })

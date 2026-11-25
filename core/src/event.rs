@@ -39,19 +39,39 @@ type Upcaster = fn(Value) -> Result<Value, DecodeError>;
 
 /// `UPCASTERS[i]` lifts version `i + 1` to `i + 2`. Its length is always
 /// `CURRENT_SCHEMA_VERSION - 1`; a schema change appends one function here and
-/// bumps the constant. Existing upcasters are never edited.
-const UPCASTERS: &[Upcaster] = &[plan_issued_end];
+/// bumps the constant. The upcaster into a released version is never edited;
+/// schema 2 is not released yet, so `v1_to_v2` still grows with it.
+const UPCASTERS: &[Upcaster] = &[v1_to_v2];
 
-/// 1 → 2: `plan_issued` gains `end`, the reason the session ended
-/// (`docs/02-layer1-content.md`); an event of version 1 has none. Other
-/// payloads are unchanged.
+/// Answer timing fields of schema 2 (`docs/02-layer1-content.md`, «Событие
+/// ответа»); an answer of version 1 has none of them.
+const ANSWER_TIMING_FIELDS: &[&str] = &[
+    "first_input_ms",
+    "typing_ms",
+    "chars_typed",
+    "edits",
+    "input_device",
+    "hidden_ms",
+];
+
+/// 1 → 2: `plan_issued` gains `end`, the reason the session ended; `answer`
+/// loses `backgrounded` and gains the timing fields, all empty
+/// (`docs/02-layer1-content.md`). Other payloads are unchanged.
 #[allow(clippy::unnecessary_wraps)] // the `Upcaster` signature
-fn plan_issued_end(mut value: Value) -> Result<Value, DecodeError> {
-    if let Some(payload) = value.get_mut("payload").and_then(Value::as_object_mut)
-        && payload.get("type").and_then(Value::as_str) == Some("plan_issued")
-        && !payload.contains_key("end")
-    {
-        payload.insert(String::from("end"), Value::Null);
+fn v1_to_v2(mut value: Value) -> Result<Value, DecodeError> {
+    if let Some(payload) = value.get_mut("payload").and_then(Value::as_object_mut) {
+        match payload.get("type").and_then(Value::as_str) {
+            Some("plan_issued") if !payload.contains_key("end") => {
+                payload.insert(String::from("end"), Value::Null);
+            }
+            Some("answer") => {
+                payload.remove("backgrounded");
+                for field in ANSWER_TIMING_FIELDS {
+                    payload.insert(String::from(*field), Value::Null);
+                }
+            }
+            _ => {}
+        }
     }
     if let Some(event) = value.as_object_mut() {
         event.insert(String::from("schema_version"), Value::from(2u16));
@@ -254,6 +274,15 @@ pub enum Confidence {
     Unsure,
 }
 
+/// What the learner answered with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename_all = "lowercase"))]
+#[serde(rename_all = "lowercase")]
+pub enum InputDevice {
+    Touch,
+    Keyboard,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct AnswerEvent {
@@ -272,10 +301,23 @@ pub struct AnswerEvent {
     /// Check result at answer time; later corrections come as `reclassified`.
     pub verdict: Verdict,
     pub misconception: Option<MisconceptionId>,
+    /// Display to answer; fixes the moment of display.
     pub latency_ms: u32,
-    /// The app went to background during the item: latency is not used
-    /// (`docs/03-layer2-learner-model.md`, «Автоматизм»).
-    pub backgrounded: bool,
+    // Timing aggregates of schema 2, the input of fluency
+    // (`docs/03-layer2-learner-model.md`, «Беглость»); `None` in answers
+    // upcast from schema 1. No keystroke rhythm: it is biometric (docs/14).
+    /// Display to the first input: a tap for a choice, the first keystroke
+    /// for typed input.
+    pub first_input_ms: Option<u32>,
+    /// First keystroke to submit; typed input only.
+    pub typing_ms: Option<u32>,
+    /// Characters typed, deleted ones included; typed input only.
+    pub chars_typed: Option<u32>,
+    /// Deletions; typed input only.
+    pub edits: Option<u32>,
+    pub input_device: Option<InputDevice>,
+    /// Time the page was hidden while the item was shown; 0: never.
+    pub hidden_ms: Option<u32>,
     pub confidence: Option<Confidence>,
     pub hints: u8,
     pub attempt: u8,

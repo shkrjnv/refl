@@ -32,7 +32,7 @@ export type Item = { id: ItemId, version: ItemVersion,
  */
 subject: SubjectId, family: FamilyId, instruction: InstructionId, difficulty: AuthorDifficulty, 
 /**
- * Seconds; for automaticity and session planning.
+ * Seconds; for the fluency prior βᶠ and session planning.
  */
 expected_time: number, topic?: TopicId, status: ItemStatus, source?: string, license?: string, 
 /**

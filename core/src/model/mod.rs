@@ -6,6 +6,7 @@
 //! the same log; [`KnowledgeModel`] is version 1.
 
 pub mod derived;
+pub mod fluency;
 pub mod fold_version;
 pub mod fsrs;
 pub mod math;
@@ -24,9 +25,10 @@ use crate::ids::{EventId, ItemRef, MisconceptionId, SubjectId};
 use crate::item::LadderLevel;
 use crate::value::{Finite, Timestamp};
 
+pub use fluency::Families;
 pub use fold_version::fold_version;
-pub use state::{KcState, MisconceptionState, RapidStats, State};
-pub use v1::{Belief, KnowledgeModel, Params};
+pub use state::{Baseline, KcState, MisconceptionState, RapidStats, State};
+pub use v1::{Belief, Fluency, KnowledgeModel, Params};
 
 /// What the model needs to know about the learner that is not in the log yet
 /// (`docs/03-layer2-learner-model.md`, open question 8).
@@ -100,17 +102,22 @@ static NO_CORRECTIONS: Corrections = Corrections(BTreeMap::new());
 /// it corrects, so that answer would arrive late and force a replay anyway.
 /// Hence a `reclassified` folded with [`FoldCtx::new`] always asks for a
 /// replay, and [`replay`] passes the corrections of the whole log.
+///
+/// `families` is [`Families::of`] the bundle, built once per bundle by the
+/// caller rather than on every event.
 #[derive(Debug, Clone, Copy)]
 pub struct FoldCtx<'a> {
     pub bundle: &'a Bundle,
+    pub families: &'a Families,
     pub corrections: &'a Corrections,
 }
 
 impl<'a> FoldCtx<'a> {
     /// For folding new events onto a state as they arrive.
-    pub fn new(bundle: &'a Bundle) -> Self {
+    pub fn new(bundle: &'a Bundle, families: &'a Families) -> Self {
         Self {
             bundle,
+            families,
             corrections: &NO_CORRECTIONS,
         }
     }
@@ -233,8 +240,10 @@ pub fn replay<M: LearnerModel>(
     let mut order: Vec<&Decoded> = events.iter().collect();
     order.sort_by(|a, b| event_id(a).cmp(event_id(b)));
     let corrections = Corrections::from_log(order.iter().copied());
+    let families = Families::of(bundle);
     let ctx = FoldCtx {
         bundle,
+        families: &families,
         corrections: &corrections,
     };
     let mut state = model.init(profile);

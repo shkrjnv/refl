@@ -85,14 +85,14 @@ fn rank(q: f64, n: usize) -> usize {
 }
 
 impl KnowledgeModel {
-    pub fn progress(&self, s: &State, kc: &KcId, now: Timestamp) -> KcProgress {
+    pub fn progress(&self, s: &State, bundle: &Bundle, kc: &KcId, now: Timestamp) -> KcProgress {
         let Some(k) = s.kcs.get(kc) else {
             return KcProgress::NotStarted;
         };
         let r = self.recall(k.card.as_ref(), now);
         if k.ever_mastered && r < self.params.forgetting_r {
             KcProgress::Forgetting
-        } else if self.is_mastered(k, now) {
+        } else if self.is_mastered(s, bundle, kc, now) {
             let stable = k
                 .card
                 .is_some_and(|c| c.stability >= self.params.long_term_stability);

@@ -32,7 +32,7 @@ use refl_core::event::{AnswerContext, Confidence, Decoded, EventPayload, Verdict
 use refl_core::ids::{ItemRef, KcId};
 use refl_core::item::KcRole;
 use refl_core::model::math::{self, KcTerm, effective_slope, phi, sigmoid};
-use refl_core::model::{Applied, FoldCtx, KnowledgeModel, LearnerModel, Profile, State};
+use refl_core::model::{Applied, Families, FoldCtx, KnowledgeModel, LearnerModel, Profile, State};
 use refl_core::plan::{Answered, Budget, Next, Outcome, Params, Phase, Plan, Planner};
 use refl_core::rng::SplitMix64;
 use refl_core::value::{Lang, Timestamp};
@@ -502,7 +502,8 @@ fn replay(
 ) -> Scores {
     let p = &model.params;
     let mut scores = Scores::default();
-    let ctx = FoldCtx::new(bundle);
+    let families = Families::of(bundle);
+    let ctx = FoldCtx::new(bundle, &families);
     let spelling: BTreeSet<KcId> = bundle
         .content
         .subjects
@@ -541,7 +542,7 @@ fn replay(
             let shown = Timestamp(t.0 - i64::from(a.latency_ms));
             let correct = matches!(a.verdict, Verdict::Correct | Verdict::Typo);
             let expected_ms = f64::from(item.expected_time) * 1000.0;
-            let rapid = !a.backgrounded
+            let rapid = a.hidden_ms.is_none_or(|ms| ms == 0)
                 && expected_ms > 0.0
                 && f64::from(a.latency_ms) < p.rapid_share * expected_ms
                 && (!item.typed_input() || a.latency_ms < p.rapid_typed_ms);
@@ -730,8 +731,7 @@ fn replay(
                     continue;
                 };
                 let mastered = r.mastery_p(&state, kc, t) >= v.confidence
-                    && k.timed > 0
-                    && k.tau >= p.tau_threshold
+                    && model.fluency(&state, bundle, kc).holds()
                     && k.production.len() >= p.production_needed;
                 if check {
                     assert_eq!(mastered, k.ever_mastered, "mastery of {kc}");

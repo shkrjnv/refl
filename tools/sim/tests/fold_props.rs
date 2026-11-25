@@ -7,7 +7,7 @@
 use proptest::prelude::*;
 use refl_core::bundle::Bundle;
 use refl_core::event::Decoded;
-use refl_core::model::{FoldCtx, KnowledgeModel, LearnerModel, Profile, State, replay};
+use refl_core::model::{Families, FoldCtx, KnowledgeModel, LearnerModel, Profile, State, replay};
 use refl_core::rng::SplitMix64;
 use refl_sim::{BundleSpec, LogSpec, synthetic_bundle, synthetic_log};
 
@@ -34,9 +34,13 @@ fn ingest(model: &KnowledgeModel, bundle: &Bundle, arrivals: &[Decoded]) -> Stat
     let profile = Profile::default();
     let mut received: Vec<Decoded> = Vec::new();
     let mut state = model.init(&profile);
+    let families = Families::of(bundle);
     for ev in arrivals {
         received.push(ev.clone());
-        if model.apply(&mut state, ev, &FoldCtx::new(bundle)).is_err() {
+        if model
+            .apply(&mut state, ev, &FoldCtx::new(bundle, &families))
+            .is_err()
+        {
             state = replay(model, &profile, bundle, &received);
         }
     }
