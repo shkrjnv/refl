@@ -62,6 +62,11 @@ bench-v1:
 m1:
     cargo run --locked --release --quiet -p refl-sim --bin m1 -- content/bench/v1/bundle.json 200 30 1 > tools/sim/m1/output.txt
 
+# M2: model v1.1 against v1 on a fresh cohort (seed 2, same frozen bundle); the same report as m1, read its «v1 against v1.1» section
+m2:
+    mkdir -p tools/sim/m2
+    cargo run --locked --release --quiet -p refl-sim --bin m1 -- content/bench/v1/bundle.json 200 30 2 > tools/sim/m2/output-seed2.txt
+
 # Review queue (by language, path:line) and all tasks as a learner sees them, in target/review/
 review:
     cargo run --locked --quiet -p content-build -- report --review --out target/review content

@@ -608,3 +608,28 @@ fn a_mark_on_an_unknown_kc_changes_nothing() {
     let s = fold(&b, &[mark(at(0, 0), 1, &ghost)]);
     assert!(s.kcs.is_empty());
 }
+
+#[test]
+fn process_noise_widens_the_belief_before_the_update_and_changes_the_version() {
+    let b = bundle();
+    let v1 = KnowledgeModel {
+        params: refl_core::model::Params {
+            process_noise: 0.0,
+            ..KnowledgeModel::default().params
+        },
+    };
+    let v11 = KnowledgeModel::default();
+    assert!(v11.version().starts_with("knowledge-v1.1+"));
+    assert_ne!(v1.version(), v11.version());
+    let first = ev(at(0, 0), 1, chosen(0, 0));
+    let run = |m: &KnowledgeModel| {
+        let mut s = m.init(&Profile::default());
+        let applied = m.apply(&mut s, &first, &FoldCtx::new(&b)).unwrap();
+        (s, applied)
+    };
+    let ((s1, a1), (s11, a11)) = (run(&v1), run(&v11));
+    // The prediction is made before q is added.
+    assert_eq!(a1, a11);
+    let kc = kc_id(0);
+    assert!(s11.kcs[&kc].var > s1.kcs[&kc].var);
+}

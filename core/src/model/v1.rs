@@ -1,6 +1,6 @@
-//! Learner model version 1 (`docs/03-layer2-learner-model.md`; the v1
-//! readings are in «Уточнения версии 1»): knowledge μ/σ with the observation
-//! model, FSRS-6 memory, automaticity, misconceptions, the rapid-guess
+//! Learner model version 1.1 (`docs/03-layer2-learner-model.md`; the v1
+//! readings are in «Уточнения версии 1»; 1.1 adds the process noise q):
+//! knowledge μ/σ with the observation model, FSRS-6 memory, automaticity, misconceptions, the rapid-guess
 //! filter and propagation of success down the `requires` graph.
 
 use alloc::collections::{BTreeMap, BTreeSet};
@@ -51,6 +51,9 @@ pub struct Params {
     pub delta: f64,
     /// η: growth of σ² per day without practice.
     pub eta: f64,
+    /// q: process noise, σ² added to every slot KC before each knowledge
+    /// update (version 1.1).
+    pub process_noise: f64,
     /// λ: smoothing of τ.
     pub lambda: f64,
     /// τ at or above this is automatic.
@@ -113,6 +116,7 @@ impl Default for Params {
             mu0_bound: 3.0,
             delta: 1.0,
             eta: 0.005,
+            process_noise: 0.02,
             lambda: 0.2,
             tau_threshold: -0.2,
             time_cap: 5.0,
@@ -570,6 +574,14 @@ impl KnowledgeModel {
             })
             .collect();
         let b = difficulty(item);
+        // Process noise: the skill changes while the learner learns, so the
+        // belief widens before the answer is weighed. The prediction above
+        // was made without it.
+        for (kc, _) in &weighted {
+            if let Some(k) = self.touch(s, bundle, kc, t) {
+                k.var += p.process_noise;
+            }
+        }
         self.observe(
             s,
             bundle,
@@ -733,7 +745,7 @@ impl LearnerModel for KnowledgeModel {
             let _ = write!(s, "{b:02x}");
             s
         });
-        format!("knowledge-v1+{short}")
+        format!("knowledge-v1.1+{short}")
     }
 
     fn init(&self, profile: &Profile) -> State {

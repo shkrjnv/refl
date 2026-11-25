@@ -295,7 +295,8 @@ struct Variant {
     rho: f64,
     delta: f64,
     eta: f64,
-    /// Process noise added to σ² of every slot KC before each answer.
+    /// Process noise added to σ² of every slot KC before each knowledge
+    /// update, after the prediction (version 1.1).
     q_answer: f64,
     /// `p'` with the raw slope `a` (docs/03) instead of `a_eff` (code).
     raw_slope_in_dp: bool,
@@ -316,7 +317,7 @@ impl Variant {
             rho: p.rho,
             delta: p.delta,
             eta: p.eta,
-            q_answer: 0.0,
+            q_answer: p.process_noise,
             raw_slope_in_dp: false,
             theta_star: p.mastery_theta,
             confidence: p.mastery_confidence,
@@ -570,14 +571,6 @@ fn replay(
                     (KcRole::Secondary, Secondary::Oracle) => fixed.push(true_star(&k.kc)),
                 }
             }
-            if v.q_answer > 0.0 && !rapid {
-                for (kc, _) in &weighted {
-                    if let Some(bel) = r.touch(kc, shown) {
-                        bel.var += v.q_answer;
-                    }
-                }
-            }
-
             // Prediction at display time, base g and s.
             let mut terms = Vec::new();
             for (kc, _) in &weighted {
@@ -609,6 +602,14 @@ fn replay(
                 }
                 if !correct && a.confidence == Some(Confidence::Sure) {
                     slip /= 2.0;
+                }
+                // Process noise comes after the prediction, as in the core.
+                if v.q_answer > 0.0 {
+                    for (kc, _) in &weighted {
+                        if let Some(bel) = r.touch(kc, t) {
+                            bel.var += v.q_answer;
+                        }
+                    }
                 }
                 info = r.observe(&state, &weighted, &fixed, b, g, slip, correct, t);
                 touched.extend(weighted.iter().map(|(k, _)| k.clone()));
@@ -809,6 +810,44 @@ fn row(name: &str, s: &Scores, reference: &[Mastery]) -> String {
     )
 }
 
+/// Reliability of M for two models side by side: per bin, answers, mean M
+/// and the true share above θ*.
+fn print_calibration_pair(a: (&str, &Scores), b: (&str, &Scores)) {
+    let bin = |s: &Scores, i: u32| {
+        let lo = f64::from(i) / 10.0;
+        let v: Vec<&(f64, bool, bool)> = s
+            .calibration
+            .iter()
+            .filter(|(m, _, _)| *m >= lo && (*m < lo + 0.1 || (i == 9 && *m <= 1.0)))
+            .collect();
+        let n = v.len() as f64;
+        (
+            v.len(),
+            v.iter().map(|x| x.0).sum::<f64>() / n.max(1.0),
+            v.iter().filter(|x| x.1).count() as f64 / n.max(1.0),
+        )
+    };
+    println!(
+        "| M bin | {0} answers | {0} mean M | {0} true share | {1} answers | {1} mean M | {1} true share |",
+        a.0, b.0
+    );
+    println!("| --- | --: | --: | --: | --: | --: | --: |");
+    for i in 0..10 {
+        let (x, y) = (bin(a.1, i), bin(b.1, i));
+        let lo = f64::from(i) / 10.0;
+        println!(
+            "| {lo:.1}–{:.1} | {} | {:.3} | {:.3} | {} | {:.3} | {:.3} |",
+            lo + 0.1,
+            x.0,
+            x.1,
+            x.2,
+            y.0,
+            y.1,
+            y.2
+        );
+    }
+}
+
 const HEADER: &str = "| variant | mastered pairs | median answers | median days | paired median answers | false mastery | FM with bug / without | median true rate +7 d | log loss |\n| --- | --: | --: | --: | --: | --: | --: | --: | --: |";
 
 fn main() -> ExitCode {
@@ -838,7 +877,15 @@ fn main() -> ExitCode {
     let bundle = live_fixture(bundle);
     let learners = usize::try_from(learners).expect("fits");
     let days_n = u32::try_from(days_n).expect("fits");
-    let model = KnowledgeModel::default();
+    // The measurement baseline is model v1 (q = 0): the bench v1 logs came
+    // from it. Model v1.1 is the core default and is compared below.
+    let model11 = KnowledgeModel::default();
+    let model = KnowledgeModel {
+        params: refl_core::model::Params {
+            process_noise: 0.0,
+            ..model11.params.clone()
+        },
+    };
     let params = Params::default();
     let mp = &model.params;
 
@@ -1003,6 +1050,59 @@ fn main() -> ExitCode {
             v.iter().filter(|x| x.2).count() as f64 / n
         );
     }
+
+    // ---- v1 against v1.1
+    let base11 = Variant {
+        name: "v1.1 (q = 0.02)",
+        ..Variant::base(&model11.params)
+    };
+    let reference = v1.masteries.clone();
+    println!("\n## v1 against v1.1 (process noise q = 0.02 per answer)\n");
+    println!(
+        "Off-policy: these logs, replayed through v1 and through v1.1; the v1.1 replica is checked against the core fold (default model) on every answer. Paired median over the {} pairs v1 mastered.\n",
+        reference.len()
+    );
+    let v11 = replay(&model11, &bundle, &runs, base11, true);
+    println!("{HEADER}");
+    println!("{}", row(base.name, &v1, &reference));
+    println!("{}", row(base11.name, &v11, &reference));
+    println!("\nCalibration of M, off-policy:\n");
+    print_calibration_pair(("v1", &v1), ("v1.1", &v11));
+    println!(
+        "\nOn-policy: the planner and the learner's trajectory follow each model; each run is scored by its own replica (checked against the core fold). Paired median over the pairs the v1 run mastered.\n"
+    );
+    let (runs_a, mastered_a, _) = generate(
+        &model,
+        &bundle,
+        &params,
+        learners,
+        days_n,
+        seed,
+        Swap::None,
+        false,
+    );
+    let (runs_b, mastered_b, _) = generate(
+        &model11,
+        &bundle,
+        &params,
+        learners,
+        days_n,
+        seed,
+        Swap::None,
+        false,
+    );
+    let sa = replay(&model, &bundle, &runs_a, base, true);
+    let sb = replay(&model11, &bundle, &runs_b, base11, true);
+    println!("{HEADER}");
+    println!("{}", row(base.name, &sa, &sa.masteries));
+    println!("{}", row(base11.name, &sb, &sa.masteries));
+    println!(
+        "\nMastered pairs per learner: v1 {:.2}, v1.1 {:.2}.",
+        mastered_a as f64 / learners as f64,
+        mastered_b as f64 / learners as f64
+    );
+    println!("\nCalibration of M, on-policy:\n");
+    print_calibration_pair(("v1", &sa), ("v1.1", &sb));
 
     // ---- variants by replay
     let reference = v1.masteries.clone();
