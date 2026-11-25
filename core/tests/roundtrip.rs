@@ -610,10 +610,13 @@ fn kc() -> impl Strategy<Value = Kc> {
         level_key(),
         unit(),
         text(),
-        proptest::collection::vec(slug(Tag::new), 0..3),
+        (
+            proptest::collection::vec(slug(Tag::new), 0..3),
+            any::<bool>(),
+        ),
     )
         .prop_map(
-            |((id, subject, domain), title, level, importance, rule, tags)| Kc {
+            |((id, subject, domain), title, level, importance, rule, (tags, observed_only))| Kc {
                 id,
                 subject,
                 domain,
@@ -623,6 +626,7 @@ fn kc() -> impl Strategy<Value = Kc> {
                 importance,
                 rule,
                 tags,
+                observed_only,
             },
         )
 }

@@ -94,6 +94,24 @@ fn clean_fixture_has_no_diagnostics() {
     assert!(out.bundle.is_some());
 }
 
+/// The spelling KC only receives observations: it is draft but not listed
+/// as blocked, so `report --missing` leaves it out (docs/02).
+#[test]
+fn an_observed_only_kc_is_not_blocked() {
+    let out = run(&fixtures().join("clean"));
+    assert_eq!(out.report.observed, ["en.k.spelling"]);
+    assert!(out.report.draft.iter().all(|d| d.kc != "en.k.spelling"));
+    let bundle = out.bundle.expect("bundle");
+    let spelling = bundle
+        .content
+        .kcs
+        .iter()
+        .find(|k| k.kc.id.as_str() == "en.k.spelling")
+        .unwrap();
+    assert!(spelling.kc.observed_only);
+    assert_eq!(spelling.status, KcStatus::Draft);
+}
+
 #[test]
 fn each_check_catches_its_own_defect() {
     let mut failures = Vec::new();

@@ -109,7 +109,16 @@ pub fn build_with_content(opts: &Options) -> std::io::Result<(Output, load::Cont
         )
     })?;
     match ledger::read(&opts.reviews)? {
-        Ok(entries) => ledger::apply(&mut content, &entries),
+        Ok(entries) => {
+            for e in ledger::apply(&mut content, &entries) {
+                diags.push(check::diag(
+                    report::Code::OrphanReview,
+                    std::path::Path::new(ledger::FILE),
+                    format!("review of `{}` in {:?}", e.record, e.lang),
+                    "no such record: remove the line with the record it reviewed".to_owned(),
+                ));
+            }
+        }
         Err(why) => diags.push(check::diag(
             report::Code::Schema,
             std::path::Path::new(ledger::FILE),

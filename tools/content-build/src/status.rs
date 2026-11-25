@@ -134,8 +134,20 @@ pub fn compute(c: &Content, report: &mut Report) -> BTreeMap<KcId, KcStatus> {
     for k in &c.kcs {
         first.entry(&k.value.id).or_insert(&k.file);
     }
+    let observed: BTreeSet<&KcId> = c
+        .kcs
+        .iter()
+        .filter(|k| k.value.observed_only)
+        .map(|k| &k.value.id)
+        .collect();
     let mut status = BTreeMap::new();
     for (&kc, &file) in &first {
+        // Only receives observations: draft, and nothing to write for it.
+        if observed.contains(kc) {
+            report.observed.push(kc.to_string());
+            status.insert(kc.clone(), KcStatus::Draft);
+            continue;
+        }
         let mut missing = Vec::new();
         for lang in [Lang::Ru, Lang::En] {
             missing.extend(explanation_gap(

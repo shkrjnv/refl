@@ -31,4 +31,10 @@ importance: UnitInterval,
 /**
  * Short statement for content authors, not shown to learners.
  */
-rule: string, tags: Array<Tag>, };
+rule: string, tags: Array<Tag>, 
+/**
+ * The KC only receives observations from other tasks, like the
+ * subject's spelling KC: it has no explanations or tasks of its own,
+ * never goes live, and is not listed as blocked.
+ */
+observed_only: boolean, };

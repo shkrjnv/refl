@@ -87,13 +87,17 @@ fn set(reviews: &mut LangReviews, lang: Lang, review: Review) {
 }
 
 /// Merges the ledger into the records: the review of the entry's language
-/// becomes `reviewed` by the named person with the recorded hash. An entry
-/// naming a record that no longer exists changes nothing.
-pub fn apply(content: &mut Content, entries: &[Entry]) {
+/// becomes `reviewed` by the named person with the recorded hash. Returns
+/// the entries that name no existing record (or review group): orphans,
+/// the build error `orphan-review` (docs/02, «Проверки при сборке»).
+pub fn apply<'e>(content: &mut Content, entries: &'e [Entry]) -> Vec<&'e Entry> {
+    let mut orphans = Vec::new();
     for e in entries {
         let Some((kind, id)) = e.record.split_once(':') else {
+            orphans.push(e);
             continue;
         };
+        let mut found = false;
         match kind {
             "explanation" => {
                 for x in content
@@ -102,6 +106,7 @@ pub fn apply(content: &mut Content, entries: &[Entry]) {
                     .filter(|x| x.value.id.as_str() == id && x.value.lang == e.lang)
                 {
                     x.value.review = e.review();
+                    found = true;
                 }
             }
             "instruction" => {
@@ -111,11 +116,13 @@ pub fn apply(content: &mut Content, entries: &[Entry]) {
                     .filter(|x| x.value.id.as_str() == id)
                 {
                     set(&mut x.value.review, e.lang, e.review());
+                    found = true;
                 }
             }
             "kc" => {
                 for x in content.kcs.iter_mut().filter(|x| x.value.id.as_str() == id) {
                     set(&mut x.value.review, e.lang, e.review());
+                    found = true;
                 }
             }
             "misconception" => {
@@ -125,6 +132,7 @@ pub fn apply(content: &mut Content, entries: &[Entry]) {
                     .filter(|x| x.value.id.as_str() == id)
                 {
                     set(&mut x.value.review, e.lang, e.review());
+                    found = true;
                 }
             }
             "item" => {
@@ -134,6 +142,7 @@ pub fn apply(content: &mut Content, entries: &[Entry]) {
                     .filter(|x| x.value.id.as_str() == id)
                 {
                     set(&mut x.value.review, e.lang, e.review());
+                    found = true;
                 }
             }
             "group" => {
@@ -143,11 +152,16 @@ pub fn apply(content: &mut Content, entries: &[Entry]) {
                     .filter(|x| x.value.review_group.as_deref() == Some(id))
                 {
                     set(&mut x.value.review, e.lang, e.review());
+                    found = true;
                 }
             }
             _ => {}
         }
+        if !found {
+            orphans.push(e);
+        }
     }
+    orphans
 }
 
 /// Which records `mark-reviewed` marks.

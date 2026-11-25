@@ -65,11 +65,13 @@ pub enum Code {
     /// A `reviewed` record without a hash, or whose hash is not that of the
     /// text it covers: the text changed after the review.
     ReviewedTextChanged,
+    /// A `reviews.lock` line whose record or review group no longer exists.
+    OrphanReview,
 }
 
 impl Code {
     /// Every check; tests require a negative fixture named after each one.
-    pub const ALL: [Self; 31] = [
+    pub const ALL: [Self; 32] = [
         Self::Nickel,
         Self::Schema,
         Self::DuplicateId,
@@ -101,6 +103,7 @@ impl Code {
         Self::LockOutdated,
         Self::ReviewedWithoutReviewer,
         Self::ReviewedTextChanged,
+        Self::OrphanReview,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -136,6 +139,7 @@ impl Code {
             Self::LockOutdated => "lock-outdated",
             Self::ReviewedWithoutReviewer => "reviewed-without-reviewer",
             Self::ReviewedTextChanged => "reviewed-text-changed",
+            Self::OrphanReview => "orphan-review",
         }
     }
 }
@@ -178,6 +182,9 @@ pub struct Report {
     pub diagnostics: Vec<Diagnostic>,
     pub draft: Vec<DraftKc>,
     pub live: Vec<String>,
+    /// KCs that only receive observations: not live, and not blocked by
+    /// anything an author could write.
+    pub observed: Vec<String>,
 }
 
 impl Report {
@@ -202,6 +209,9 @@ impl fmt::Display for Report {
         }
         for kc in &self.live {
             writeln!(f, "live  {kc}")?;
+        }
+        for kc in &self.observed {
+            writeln!(f, "observed-only {kc}")?;
         }
         for d in &self.draft {
             writeln!(

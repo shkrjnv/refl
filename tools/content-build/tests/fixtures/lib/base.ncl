@@ -27,6 +27,7 @@ let primary_kc = fun primary => [{ kc = primary, role = "primary" }] in
       title = { ru = "Орфография", en = "Spelling" },      level = "A1",
       importance = 0.5,
       rule = "spelling",
+      observed_only = true,
     },
     {
       id = "en.k.a",

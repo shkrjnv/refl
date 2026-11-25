@@ -142,6 +142,7 @@ fn a_kc_title_follows_the_chain_and_skips_drafts() {
         importance: UnitInterval::new(0.5).unwrap(),
         rule: String::new(),
         tags: Vec::new(),
+        observed_only: false,
     };
     // uz is draft and ru has no record, so every interface falls to en.
     for lang in [Lang::Uz, Lang::Ru, Lang::En] {

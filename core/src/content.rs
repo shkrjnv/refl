@@ -30,6 +30,11 @@ pub struct Kc {
     pub rule: String,
     #[serde(default)]
     pub tags: Vec<Tag>,
+    /// The KC only receives observations from other tasks, like the
+    /// subject's spelling KC: it has no explanations or tasks of its own,
+    /// never goes live, and is not listed as blocked.
+    #[serde(default)]
+    pub observed_only: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]

@@ -132,6 +132,7 @@ pub fn synthetic_bundle(spec: BundleSpec) -> Bundle {
             importance: UnitInterval::new(importance).expect("unit"),
             rule: String::new(),
             tags: Vec::new(),
+            observed_only: false,
         },
         status: KcStatus::Live,
         level_rank: rank,

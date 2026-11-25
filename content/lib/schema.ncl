@@ -38,6 +38,9 @@ let LangReviews = { uz | ReviewRecord | optional, ru | ReviewRecord | optional, 
     importance | Unit,
     rule | String,
     tags | Array String | optional,
+    # Only receives observations from other tasks (the subject's spelling
+    # KC): never live, not listed as blocked.
+    observed_only | Bool | optional,
   },
   Edge = {
     kind | OneOf ["requires", "supports", "contrasts", "part_of"],
