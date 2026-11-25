@@ -12,7 +12,7 @@ use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
 use refl_core::model::{KnowledgeModel, Profile, replay};
-use refl_core::plan::{Budget, ExplanationTimes, History, Next, Params, Planner};
+use refl_core::plan::{Budget, History, Next, Params, Planner, ReadingSpeed};
 use refl_core::value::{Lang, Seed, Timestamp};
 use refl_sim::cohort::{Learner, Track, session_ours};
 use refl_sim::{BundleSpec, DAY_MS, LogSpec, event_time, synthetic_bundle, synthetic_log};
@@ -43,8 +43,8 @@ fn time(kcs: usize, items_per_kc: usize) {
     );
     let model = KnowledgeModel::default();
     let params = Params::default();
-    let times = ExplanationTimes::from_log(&log);
-    let planner = Planner::new(&model, &bundle, &params, &times);
+    let reading = ReadingSpeed::from_log(&bundle, &params, &log);
+    let planner = Planner::new(&model, &bundle, &params, &reading);
     let state = replay(&model, &Profile::default(), &bundle, &log);
     let history = History::from_log(&bundle, &log);
     let now = Timestamp(event_time(&log) + DAY_MS);
@@ -122,10 +122,10 @@ fn main() -> ExitCode {
         time(40, 12);
         time(200, 15);
     }
-    let times = track.times();
+    let reading = track.speed(&params);
     println!(
         "sessions={sessions} decisions={decisions} violations={violations} planner={} state={} hash={hash}",
-        Planner::new(&model, &bundle, &params, &times).version(),
+        Planner::new(&model, &bundle, &params, &reading).version(),
         track.state.hash()
     );
     if violations > 0 {

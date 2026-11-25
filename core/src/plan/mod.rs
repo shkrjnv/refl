@@ -459,55 +459,101 @@ fn latest<K: Ord + Clone>(map: &mut BTreeMap<K, Timestamp>, key: &K, at: Timesta
     *t = (*t).max(at);
 }
 
-/// Views of each explanation: how many, and the median seconds
-/// (`explanation_viewed.seconds`). The server counts them over all
-/// learners; until then the device counts its own log.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ExplanationTimes(BTreeMap<ExplanationId, (u32, u32)>);
+/// How fast this learner reads explanations, against the expert prior of
+/// 100 words a minute (`docs/04-placement-planner.md`, «Время объяснения»):
+/// the median ratio of actual to expected seconds over their
+/// `explanation_viewed` events, pulled towards 1 with weight `n₀`.
+/// A per-explanation correction waits for population statistics; when it
+/// comes it is versioned calibration data and its value goes into
+/// `plan_issued`.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct ReadingSpeed {
+    /// Multiplies the expected seconds; 1 without views.
+    pub factor: f64,
+    /// Views the factor is made of.
+    pub views: u32,
+}
 
-impl ExplanationTimes {
-    /// From the `explanation_viewed` events of logs, in any order.
-    pub fn from_log<'a>(events: impl IntoIterator<Item = &'a Decoded>) -> Self {
-        Self::from_views(events.into_iter().filter_map(|ev| match ev {
-            Decoded::Known(e) => match &e.payload {
-                EventPayload::ExplanationViewed {
-                    explanation,
-                    seconds,
-                    ..
-                } => Some((explanation, *seconds)),
-                _ => None,
-            },
-            Decoded::Unknown(_) => None,
-        }))
-    }
-
-    /// From (explanation, seconds) views, in any order.
-    pub fn from_views<'a>(views: impl IntoIterator<Item = (&'a ExplanationId, u32)>) -> Self {
-        let mut by_id: BTreeMap<&ExplanationId, Vec<u32>> = BTreeMap::new();
-        for (id, seconds) in views {
-            by_id.entry(id).or_default().push(seconds);
+impl Default for ReadingSpeed {
+    fn default() -> Self {
+        Self {
+            factor: 1.0,
+            views: 0,
         }
-        let views = by_id;
-        Self(
-            views
-                .into_iter()
-                .map(|(id, mut s)| {
-                    s.sort_unstable();
-                    // The lower median of an even count: an integer, no float.
-                    let median = s[(s.len() - 1) / 2];
-                    (
-                        id.clone(),
-                        (u32::try_from(s.len()).unwrap_or(u32::MAX), median),
-                    )
-                })
-                .collect(),
+    }
+}
+
+impl ReadingSpeed {
+    /// From the `explanation_viewed` events of a learner's log, in any
+    /// order. Views of explanations the bundle lacks are skipped.
+    pub fn from_log<'a>(
+        bundle: &Bundle,
+        params: &Params,
+        events: impl IntoIterator<Item = &'a Decoded>,
+    ) -> Self {
+        Self::from_views(
+            bundle,
+            params,
+            events.into_iter().filter_map(|ev| match ev {
+                Decoded::Known(e) => match &e.payload {
+                    EventPayload::ExplanationViewed {
+                        explanation,
+                        seconds,
+                        ..
+                    } => Some((explanation, *seconds)),
+                    _ => None,
+                },
+                Decoded::Unknown(_) => None,
+            }),
         )
     }
 
-    /// Views and median seconds of one explanation; `None` without views.
-    pub fn get(&self, id: &ExplanationId) -> Option<(u32, u32)> {
-        self.0.get(id).copied()
+    /// From (explanation, seconds) views, in any order.
+    #[allow(clippy::cast_precision_loss)] // view counts are small
+    pub fn from_views<'a>(
+        bundle: &Bundle,
+        params: &Params,
+        views: impl IntoIterator<Item = (&'a ExplanationId, u32)>,
+    ) -> Self {
+        let mut ratios: Vec<f64> = views
+            .into_iter()
+            .filter_map(|(id, seconds)| {
+                let e = bundle.content.explanations.iter().find(|e| &e.id == id)?;
+                let expected = prior_seconds(params, e);
+                (expected > 0.0).then(|| f64::from(seconds) / expected)
+            })
+            .collect();
+        if ratios.is_empty() {
+            return Self::default();
+        }
+        ratios.sort_by(f64::total_cmp);
+        let n = ratios.len();
+        let median = if n % 2 == 1 {
+            ratios[n / 2]
+        } else {
+            f64::midpoint(ratios[n / 2 - 1], ratios[n / 2])
+        };
+        let weight = n as f64;
+        Self {
+            factor: (params.explanation_n0 + weight * median) / (params.explanation_n0 + weight),
+            views: u32::try_from(n).unwrap_or(u32::MAX),
+        }
     }
+}
+
+/// Expected seconds of reading `e` for the average reader: the words of its
+/// body, native-language block and examples at the expert reading speed.
+#[allow(clippy::cast_precision_loss)] // word counts are small
+fn prior_seconds(params: &Params, e: &crate::content::Explanation) -> f64 {
+    let words = e.body.split_whitespace().count()
+        + e.l1_contrast
+            .as_deref()
+            .map_or(0, |t| t.split_whitespace().count())
+        + e.examples
+            .iter()
+            .map(|x| x.text.split_whitespace().count())
+            .sum::<usize>();
+    words as f64 * 60.0 / params.reading_words_per_minute
 }
 
 /// The prototype session builder over learner model v1 and one bundle.
@@ -516,8 +562,8 @@ pub struct Planner<'a> {
     pub model: &'a KnowledgeModel,
     pub bundle: &'a Bundle,
     pub params: &'a Params,
-    /// Views of the explanations, for the time of a lesson.
-    pub times: &'a ExplanationTimes,
+    /// This learner's reading speed, for the time of a lesson.
+    pub speed: &'a ReadingSpeed,
 }
 
 impl<'a> Planner<'a> {
@@ -525,13 +571,13 @@ impl<'a> Planner<'a> {
         model: &'a KnowledgeModel,
         bundle: &'a Bundle,
         params: &'a Params,
-        times: &'a ExplanationTimes,
+        speed: &'a ReadingSpeed,
     ) -> Self {
         Self {
             model,
             bundle,
             params,
-            times,
+            speed,
         }
     }
 

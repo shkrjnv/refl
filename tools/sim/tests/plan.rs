@@ -10,7 +10,7 @@ use refl_core::bundle::{Bundle, KcStatus};
 use refl_core::ids::{FamilyId, KcId, SubjectId};
 use refl_core::model::{KnowledgeModel, Profile, State, replay};
 use refl_core::plan::{
-    Budget, End, ExplanationTimes, History, Next, Params, Phase, Plan, Planner, Step, Violation,
+    Budget, End, History, Next, Params, Phase, Plan, Planner, ReadingSpeed, Step, Violation,
 };
 use refl_core::value::{Finite, Lang, Seed, Timestamp};
 use refl_sim::cohort::{Learner, SessionReport, Track, session_ours};
@@ -185,12 +185,12 @@ fn empty_plan(now: Timestamp, budget: Budget) -> Plan {
 
 /// A planner without explanation views: lessons take the word prior.
 fn planner<'a>(model: &'a KnowledgeModel, b: &'a Bundle, params: &'a Params) -> Planner<'a> {
-    static NO_VIEWS: std::sync::OnceLock<ExplanationTimes> = std::sync::OnceLock::new();
+    static NO_VIEWS: std::sync::OnceLock<ReadingSpeed> = std::sync::OnceLock::new();
     Planner::new(
         model,
         b,
         params,
-        NO_VIEWS.get_or_init(ExplanationTimes::default),
+        NO_VIEWS.get_or_init(ReadingSpeed::default),
     )
 }
 
@@ -362,8 +362,8 @@ fn explanation_time_follows_its_views() {
     let s = State::new(Profile::default());
     let now = Timestamp(refl_sim::T0.0);
     let history = History::default();
-    let lesson_seconds = |times: &ExplanationTimes| {
-        let planner = Planner::new(&model, &b, &params, times);
+    let lesson_seconds = |speed: &ReadingSpeed| {
+        let planner = Planner::new(&model, &b, &params, speed);
         let session = planner.build_session(
             &s,
             &history,
@@ -375,23 +375,16 @@ fn explanation_time_follows_its_views() {
         assert_eq!(session.plan.steps[0].phase, Phase::Lesson);
         session.plan.steps[0].seconds
     };
-    assert_eq!(lesson_seconds(&ExplanationTimes::default()), 72);
-    let ids: Vec<_> = b
-        .content
-        .explanations
-        .iter()
-        .map(|e| e.id.clone())
-        .collect();
-    let views: Vec<_> = ids
-        .iter()
-        .flat_map(|id| [120, 125, 132, 140, 150].map(|s| (id, s)))
-        .collect();
-    assert_eq!(
-        lesson_seconds(&ExplanationTimes::from_views(
-            views.iter().map(|(id, s)| (*id, *s))
-        )),
-        102
-    );
+    assert_eq!(lesson_seconds(&ReadingSpeed::default()), 72);
+    // Five views of 108 s of a 72 s explanation: the ratio is 1.5, pulled
+    // towards 1 with n₀ = 5 gives 1.25, and every lesson takes 90 s: the
+    // factor is the learner's, not the explanation's.
+    let ids: Vec<_> = b.content.explanations.iter().map(|e| &e.id).collect();
+    let views = [ids[0]; 5].map(|id| (id, 108));
+    let speed = ReadingSpeed::from_views(&b, &params, views);
+    assert_eq!(speed.views, 5);
+    assert!((speed.factor - 1.25).abs() < 1e-12);
+    assert_eq!(lesson_seconds(&speed), 90);
 }
 
 /// A KC deferred by the 12-items rule waits for the next UTC day; the

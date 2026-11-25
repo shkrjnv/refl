@@ -297,32 +297,10 @@ impl<'a> Planner<'a> {
         )
     }
 
-    /// Expected seconds of reading `e`: the words of its body, native-language
-    /// block and examples at the reading speed, shrunk towards the median of
-    /// its `n` views with weight `n / (n + n₀)`; rounded up.
-    #[allow(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        clippy::cast_precision_loss
-    )] // word counts and seconds are small
+    /// Expected seconds of this learner reading `e`: the words at the expert
+    /// speed times their reading-speed factor; rounded up.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // seconds are small
     pub(super) fn explanation_seconds(&self, e: &Explanation) -> u32 {
-        let p = self.params;
-        let words = e.body.split_whitespace().count()
-            + e.l1_contrast
-                .as_deref()
-                .map_or(0, |t| t.split_whitespace().count())
-            + e.examples
-                .iter()
-                .map(|x| x.text.split_whitespace().count())
-                .sum::<usize>();
-        let prior = words as f64 * 60.0 / p.reading_words_per_minute;
-        let seconds = match self.times.get(&e.id) {
-            Some((n, median)) => {
-                let n = f64::from(n);
-                (p.explanation_n0 * prior + n * f64::from(median)) / (p.explanation_n0 + n)
-            }
-            None => prior,
-        };
-        libm::ceil(seconds) as u32
+        libm::ceil(super::prior_seconds(self.params, e) * self.speed.factor) as u32
     }
 }

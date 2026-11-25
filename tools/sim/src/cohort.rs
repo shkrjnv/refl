@@ -25,7 +25,7 @@ use refl_core::model::{
     AnswerOutcome, Applied, FoldCtx, KnowledgeModel, LearnerModel, Profile, State,
 };
 use refl_core::plan::{
-    Answered, Budget, Done, ExplanationTimes, History, Next, Outcome, Params, Phase, Plan, Planner,
+    Answered, Budget, Done, History, Next, Outcome, Params, Phase, Plan, Planner, ReadingSpeed,
     Shown, Step,
 };
 use refl_core::rng::SplitMix64;
@@ -422,10 +422,13 @@ impl<'a> Track<'a> {
         }
     }
 
-    /// Explanation times from this learner's own views: the device's
-    /// calibration before server statistics exist (docs/04).
-    pub fn times(&self) -> ExplanationTimes {
-        ExplanationTimes::from_views(self.views.iter().map(|(id, s)| (id, *s)))
+    /// This learner's reading speed from their own views (docs/04).
+    pub fn speed(&self, params: &Params) -> ReadingSpeed {
+        ReadingSpeed::from_views(
+            self.bundle,
+            params,
+            self.views.iter().map(|(id, s)| (id, *s)),
+        )
     }
 
     pub fn now(&self) -> Timestamp {
@@ -595,8 +598,8 @@ pub fn session_ours(
     learner: &mut Learner,
     budget: Budget,
 ) -> SessionReport {
-    let times = track.times();
-    let planner = Planner::new(track.model, track.bundle, params, &times);
+    let pace = track.speed(params);
+    let planner = Planner::new(track.model, track.bundle, params, &pace);
     let mut r = SessionReport::default();
     let started = track.clock;
     let seed = track.seed();
@@ -782,9 +785,9 @@ pub fn session_fsrs(
     let started = track.clock;
     let bundle = track.bundle;
     let model = track.model;
-    let times = track.times();
+    let speed = track.speed(params);
     let mut base = Baseline {
-        planner: ours.then(|| Planner::new(model, bundle, params, &times)),
+        planner: ours.then(|| Planner::new(model, bundle, params, &speed)),
         plan: Plan {
             budget,
             started: track.now(),
