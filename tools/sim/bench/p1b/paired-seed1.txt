@@ -1,0 +1,13 @@
+Paired per learner, B − A; A = tools/sim/bench/p1b/part2-seed1-ours.tsv, B = tools/sim/bench/p1b/confirm-seed1-ours.tsv
+
+| | learners | mean A | mean B | mean B − A (± s.e.) | B above / below A |
+| --- | --: | --: | --: | --: | --: |
+| answers per session, days 1-5 | 200 | 17.63 | 17.64 | +0.00 (± 0.00) | 1 / 0 |
+| minutes per session, days 1-5 | 200 | 4.40 | 4.40 | +0.00 (± 0.00) | 1 / 0 |
+| topics mastered | 200 | 4.68 | 4.68 | +0.00 (± 0.00) | 0 / 0 |
+| answers to mastery, mean | 200 | 68.49 | 68.57 | +0.09 (± 0.09) | 1 / 0 |
+| calendar days to mastery, mean | 200 | 5.91 | 5.92 | +0.01 (± 0.01) | 1 / 0 |
+| false masteries | 200 | 0.62 | 0.62 | +0.00 (± 0.00) | 0 / 0 |
+| truly known at the end | 200 | 4.34 | 4.34 | -0.01 (± 0.01) | 0 / 1 |
+| truly known gain | 200 | 4.32 | 4.32 | -0.01 (± 0.01) | 0 / 1 |
+| active hours | 200 | 1.61 | 1.62 | +0.00 (± 0.00) | 1 / 0 |

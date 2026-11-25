@@ -1,0 +1,68 @@
+diff --git a/core/src/model/state.rs b/core/src/model/state.rs
+index 334fc56..3eaee11 100644
+--- a/core/src/model/state.rs
++++ b/core/src/model/state.rs
+@@ -53,6 +53,11 @@ pub struct KcState {
+     pub production: Vec<ItemId>,
+     /// The mastery criterion held at some event.
+     pub ever_mastered: bool,
++    /// P1b part 3 experiment: when the KC was first answered as primary.
++    pub first_answer: Option<Timestamp>,
++    /// P1b part 3 experiment: a correct production answer at least
++    /// `confirm_hours` after `first_answer`.
++    pub confirmed: bool,
+ }
+ 
+ /// Beta belief about one misconception.
+diff --git a/core/src/model/v1.rs b/core/src/model/v1.rs
+index d3735ac..fc8b65b 100644
+--- a/core/src/model/v1.rs
++++ b/core/src/model/v1.rs
+@@ -84,6 +84,9 @@ pub struct Params {
+     pub mastery_confidence: f64,
+     /// Correct production answers on distinct items.
+     pub production_needed: usize,
++    /// P1b part 3: the confirming production answer comes this long after
++    /// the KC's first answer, hours.
++    pub confirm_hours: f64,
+     /// Stability for «надолго», days.
+     pub long_term_stability: f64,
+     /// R below this: «забывается».
+@@ -136,6 +139,7 @@ impl Default for Params {
+             mastery_theta: 1.5,
+             mastery_confidence: 0.8,
+             production_needed: 2,
++            confirm_hours: 12.0,
+             long_term_stability: 21.0,
+             forgetting_r: 0.8,
+             rapid_share: 0.25,
+@@ -377,6 +381,8 @@ impl KnowledgeModel {
+                     timed: 0,
+                     production: Vec::new(),
+                     ever_mastered: false,
++                    first_answer: None,
++                    confirmed: false,
+                 },
+             );
+         }
+@@ -451,6 +457,7 @@ impl KnowledgeModel {
+             && k.timed > 0
+             && k.tau >= p.tau_threshold
+             && k.production.len() >= p.production_needed
++            && k.confirmed
+     }
+ 
+     fn tempo(&self, a: &AnswerEvent, expected_ms: f64) -> Tempo {
+@@ -697,6 +704,12 @@ impl KnowledgeModel {
+             {
+                 k.production.push(a.item.id.clone());
+             }
++            let first = *k.first_answer.get_or_insert(t);
++            #[allow(clippy::cast_precision_loss)] // milliseconds
++            let hours = (t.0 - first.0) as f64 / 3_600_000.0;
++            if correct && item.is_production() && hours >= p.confirm_hours {
++                k.confirmed = true;
++            }
+         }
+ 
+         // Misconceptions: a shown one gains α, a resisted one gains β.

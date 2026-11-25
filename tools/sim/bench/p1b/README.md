@@ -50,4 +50,34 @@ Control on the old bundle (`content/bench/v1/bundle.json`, cell v1.1 × proto-1,
 - **Planner prototype-1 → prototype-2 (P1)** adds 1.3–2.6 points at session end and 2.1–3.3 in m1, with both models, while mastering about 1.7 more topics per learner.
 - **Masteries in one sitting are almost absent:** at most 3 of about 900 pairs are mastered on the UTC day of the first answer; the median is 5–12 calendar days. False mastery does not come from same-day mastery in this cohort.
 
+## Part 2: a topic practised alone
+
+Planner `session-prototype-3` (commit `1c983b4`, docs/04 «Одна KC без партнёра»), model v1.2, run with `just p1b 1` and `just p1b 2` on main. Outputs: `part2-seed{1,2}.txt` and per-learner tables `part2-seed{1,2}-{ours,fsrs}.tsv`.
+
+## Part 3: delayed confirmation of mastery (experiment, not on main)
+
+A fourth mastery condition (variant of docs/03 «Когда тема считается освоенной»): at least one correct production answer (`gap_fill`) on the topic at least 12 hours after its first answer as a primary topic. The model has no notion of a session; with daily sessions of at most 25 minutes, 12 hours later is always a later session. Times are the processing time of the answer (client time minus latency), which differs from `client_ts` by seconds. 12 hours is a fixed proposal, not tuned. The change ran in a throwaway worktree on top of `1c983b4`; its diff is `confirm.patch`. Outputs: `confirm-seed{1,2}.txt`, `confirm-seed{1,2}-{ours,fsrs}.tsv`, and per-learner differences against part 2 on the same learners in `paired-seed{1,2}.txt`.
+
+## Results
+
+Seed 1 / seed 2. «Before P1» and «P1» are the cells `v12p1` and `v12p2` of part 1. The «only FSRS» arm has no mastery detector of its own: our model labels its logs, so its false mastery is not a baseline to beat. Days 6–30 mostly measure content running out (about 4.5 of 5 topics mastered), so session conclusions come from days 1–5.
+
+| | before P1 | P1 | P1b part 2 | part 2 + confirmation | only FSRS |
+| --- | --: | --: | --: | --: | --: |
+| answers per session, days 1–5: median (mean) | 7 (7.4) / 7 (7.3) | 7 (8.9) / 7 (8.5) | 15 (17.6) / 15 (17.5) | 15 (17.6) / 15 (17.5) | 15 (14.7) / 15 (14.6) |
+| minutes per session, days 1–5: median (mean) | 1.7 (2.0) / 1.7 (2.0) | 1.8 (2.4) / 1.7 (2.3) | 3.7 (4.4) / 3.7 (4.4) | 3.7 (4.4) / 3.7 (4.4) | 3.0 (3.3) / 3.0 (3.3) |
+| main end reasons, days 1–5 | block_closed 93% / 91% | no_partner 92% / 90% | items_exhausted 80% / 78%, kc_cap 12% / 12% | the same | items_exhausted 100% |
+| topics mastered per learner (ever) | 2.71 / 2.80 | 4.50 / 4.41 | 4.68 / 4.79 | 4.68 / 4.79 | 3.56 / 3.73 |
+| answers to mastery, median | 55 / 52 | 56 / 55 | 60 / 58 | 60 / 58 | 66 / 64 |
+| calendar days to mastery, median | 12 / 11 | 6 / 5 | 5 / 4 | 5 / 4 | 5 / 4 |
+| false mastery | 10.0% / 7.5% | 11.3% / 10.1% | **13.3% / 12.8%** | **13.3% / 12.8%** | 14.5% / 13.3% (14.3% / 13.3% under the variant) |
+| truly known topics at the end | 4.00 / 4.00 | 4.29 / 4.22 | 4.34 / 4.20 | 4.34 / 4.20 | 3.51 / 3.58 |
+| known gain per active hour | 3.35 / 3.29 | 2.91 / 2.91 | 2.68 / 2.62 | 2.67 / 2.62 | 2.73 / 2.76 |
+
+**Acceptance** (fixed before the runs: false mastery ≤ 10% on both seeds): neither part 2 nor part 2 + confirmation is acceptable. No winner is picked.
+
+- **Part 2 doubles early practice.** Days 1–5 go from 7 to 15 answers and from 1.8 to 3.7 minutes a session (median). Now 80% / 78% of those sessions end because the topic has no unseen task left, and 12% at the cap: the volume of the first days is bound by the root topic's tasks, where «only FSRS» also stops at 15.
+- **It costs false mastery:** 11.3% → 13.3% and 10.1% → 12.8%, and known gain per active hour falls from 2.9 to 2.6–2.7 (more minutes, about the same topics truly known at the end). Why the extra practice raises false mastery was not measured: same-day masteries stay at 1 of about 950 pairs.
+- **Delayed confirmation changes nothing here.** Per learner, on the same cohort, every metric moves by at most 0.1 (`paired-seed{1,2}.txt`); one or two learners per seed differ at all. The condition is already met by almost every mastery, because masteries come a median of 4–5 days after the first answer. The rationale (all evidence from one sitting, R ≈ 1) does not describe how this cohort reaches false mastery.
+
 The numbers are the simulator's, not pilot results.
