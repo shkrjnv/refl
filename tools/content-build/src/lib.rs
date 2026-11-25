@@ -169,6 +169,7 @@ pub fn build_with_content(opts: &Options) -> std::io::Result<(Output, load::Cont
     let requires_closure = requires.closure(&ids);
     check::redundant_supports(&content, &requires_closure, &mut report.diagnostics);
     check::secondary_downstream(&content, &requires_closure, &mut report.diagnostics);
+    check::family_instruction(&content, &mut report.diagnostics);
     check::implied_prerequisites(
         &content,
         &items,

@@ -9,7 +9,7 @@ use refl_core::bundle::{ItemEntry, KcItems, Required};
 use refl_core::content::{
     Edge, EdgeKind, ExplanationDepth, ExplanationTarget, LangReviews, Review, ReviewStatus,
 };
-use refl_core::ids::{InstructionId, ItemRef, KcId, MisconceptionId};
+use refl_core::ids::{FamilyId, InstructionId, ItemRef, KcId, MisconceptionId};
 use refl_core::item::{ItemStatus, KcRole};
 use refl_core::kind::{self, ItemKind, QualityCtx, QualityIssueKind};
 use refl_core::lesson::LessonStep;
@@ -549,6 +549,32 @@ pub fn redundant_supports(
 /// teaches the primary but needs a KC the planner gives after it (docs/02,
 /// «Проверки при сборке»). Every item, whatever its status. `closure` is the
 /// bundle's.
+/// `family-instruction`: every item of a family, whatever its status, has
+/// the same instruction (docs/02, «Таблица семей»).
+pub fn family_instruction(c: &Content, diags: &mut Vec<Diagnostic>) {
+    let mut families: BTreeMap<&FamilyId, (&Path, BTreeSet<&InstructionId>)> = BTreeMap::new();
+    for it in &c.items {
+        let (_, instructions) = families
+            .entry(&it.value.family)
+            .or_insert_with(|| (&it.file, BTreeSet::new()));
+        instructions.insert(&it.value.instruction);
+    }
+    for (family, (file, instructions)) in families {
+        if instructions.len() > 1 {
+            let list: Vec<String> = instructions.iter().map(|i| format!("`{i}`")).collect();
+            diags.push(diag(
+                Code::FamilyInstruction,
+                file,
+                format!("family `{family}`"),
+                format!(
+                    "its items have different instructions ({}): give every item of a family one instruction",
+                    list.join(", ")
+                ),
+            ));
+        }
+    }
+}
+
 pub fn secondary_downstream(
     c: &Content,
     closure: &BTreeMap<KcId, Vec<Required>>,
