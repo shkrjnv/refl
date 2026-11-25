@@ -70,6 +70,10 @@ bench-v1:
 p1 seed="1":
     cargo run --locked --release --quiet -p refl-sim --bin p1 -- content/bench/v2/bundle.json 200 30 {{seed}}
 
+# P1b: the p1 report plus same-day masteries and per-learner tables in target/p1b-seed<seed>-{ours,fsrs}.tsv (tools/sim/bench/p1b); the cohort seed is the argument
+p1b seed="1":
+    cargo run --locked --release --quiet -p refl-sim --bin p1b -- content/bench/v2/bundle.json 200 30 {{seed}} target/p1b-seed{{seed}}
+
 # M1: why the knowledge model lags (tools/sim/m1/REPORT.md); replays the bench v1 cohort through variants of the knowledge update, about 1 minute
 m1:
     cargo run --locked --release --quiet -p refl-sim --bin m1 -- content/bench/v1/bundle.json 200 30 1 > tools/sim/m1/output.txt

@@ -1,0 +1,166 @@
+# M1 measurement: /home/ilumix/development/projcts/refl/content/bench/v2/bundle.json, 200 learners, 30 days, seed 1
+
+check: session copy = session_ours on every event; mastered pairs 500 = 500
+answers in the logs: 83857
+check: replica = core fold on every answer (μ, σ², prediction, rapid, mastery bit for bit); 500 masteries
+
+## Information per answer (model formulas, p = 0.8 targeted, s = 0.05)
+
+| g | σ | a_eff | P* | I = p'^2/(p(1-p)) | user's (p-g)^2/(1-g)^2 (1-p)/p |
+| --: | --: | --: | --: | --: | --: |
+| 0.000 | 1.50 | 0.729 | 0.842 | 0.0529 | 0.1600 |
+| 0.000 | 1.00 | 0.847 | 0.842 | 0.0716 | 0.1600 |
+| 0.000 | 0.50 | 0.954 | 0.842 | 0.0908 | 0.1600 |
+| 0.000 | 0.35 | 0.977 | 0.842 | 0.0951 | 0.1600 |
+| 0.250 | 1.50 | 0.729 | 0.786 | 0.0461 | 0.1344 |
+| 0.250 | 1.00 | 0.847 | 0.786 | 0.0623 | 0.1344 |
+| 0.250 | 0.50 | 0.954 | 0.786 | 0.0791 | 0.1344 |
+| 0.250 | 0.35 | 0.977 | 0.786 | 0.0828 | 0.1344 |
+| 0.333 | 1.50 | 0.729 | 0.757 | 0.0428 | 0.1225 |
+| 0.333 | 1.00 | 0.847 | 0.757 | 0.0578 | 0.1225 |
+| 0.333 | 0.50 | 0.954 | 0.757 | 0.0733 | 0.1225 |
+| 0.333 | 0.35 | 0.977 | 0.757 | 0.0768 | 0.1225 |
+
+Answers to shrink σ from 1.5 (prior) to σ*, n = (1/σ*² − 1/1.5²)/Ī, and the σ* the bound needs at μ: σ* = (μ − θ*)/0.84 (R = 1):
+
+| μ at mastery | σ* | n at Ī = 0.05 | n at Ī = 0.08 | n at Ī = 0.10 |
+| --: | --: | --: | --: | --: |
+| 1.8 | 0.356 | 149 | 93 | 74 |
+| 2.0 | 0.594 | 48 | 30 | 24 |
+| 2.2 | 0.832 | 20 | 13 | 10 |
+| 2.5 | 1.188 | 5 | 3 | 3 |
+| 3.0 | 1.782 | 0 | 0 | 0 |
+
+Measured w·I per direct answer on a primary KC before its mastery: all 0.0594 (69648), typed 0.0771 (32127), choice 0.0443 (37521).
+At mastery: median μ 1.93, median σ 0.495; true correct rate on the KC's items at mastery 0.936, 7 days later 0.909.
+Mastered KCs with the learner's own wrong idea: 97, median answers 118.
+Mastered KCs without the learner's own wrong idea: 403, median answers 65.
+At the first answer after which the learner truly knew the KC (true rate on its items ≥ 0.8), 691 pairs: median answers 10, model μ -0.75, σ 0.95, M 0.01; the learner's θ on the model's scale 1.43.
+
+## Calibration of M = P(θ_eff > θ*), v1, after every non-rapid answer on the answered primary KC
+
+Truth: the learner's true correct rate on a medium typed item ≥ (1 − s)·σ(θ*) = 0.777, which is what θ* stands for.
+
+| M bin | answers | mean M | true share above θ* | with the bug |
+| --- | --: | --: | --: | --: |
+| 0.0–0.1 | 34264 | 0.025 | 0.741 | 0.672 |
+| 0.1–0.2 | 8470 | 0.146 | 0.976 | 0.948 |
+| 0.2–0.3 | 5790 | 0.247 | 0.994 | 0.977 |
+| 0.3–0.4 | 3451 | 0.349 | 0.998 | 0.988 |
+| 0.4–0.5 | 3761 | 0.451 | 0.998 | 0.993 |
+| 0.5–0.6 | 4254 | 0.550 | 0.998 | 0.992 |
+| 0.6–0.7 | 4926 | 0.651 | 0.999 | 0.991 |
+| 0.7–0.8 | 5388 | 0.750 | 0.998 | 0.993 |
+| 0.8–0.9 | 3414 | 0.848 | 0.995 | 0.995 |
+| 0.9–1.0 | 9008 | 0.971 | 1.000 | 1.000 |
+
+## v1 against v1.1 (process noise q = 0.02 per answer)
+
+Off-policy: these logs, replayed through v1 and through v1.1; the v1.1 replica is checked against the core fold (default model) on every answer. Paired median over the 500 pairs v1 mastered.
+
+| variant | mastered pairs | median answers | median days | paired median answers | false mastery | FM with bug / without | median true rate +7 d | log loss |
+| --- | --: | --: | --: | --: | --: | --: | --: | --: |
+| v1 as is | 500 | 72 | 7.0 | 72 (0 cens.) | 5.8% | 4.1% (97) / 6.2% (403) | 0.909 | 0.4573 |
+| v1.1 (q = 0.02) | 598 | 61 | 6.0 | 56 (0 cens.) | 11.7% | 7.6% (144) / 13.0% (454) | 0.897 | 0.4328 |
+
+Calibration of M, off-policy:
+
+| M bin | v1 answers | v1 mean M | v1 true share | v1.1 answers | v1.1 mean M | v1.1 true share |
+| --- | --: | --: | --: | --: | --: | --: |
+| 0.0–0.1 | 34264 | 0.025 | 0.741 | 19726 | 0.027 | 0.556 |
+| 0.1–0.2 | 8470 | 0.146 | 0.976 | 6158 | 0.147 | 0.954 |
+| 0.2–0.3 | 5790 | 0.247 | 0.994 | 5115 | 0.249 | 0.988 |
+| 0.3–0.4 | 3451 | 0.349 | 0.998 | 4564 | 0.350 | 0.996 |
+| 0.4–0.5 | 3761 | 0.451 | 0.998 | 4731 | 0.451 | 0.999 |
+| 0.5–0.6 | 4254 | 0.550 | 0.998 | 5046 | 0.551 | 0.999 |
+| 0.6–0.7 | 4926 | 0.651 | 0.999 | 5862 | 0.652 | 0.999 |
+| 0.7–0.8 | 5388 | 0.750 | 0.998 | 7434 | 0.752 | 0.999 |
+| 0.8–0.9 | 3414 | 0.848 | 0.995 | 9900 | 0.852 | 0.999 |
+| 0.9–1.0 | 9008 | 0.971 | 1.000 | 14190 | 0.953 | 1.000 |
+
+On-policy: the planner and the learner's trajectory follow each model; each run is scored by its own replica (checked against the core fold). Paired median over the pairs the v1 run mastered.
+
+| variant | mastered pairs | median answers | median days | paired median answers | false mastery | FM with bug / without | median true rate +7 d | log loss |
+| --- | --: | --: | --: | --: | --: | --: | --: | --: |
+| v1 as is | 500 | 72 | 7.0 | 72 (0 cens.) | 5.8% | 4.1% (97) / 6.2% (403) | 0.909 | 0.4573 |
+| v1.1 (q = 0.02) | 893 | 56 | 6.0 | 52 (5 cens.) | 12.5% | 8.3% (254) / 14.2% (639) | 0.878 | 0.4703 |
+
+Mastered pairs per learner: v1 2.50, v1.1 4.46.
+
+Calibration of M, on-policy:
+
+| M bin | v1 answers | v1 mean M | v1 true share | v1.1 answers | v1.1 mean M | v1.1 true share |
+| --- | --: | --: | --: | --: | --: | --: |
+| 0.0–0.1 | 34264 | 0.025 | 0.741 | 23803 | 0.026 | 0.522 |
+| 0.1–0.2 | 8470 | 0.146 | 0.976 | 6835 | 0.146 | 0.930 |
+| 0.2–0.3 | 5790 | 0.247 | 0.994 | 4906 | 0.248 | 0.977 |
+| 0.3–0.4 | 3451 | 0.349 | 0.998 | 3805 | 0.349 | 0.993 |
+| 0.4–0.5 | 3761 | 0.451 | 0.998 | 4271 | 0.452 | 0.995 |
+| 0.5–0.6 | 4254 | 0.550 | 0.998 | 5489 | 0.552 | 0.995 |
+| 0.6–0.7 | 4926 | 0.651 | 0.999 | 6779 | 0.651 | 0.994 |
+| 0.7–0.8 | 5388 | 0.750 | 0.998 | 8131 | 0.752 | 0.995 |
+| 0.8–0.9 | 3414 | 0.848 | 0.995 | 7054 | 0.849 | 0.996 |
+| 0.9–1.0 | 9008 | 0.971 | 1.000 | 13276 | 0.956 | 1.000 |
+
+## Variants, replayed on the same logs (off-policy)
+
+Paired median: over the 500 (learner, KC) pairs v1 mastered, a pair the variant never masters counts as ∞. False mastery: true correct rate on the KC's items (wrong idea and secondary KCs included) 7 days after mastery without reviews below 0.7.
+
+| variant | mastered pairs | median answers | median days | paired median answers | false mastery | FM with bug / without | median true rate +7 d | log loss |
+| --- | --: | --: | --: | --: | --: | --: | --: | --: |
+| v1 as is | 500 | 72 | 7.0 | 72 (0 cens.) | 5.8% | 4.1% (97) / 6.2% (403) | 0.909 | 0.4573 |
+| q = 0.02 per answer | 598 | 61 | 6.0 | 56 (0 cens.) | 11.7% | 7.6% (144) / 13.0% (454) | 0.897 | 0.4328 |
+| q = 0.05 per answer | 640 | 51 | 5.0 | 45 (0 cens.) | 15.3% | 10.4% (163) / 17.0% (477) | 0.872 | 0.4244 |
+| q = 0.1 per answer | 661 | 43 | 4.0 | 39 (0 cens.) | 20.6% | 14.9% (174) / 22.6% (487) | 0.843 | 0.4189 |
+| q = 0.2 per answer | 686 | 37 | 3.0 | 32 (0 cens.) | 29.3% | 22.5% (187) / 31.9% (499) | 0.796 | 0.4145 |
+| q = 0.3 per answer | 695 | 32 | 3.0 | 30 (0 cens.) | 37.0% | 28.0% (189) / 40.3% (506) | 0.757 | 0.4126 |
+| q = 0.02 per day (η) | 512 | 72 | 7.0 | 70 (10 cens.) | 6.2% | 3.8% (105) / 6.9% (407) | 0.907 | 0.4513 |
+| q = 0.05 per day (η) | 545 | 70 | 7.0 | 66 (8 cens.) | 7.7% | 6.6% (121) / 8.0% (424) | 0.904 | 0.4447 |
+| q = 0.1 per day (η) | 572 | 66 | 7.0 | 61 (5 cens.) | 8.2% | 6.0% (133) / 8.9% (439) | 0.901 | 0.4388 |
+| q = 0.2 per day (η) | 602 | 61 | 6.0 | 56 (2 cens.) | 11.5% | 7.5% (147) / 12.7% (455) | 0.897 | 0.4327 |
+| q = 0.3 per day (η) | 620 | 58 | 6.0 | 51 (0 cens.) | 12.1% | 7.7% (156) / 13.6% (464) | 0.892 | 0.4294 |
+| slope a = 1.3 | 232 | 67 | 11.0 | ∞ (268 cens.) | 3.4% | 3.6% (28) / 3.4% (204) | 0.909 | 0.4569 |
+| γ = 0 | 488 | 70 | 7.0 | 72 (15 cens.) | 7.0% | 6.8% (88) / 7.0% (400) | 0.906 | 0.4449 |
+| secondaries left out | 220 | 71 | 10.0 | ∞ (281 cens.) | 5.9% | 0.0% (21) / 6.5% (199) | 0.926 | 0.4635 |
+| secondaries: oracle P* | 286 | 73 | 9.0 | 142 (217 cens.) | 7.0% | 2.6% (38) / 7.7% (248) | 0.913 | 0.4413 |
+| w_secondary = 0 | 469 | 66 | 7.0 | 69 (47 cens.) | 7.7% | 5.7% (88) / 8.1% (381) | 0.900 | 0.4598 |
+| typed answers only | 470 | 67 | 8.0 | 71 (56 cens.) | 7.4% | 7.7% (104) / 7.4% (366) | 0.901 | 0.4574 |
+| confidence 0.7 | 525 | 63 | 6.0 | 61 (0 cens.) | 10.1% | 8.6% (105) / 10.5% (420) | 0.900 | 0.4573 |
+| confidence 0.6 | 542 | 56 | 5.0 | 53 (0 cens.) | 15.9% | 9.8% (112) / 17.4% (430) | 0.880 | 0.4573 |
+| confidence 0.5 | 568 | 47 | 5.0 | 44 (0 cens.) | 21.8% | 13.0% (123) / 24.3% (445) | 0.855 | 0.4573 |
+| θ* = 1.2 | 553 | 57 | 6.0 | 55 (0 cens.) | 13.6% | 9.2% (119) / 14.7% (434) | 0.893 | 0.4573 |
+| θ* = 1.0 | 595 | 49 | 5.0 | 45 (0 cens.) | 16.5% | 11.4% (140) / 18.0% (455) | 0.871 | 0.4573 |
+| ρ = 0 (no propagation) | 492 | 72 | 7.0 | 73 (9 cens.) | 3.9% | 1.1% (94) / 4.5% (398) | 0.913 | 0.4583 |
+| δ = 0 | 494 | 72 | 7.0 | 72 (6 cens.) | 5.9% | 4.3% (93) / 6.2% (401) | 0.909 | 0.4569 |
+| η = 0 | 456 | 68 | 7.0 | 73 (45 cens.) | 5.5% | 5.3% (76) / 5.5% (380) | 0.906 | 0.4604 |
+| δ = 0, η = 0 | 452 | 68 | 7.0 | 73 (48 cens.) | 5.5% | 5.3% (75) / 5.6% (377) | 0.906 | 0.4601 |
+| raw a in p' | 349 | 72 | 10.0 | 106 (151 cens.) | 5.4% | 5.2% (58) / 5.5% (291) | 0.903 | 0.4681 |
+| η 0.05 + confidence 0.7 | 578 | 62 | 6.0 | 56 (0 cens.) | 12.1% | 8.2% (134) / 13.3% (444) | 0.898 | 0.4447 |
+| η 0.05 + θ* = 1.2 | 594 | 58 | 6.0 | 53 (0 cens.) | 13.5% | 7.7% (142) / 15.3% (452) | 0.892 | 0.4447 |
+| q 0.02/answer + θ* = 1.2 | 634 | 50 | 5.0 | 44 (0 cens.) | 16.1% | 11.1% (162) / 17.8% (472) | 0.869 | 0.4328 |
+| q 0.02/answer + η 0.05 | 610 | 59 | 6.0 | 54 (0 cens.) | 12.1% | 8.0% (150) / 13.5% (460) | 0.894 | 0.4307 |
+| q 0.05/answer + raw a | 639 | 52 | 5.0 | 46 (0 cens.) | 15.2% | 9.9% (162) / 17.0% (477) | 0.875 | 0.4255 |
+| q 0.05/answer + γ 0 | 643 | 50 | 5.0 | 44 (0 cens.) | 16.6% | 12.2% (164) / 18.2% (479) | 0.871 | 0.4154 |
+| q 0.1/answer + confidence 0.7 | 687 | 36 | 3.0 | 32 (0 cens.) | 32.0% | 22.5% (187) / 35.6% (500) | 0.793 | 0.4189 |
+| q 0.05/answer + raw a + γ 0 | 641 | 51 | 5.0 | 45 (0 cens.) | 16.5% | 12.3% (163) / 18.0% (478) | 0.873 | 0.4158 |
+| q 0.1/answer + raw a + γ 0 | 667 | 42 | 4.0 | 37 (0 cens.) | 21.9% | 16.5% (176) / 23.8% (491) | 0.839 | 0.4107 |
+
+## On-policy runs: the planner sees the variant
+
+Model parameters that `KnowledgeModel::Params` holds run with the planner reading them; planner-side swaps run through the session copy. Scored by the same variant's replica.
+
+| run | mastered per learner | minutes per learner | items swapped | mastered pairs | median answers | median days | paired median answers | false mastery | FM with bug / without | median true rate +7 d | log loss |
+| --- | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: |
+| v1 as is | 2.50 | 80.1 | 0 | 500 | 72 | 7.0 | 72 (0 cens.) | 5.8% | 4.1% (97) / 6.2% (403) | 0.909 | 0.4573 |
+| planner: measurement items | 2.48 | 79.0 | 3963 | 495 | 68 | 7.0 | 75 (35 cens.) | 5.1% | 4.0% (99) / 5.3% (396) | 0.909 | 0.4557 |
+| planner: typed near mastery | 2.50 | 80.1 | 0 | 500 | 72 | 7.0 | 72 (0 cens.) | 5.8% | 4.1% (97) / 6.2% (403) | 0.909 | 0.4573 |
+| confidence 0.7 | 2.58 | 73.7 | 0 | 517 | 58 | 6.0 | 61 (48 cens.) | 10.6% | 8.6% (105) / 11.2% (412) | 0.898 | 0.4707 |
+| confidence 0.6 | 2.54 | 70.3 | 0 | 509 | 52 | 5.0 | 57 (76 cens.) | 16.9% | 7.0% (100) / 19.3% (409) | 0.877 | 0.4804 |
+| θ* = 1.2 | 3.46 | 85.7 | 0 | 691 | 52 | 5.0 | 50 (31 cens.) | 16.5% | 12.5% (168) / 17.8% (523) | 0.867 | 0.4944 |
+| γ = 0 | 2.67 | 83.4 | 0 | 534 | 69 | 7.0 | 71 (44 cens.) | 9.2% | 7.4% (108) / 9.6% (426) | 0.901 | 0.4454 |
+| η = 0.02 per day | 3.26 | 86.9 | 0 | 652 | 70 | 7.0 | 68 (26 cens.) | 7.2% | 5.2% (153) / 7.8% (499) | 0.905 | 0.4601 |
+| η = 0.05 per day | 3.79 | 94.2 | 0 | 759 | 68 | 6.1 | 64 (19 cens.) | 8.0% | 6.3% (190) / 8.6% (569) | 0.897 | 0.4594 |
+| η = 0.1 per day | 4.34 | 95.6 | 0 | 869 | 62 | 6.0 | 56 (7 cens.) | 10.4% | 7.6% (238) / 11.4% (631) | 0.892 | 0.4613 |
+| η = 0.2 per day | 4.59 | 91.8 | 0 | 919 | 56 | 6.0 | 50 (1 cens.) | 11.4% | 6.7% (269) / 13.4% (650) | 0.877 | 0.4661 |
+| η = 0.05, confidence 0.7 | 3.85 | 87.9 | 0 | 770 | 59 | 6.0 | 54 (19 cens.) | 15.1% | 12.5% (200) / 16.0% (570) | 0.878 | 0.4802 |
+| η = 0.05, θ* = 1.2 | 4.38 | 90.7 | 0 | 877 | 52 | 5.0 | 44 (10 cens.) | 18.6% | 13.3% (248) / 20.7% (629) | 0.857 | 0.4953 |
