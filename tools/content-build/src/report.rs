@@ -67,11 +67,14 @@ pub enum Code {
     ReviewedTextChanged,
     /// A `reviews.lock` line whose record or review group no longer exists.
     OrphanReview,
+    /// Every session-available item of a KC has another KC as secondary, with
+    /// no `requires` path to it.
+    ImpliedPrerequisite,
 }
 
 impl Code {
     /// Every check; tests require a negative fixture named after each one.
-    pub const ALL: [Self; 32] = [
+    pub const ALL: [Self; 33] = [
         Self::Nickel,
         Self::Schema,
         Self::DuplicateId,
@@ -104,6 +107,7 @@ impl Code {
         Self::ReviewedWithoutReviewer,
         Self::ReviewedTextChanged,
         Self::OrphanReview,
+        Self::ImpliedPrerequisite,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -140,6 +144,7 @@ impl Code {
             Self::ReviewedWithoutReviewer => "reviewed-without-reviewer",
             Self::ReviewedTextChanged => "reviewed-text-changed",
             Self::OrphanReview => "orphan-review",
+            Self::ImpliedPrerequisite => "implied-prerequisite",
         }
     }
 }

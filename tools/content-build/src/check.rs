@@ -5,10 +5,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
+use refl_core::bundle::{ItemEntry, KcItems, Required};
 use refl_core::content::{
     EdgeKind, ExplanationDepth, ExplanationTarget, LangReviews, Review, ReviewStatus,
 };
-use refl_core::ids::{InstructionId, KcId, MisconceptionId};
+use refl_core::ids::{InstructionId, ItemRef, KcId, MisconceptionId};
 use refl_core::item::{ItemStatus, KcRole};
 use refl_core::kind::{self, ItemKind, QualityCtx, QualityIssueKind};
 use refl_core::lesson::LessonStep;
@@ -450,5 +451,62 @@ pub fn reviewers(c: &Content, diags: &mut Vec<Diagnostic>) {
     }
     for i in &c.items {
         per_language(&i.file, format!("item `{}`", i.value.id), &i.value.review);
+    }
+}
+
+/// A KC whose every session-eligible item has another KC as secondary,
+/// without a `requires` path to it: the items cannot be solved without that
+/// KC, yet the planner may give the first before the second (docs/02,
+/// «Проверки при сборке»). `items_by_kc` and `closure` are the bundle's.
+pub fn implied_prerequisites(
+    c: &Content,
+    items: &[ItemEntry],
+    items_by_kc: &BTreeMap<KcId, KcItems>,
+    closure: &BTreeMap<KcId, Vec<Required>>,
+    diags: &mut Vec<Diagnostic>,
+) {
+    let secondaries = |r: &ItemRef| -> BTreeSet<&KcId> {
+        let Ok(i) = items.binary_search_by(|e| e.item.id.cmp(&r.id)) else {
+            return BTreeSet::new();
+        };
+        items[i]
+            .item
+            .body
+            .slots()
+            .iter()
+            .flat_map(|s| &s.kcs)
+            .filter(|k| k.role == KcRole::Secondary)
+            .map(|k| &k.kc)
+            .collect()
+    };
+    for (a, by_kc) in items_by_kc {
+        let Some((first, rest)) = by_kc.primary.split_first() else {
+            continue;
+        };
+        let mut shared = secondaries(first);
+        for r in rest {
+            let next = secondaries(r);
+            shared.retain(|b| next.contains(b));
+        }
+        let required = closure.get(a).map_or(&[][..], Vec::as_slice);
+        for b in shared {
+            if b == a || required.iter().any(|r| &r.kc == b) {
+                continue;
+            }
+            let file = c
+                .kcs
+                .iter()
+                .find(|k| &k.value.id == a)
+                .map_or_else(|| Path::new("."), |k| k.file.as_path());
+            diags.push(diag(
+                Code::ImpliedPrerequisite,
+                file,
+                format!("KC `{a}`"),
+                format!(
+                    "all {} session-eligible item(s) of `{a}` have `{b}` as a secondary KC, but `{a}` does not require `{b}`: add the edge or drop `{b}` from an item",
+                    by_kc.primary.len()
+                ),
+            ));
+        }
     }
 }

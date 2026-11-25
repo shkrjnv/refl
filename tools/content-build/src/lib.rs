@@ -81,6 +81,18 @@ pub struct Output {
     pub lock_update: Option<String>,
 }
 
+impl Output {
+    /// The result of a build with errors: the report alone.
+    fn rejected(report: Report) -> Self {
+        Self {
+            report,
+            bundle: None,
+            lexicon: None,
+            lock_update: None,
+        }
+    }
+}
+
 /// Loads, checks and compiles the content.
 ///
 /// # Errors
@@ -149,17 +161,22 @@ pub fn build_with_content(opts: &Options) -> std::io::Result<(Output, load::Cont
     };
     let status = status::compute(&content, &mut report);
     if report.has_errors() {
-        let output = Output {
-            report,
-            bundle: None,
-            lexicon: None,
-            lock_update: None,
-        };
-        return Ok((output, content));
+        return Ok((Output::rejected(report), content));
     }
 
     let kcs = kc_entries(&content, &status);
     let (items, items_by_kc) = item_entries(&content, &status, &compiled);
+    let requires_closure = requires.closure(&ids);
+    check::implied_prerequisites(
+        &content,
+        &items,
+        &items_by_kc,
+        &requires_closure,
+        &mut report.diagnostics,
+    );
+    if report.has_errors() {
+        return Ok((Output::rejected(report), content));
+    }
 
     let mut edges: Vec<_> = content.edges.iter().map(|e| e.value.clone()).collect();
     edges.sort();
@@ -169,7 +186,7 @@ pub fn build_with_content(opts: &Options) -> std::io::Result<(Output, load::Cont
         subjects: sorted(&content.subjects, |s| &s.id),
         kcs,
         edges,
-        requires_closure: requires.closure(&ids),
+        requires_closure,
         misconceptions: sorted(&content.misconceptions, |m| &m.id),
         explanations: sorted(&content.explanations, |e| &e.id),
         instructions: sorted(&content.instructions, |i| &i.id),
