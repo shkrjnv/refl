@@ -226,6 +226,7 @@ Alternatives `( | )`, optional `[ ]`, nesting up to 4, no repetition: the langua
 - subjects: ids carry the subject prefix, levels and domains exist in the subject, the scale has a positive step, a task's KCs and the spelling KC belong to its subject, and `requires` never crosses subjects;
 - no prerequisite cycles in the graph;
 - no implied prerequisite: if every session-available task of topic A has topic B as a secondary topic, A must require B (the task cannot be solved without B, and the planner could otherwise give A first). On the current content this flags `en.gram.article.a-an-sound` → `en.gram.article.first-mention`; the edge is the content author's decision, so the content build fails until they make it;
+- no redundant `supports` edge: a soft `supports` link between two topics already joined by a `requires` path (either direction) is an error, since the hard dependency says it already;
 - every task has a primary KC and enough distractors and error patterns, each tied to a misconception;
 - the correct answer is accepted, distractors are not;
 - accepted and error patterns do not overlap, checked by an exact automaton product with the shortest witness in the report;

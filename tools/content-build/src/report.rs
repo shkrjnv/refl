@@ -70,11 +70,13 @@ pub enum Code {
     /// Every session-available item of a KC has another KC as secondary, with
     /// no `requires` path to it.
     ImpliedPrerequisite,
+    /// A `supports` edge between KCs already joined by a `requires` path.
+    RedundantSupports,
 }
 
 impl Code {
     /// Every check; tests require a negative fixture named after each one.
-    pub const ALL: [Self; 33] = [
+    pub const ALL: [Self; 34] = [
         Self::Nickel,
         Self::Schema,
         Self::DuplicateId,
@@ -108,6 +110,7 @@ impl Code {
         Self::ReviewedTextChanged,
         Self::OrphanReview,
         Self::ImpliedPrerequisite,
+        Self::RedundantSupports,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -145,6 +148,7 @@ impl Code {
             Self::ReviewedTextChanged => "reviewed-text-changed",
             Self::OrphanReview => "orphan-review",
             Self::ImpliedPrerequisite => "implied-prerequisite",
+            Self::RedundantSupports => "redundant-supports",
         }
     }
 }

@@ -78,7 +78,6 @@ let s = import "../lib/schema.ncl" in
     { kind = "requires", from = "en.gram.article.second-mention", to = "en.gram.article.first-mention" },
     { kind = "requires", from = "en.gram.article.zero-general", to = "en.gram.noun.countability" },
     { kind = "requires", from = "en.gram.article.a-an-sound", to = "en.gram.article.first-mention" },
-    { kind = "supports", from = "en.gram.article.first-mention", to = "en.gram.article.a-an-sound" },
     { kind = "contrasts", from = "en.gram.article.first-mention", to = "en.gram.article.second-mention" },
     { kind = "contrasts", from = "en.gram.article.zero-general", to = "en.gram.article.second-mention" },
   ],

@@ -7,7 +7,7 @@ use std::path::Path;
 
 use refl_core::bundle::{ItemEntry, KcItems, Required};
 use refl_core::content::{
-    EdgeKind, ExplanationDepth, ExplanationTarget, LangReviews, Review, ReviewStatus,
+    Edge, EdgeKind, ExplanationDepth, ExplanationTarget, LangReviews, Review, ReviewStatus,
 };
 use refl_core::ids::{InstructionId, ItemRef, KcId, MisconceptionId};
 use refl_core::item::{ItemStatus, KcRole};
@@ -508,5 +508,39 @@ pub fn implied_prerequisites(
                 ),
             ));
         }
+    }
+}
+
+/// A `supports` edge between KCs that a `requires` path already joins, in
+/// either direction (docs/02, «Проверки при сборке»). `closure` is the
+/// bundle's.
+pub fn redundant_supports(
+    c: &Content,
+    closure: &BTreeMap<KcId, Vec<Required>>,
+    diags: &mut Vec<Diagnostic>,
+) {
+    let reaches = |from: &KcId, to: &KcId| {
+        closure
+            .get(from)
+            .is_some_and(|r| r.iter().any(|r| &r.kc == to))
+    };
+    for e in &c.edges {
+        let Edge { kind, from, to } = &e.value;
+        if *kind != EdgeKind::Supports {
+            continue;
+        }
+        let path = if reaches(from, to) {
+            format!("`{from}` requires `{to}`")
+        } else if reaches(to, from) {
+            format!("`{to}` requires `{from}`")
+        } else {
+            continue;
+        };
+        diags.push(diag(
+            Code::RedundantSupports,
+            &e.file,
+            format!("edge `{from}` supports `{to}`"),
+            format!("already joined by a `requires` path ({path}): remove the `supports` edge"),
+        ));
     }
 }
