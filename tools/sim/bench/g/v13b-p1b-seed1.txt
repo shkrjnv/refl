@@ -1,0 +1,36 @@
+# P1b measurement: content/bench/v3/bundle.json, 200 learners, 30 days, seed 1
+
+model knowledge-v1.3+68ea62decb36521e, planner session-prototype-4+c896293765c21793, budget 25 minutes
+
+### ours
+
+| | days 1-5 | days 6-30 |
+| --- | --: | --: |
+| minutes per session, median [p25-p75] | 5.0 [3.6-7.0], mean 5.5 | 3.6 [0.3-5.9], mean 3.8 |
+| answers per session, median [p25-p75] | 15.0 [15.0-25.0], mean 20.1 | 22.0 [1.0-32.0], mean 19.7 |
+| sessions by end reason | items_exhausted 87%, kc_cap 4%, kc_deferred 2%, kc_mastered 2%, reviews_done 5% | items_exhausted 47%, kc_cap 11%, kc_deferred 1%, kc_mastered 17%, nothing_due 13%, reviews_done 12% |
+
+- topics mastered per learner: ever 4.43, at the end 4.30
+- answers to mastery, median [p25-p75]: 55 [39-83] over 887 (learner, topic) pairs
+- calendar days to mastery, median [p25-p75]: 4 [3-8]
+- false mastery: 9.1% (81 of 887)
+- mastered on the UTC day of the first answer: 0.2% (2 of 887); false mastery there 0.0% (0 of 2), on later days 9.2% (81 of 885)
+- truly known topics per learner: start 0.03, end 4.45; gain 4.42 in 2.04 active hours = 2.17 per active hour
+- answers per learner 592; validator violations {}
+
+### only FSRS
+
+| | days 1-5 | days 6-30 |
+| --- | --: | --: |
+| minutes per session, median [p25-p75] | 3.2 [2.6-4.0], mean 3.5 | 2.1 [1.7-2.7], mean 2.3 |
+| answers per session, median [p25-p75] | 15.0 [15.0-15.0], mean 14.6 | 11.0 [11.0-15.0], mean 12.3 |
+| sessions by end reason | items_exhausted 100% | items_exhausted 98%, nothing_due 2%, reviews_done 1% |
+
+- topics mastered per learner: ever 1.98, at the end 1.39
+- answers to mastery, median [p25-p75]: 57 [42-81] over 395 (learner, topic) pairs
+- calendar days to mastery, median [p25-p75]: 4 [3-5]
+- false mastery: 5.6% (22 of 395)
+- mastered on the UTC day of the first answer: 0.5% (2 of 395); false mastery there 0.0% (0 of 2), on later days 5.6% (22 of 393)
+- truly known topics per learner: start 0.03, end 2.27; gain 2.25 in 1.25 active hours = 1.80 per active hour
+- answers per learner 380; validator violations {}
+
