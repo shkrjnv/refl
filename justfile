@@ -58,6 +58,10 @@ cohort learners="200" days="30" seed="1": content
 bench-v1:
     cargo run --locked --release --quiet -p refl-sim --bin cohort -- content/bench/v1/bundle.json $(cat tools/sim/bench/v1/args) | diff -u tools/sim/bench/v1/expected.txt - && echo "benchmark v1: identical to tools/sim/bench/v1/expected.txt"
 
+# M1: why the knowledge model lags (tools/sim/m1/REPORT.md); replays the bench v1 cohort through variants of the knowledge update, about 1 minute
+m1:
+    cargo run --locked --release --quiet -p refl-sim --bin m1 -- content/bench/v1/bundle.json 200 30 1 > tools/sim/m1/output.txt
+
 # Review queue (by language, path:line) and all tasks as a learner sees them, in target/review/
 review:
     cargo run --locked --quiet -p content-build -- report --review --out target/review content

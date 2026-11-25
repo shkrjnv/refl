@@ -13,8 +13,8 @@ use std::collections::BTreeMap;
 
 use refl_core::bundle::Bundle;
 use refl_core::content::{ExplanationDepth, ExplanationTarget};
-use refl_core::event::PlanIssuedEvent;
 use refl_core::event::{AnswerContext, AnswerEvent, Confidence, EventPayload, Response, Verdict};
+use refl_core::event::{Decoded, PlanIssuedEvent};
 use refl_core::ids::ExplanationId;
 use refl_core::ids::{ItemRef, KcId, MisconceptionId};
 use refl_core::item::KcRole;
@@ -75,12 +75,12 @@ pub struct Learner {
 }
 
 /// Discrimination of the learner's response curve (ours is 1.0).
-const SLOPE: f64 = 1.3;
+pub const SLOPE: f64 = 1.3;
 
 /// A fixed per-item shift of the true difficulty from the author's,
 /// in `[−0.5, 0.5]`: FNV-1a of the id.
 #[allow(clippy::cast_precision_loss)] // 16 bits
-fn difficulty_shift(item: &ItemRef) -> f64 {
+pub fn difficulty_shift(item: &ItemRef) -> f64 {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
     for b in item.id.as_str().bytes() {
         h ^= u64::from(b);
@@ -176,7 +176,7 @@ impl Learner {
     }
 
     /// True skill on `kc` at `t`.
-    fn skill(&self, kc: &KcId, t: Timestamp) -> f64 {
+    pub fn skill(&self, kc: &KcId, t: Timestamp) -> f64 {
         self.kcs.get(kc).map_or(-3.0, |k| {
             let kept = k.last.map_or(0.0, |last| {
                 libm::exp(-self.forget_rate * days(last, t) / k.stability)
@@ -236,6 +236,40 @@ impl Learner {
     /// on `kc` at `t`, without guessing or fatigue: the retention measure.
     pub fn recall(&self, kc: &KcId, t: Timestamp) -> f64 {
         (1.0 - self.slip) * sigmoid(SLOPE * self.skill(kc, t))
+    }
+
+    /// Chance that this learner answers from a wrong idea on `kc` that our
+    /// content does not diagnose; 0 for most KCs.
+    pub fn bug(&self, kc: &KcId) -> f64 {
+        self.kcs.get(kc).map_or(0.0, |k| k.bug)
+    }
+
+    /// Probability of a correct answer to `slot` of `item` at `t` by the
+    /// formula of [`Learner::answer`], without rapid guesses or fatigue and
+    /// without learning from it: the learner's true correct rate on a fresh
+    /// item, wrong ideas and secondary KCs included. Measurement only.
+    pub fn p_correct(&self, bundle: &Bundle, item: &ItemRef, slot: u16, t: Timestamp) -> f64 {
+        let items = &bundle.content.items;
+        let entry = &items[items
+            .binary_search_by(|e| e.item.id.cmp(&item.id))
+            .expect("items are in the bundle")];
+        let body = &entry.item.body;
+        let s = &body.slots()[usize::from(slot)];
+        let b = f64::from(entry.item.difficulty.get()) - 3.0 + difficulty_shift(item);
+        let bug = s
+            .kcs
+            .iter()
+            .filter(|k| k.role == KcRole::Primary)
+            .filter_map(|k| self.kcs.get(&k.kc))
+            .map(|k| k.bug)
+            .fold(0.0, f64::max);
+        let p_skill: f64 = s
+            .kcs
+            .iter()
+            .map(|k| sigmoid(SLOPE * (self.skill(&k.kc, t) - b)))
+            .product();
+        let g = body.guessing(slot);
+        (1.0 - bug) * (g + (1.0 - g - self.slip) * p_skill)
     }
 
     /// The learner answers `slot` of `item` at `at`, `minutes` into the
@@ -405,6 +439,17 @@ pub struct Track<'a> {
     pub answers: BTreeMap<KcId, u32>,
     /// Answers until the model first counted the KC mastered.
     pub to_mastery: BTreeMap<KcId, u32>,
+    /// When set, every folded answer and explanation view with the learner
+    /// right after it, for replaying the log; `plan_issued` is left out.
+    /// Measurement only: recording changes nothing else.
+    pub log: Option<Vec<Logged>>,
+}
+
+/// One recorded event of a [`Track`] and the learner right after it.
+#[derive(Debug, Clone)]
+pub struct Logged {
+    pub event: Decoded,
+    pub learner: Learner,
 }
 
 impl<'a> Track<'a> {
@@ -419,6 +464,7 @@ impl<'a> Track<'a> {
             rng: SplitMix64::new(seed),
             answers: BTreeMap::new(),
             to_mastery: BTreeMap::new(),
+            log: None,
         }
     }
 
@@ -446,21 +492,33 @@ impl<'a> Track<'a> {
     }
 
     /// Folds an event at the next millisecond.
-    fn fold(&mut self, payload: EventPayload) -> Applied {
+    fn fold(&mut self, payload: EventPayload) -> (Applied, Decoded) {
         self.wait(1);
         let ev = event(self.now(), self.rng.next_u64(), payload);
         self.history.record(self.bundle, &ev);
-        self.model
+        let applied = self
+            .model
             .apply(&mut self.state, &ev, &FoldCtx::new(self.bundle))
-            .expect("events are folded in order")
+            .expect("events are folded in order");
+        (applied, ev)
     }
 
-    fn plan_issued(&mut self, ev: PlanIssuedEvent) {
+    /// Records `event` with the learner as it is now, if recording.
+    fn record(&mut self, event: Decoded, learner: &Learner) {
+        if let Some(log) = &mut self.log {
+            log.push(Logged {
+                event,
+                learner: learner.clone(),
+            });
+        }
+    }
+
+    pub fn plan_issued(&mut self, ev: PlanIssuedEvent) {
         self.fold(EventPayload::PlanIssued(ev));
     }
 
     /// The learner reads `explanation` of `kc` at their own pace.
-    fn lesson(&mut self, learner: &mut Learner, kc: &KcId, explanation: &ExplanationId) {
+    pub fn lesson(&mut self, learner: &mut Learner, kc: &KcId, explanation: &ExplanationId) {
         let e = self
             .bundle
             .content
@@ -479,16 +537,17 @@ impl<'a> Track<'a> {
         let seconds = learner.reading_seconds(words);
         self.wait(i64::from(seconds) * 1000);
         learner.lesson(kc, self.now());
-        self.fold(EventPayload::ExplanationViewed {
+        let (_, ev) = self.fold(EventPayload::ExplanationViewed {
             explanation: e.id.clone(),
             depth: e.depth,
             seconds,
         });
+        self.record(ev, learner);
         self.views.push((e.id.clone(), seconds));
     }
 
     /// The learner answers; the answer is folded and counted.
-    fn answer(
+    pub fn answer(
         &mut self,
         learner: &mut Learner,
         item: &ItemRef,
@@ -513,9 +572,10 @@ impl<'a> Track<'a> {
             hints: 0,
             attempt: 1,
         };
-        let Applied::Answer(outcome) = self.fold(EventPayload::Answer(a.clone())) else {
+        let (Applied::Answer(outcome), ev) = self.fold(EventPayload::Answer(a.clone())) else {
             panic!("the answer's item is in the bundle");
         };
+        self.record(ev, learner);
         let projection = self.bundle.projection(item).expect("in the bundle");
         if !outcome.rapid {
             for k in &projection.slots[usize::from(slot)].kcs {
