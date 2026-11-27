@@ -374,7 +374,6 @@ domain-listening = Listening
 domain-writing = Writing
 progress-memory-kicker = Memory model
 progress-memory-title = FSRS retrievability
-progress-fsrs-formula = R(t) = (1 + t / (9 · S))⁻¹
 progress-fsrs-note = R is the predicted chance of recalling a rule after t days. S is FSRS stability; D is difficulty on the model scale.
 progress-stability = Stability S
 progress-difficulty = Difficulty D
@@ -415,3 +414,5 @@ today-widget-row-tall = tall
 today-widget-row-compact = compact
 today-widget-span = { $columns } columns · { $row }
 progress-fsrs-badge = FSRS
+today-widget-resize-target = Target: { $columns } columns × { $rows } rows
+progress-iso-tooltip = { $level }: { $mastered } of { $total } mastered · { $percent }%

@@ -374,7 +374,6 @@ domain-listening = Tinglash
 domain-writing = Yozish
 progress-memory-kicker = Xotira modeli
 progress-memory-title = FSRS qaytarilishi
-progress-fsrs-formula = R(t) = (1 + t / (9 · S))⁻¹
 progress-fsrs-note = R — t kundan keyin qoidani eslash ehtimoli. S — FSRS barqarorligi, D — model shkalasidagi qiyinlik.
 progress-stability = Barqarorlik S
 progress-difficulty = Qiyinlik D
@@ -415,3 +414,5 @@ today-widget-row-tall = baland
 today-widget-row-compact = ixcham
 today-widget-span = { $columns } ustun · { $row }
 progress-fsrs-badge = FSRS
+today-widget-resize-target = Maqsad: { $columns } ustun × { $rows } qator
+progress-iso-tooltip = { $level }: { $total } dan { $mastered } o‘zlashtirilgan · { $percent }%

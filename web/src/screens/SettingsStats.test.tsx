@@ -29,7 +29,7 @@ const stateJson = JSON.stringify({
 });
 
 describe("statistics, profile, and settings", () => {
-  it("renders the FSRS model formula, metrics, and analytical charts", () => {
+  it("renders equation-free FSRS metrics and analytical charts", () => {
     render(
       <I18nProvider initialLocale="en">
         <ProgressScreen content={testContent()} stateJson={stateJson} />
@@ -38,8 +38,8 @@ describe("statistics, profile, and settings", () => {
 
     expect(screen.getByText("FSRS retrievability")).toBeTruthy();
     expect(
-      screen.getByText("R(t) = (1 + t / (9 · S))⁻¹"),
-    ).toBeTruthy();
+      screen.queryByText("R(t) = (1 + t / (9 · S))⁻¹"),
+    ).toBeNull();
     const stabilityMetric = screen.getByText("Stability S").parentElement;
     expect(stabilityMetric).not.toBeNull();
     if (stabilityMetric) {
@@ -56,6 +56,9 @@ describe("statistics, profile, and settings", () => {
     expect(screen.getByText("Misconceptions")).toBeTruthy();
     expect(screen.getByText("Cure rate 50%")).toBeTruthy();
     expect(screen.getByText("Forecast quality")).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: /A1: 1 of 1 mastered/ }),
+    ).toBeTruthy();
   });
 
   it("keeps Profile separate from the compact Settings surface", () => {

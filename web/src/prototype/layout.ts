@@ -15,6 +15,14 @@ export const widgetRowSpans = ["compact", "tall"] as const;
 export type WidgetRowSpan = (typeof widgetRowSpans)[number];
 export type NavigationPosition = "left" | "right" | "bottom";
 
+export const widgetMinColSpans: Record<WidgetId, WidgetColSpan> = {
+  hero: 2,
+  rules: 2,
+  memory: 1,
+  misconceptions: 1,
+  activity: 1,
+};
+
 export interface DashboardLayout {
   nav: NavigationPosition;
   order: WidgetId[];
@@ -113,6 +121,9 @@ export function normalizeLayout(value: unknown): DashboardLayout {
       }
     }
   }
+  for (const id of widgetIds) {
+    colSpan[id] = Math.max(widgetMinColSpans[id], colSpan[id]) as WidgetColSpan;
+  }
   return { nav, order, colSpan, rowSpan };
 }
 
@@ -191,11 +202,12 @@ export function updateWidgetSpan(
   id: WidgetId,
   span: { colSpan?: WidgetColSpan; rowSpan?: WidgetRowSpan },
 ): DashboardLayout {
+  const requested = span.colSpan ?? layout.colSpan[id];
   return {
     ...layout,
     colSpan: {
       ...layout.colSpan,
-      [id]: span.colSpan ?? layout.colSpan[id],
+      [id]: Math.max(widgetMinColSpans[id], requested) as WidgetColSpan,
     },
     rowSpan: {
       ...layout.rowSpan,

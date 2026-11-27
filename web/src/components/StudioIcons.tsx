@@ -36,36 +36,38 @@ function paths(name: StudioIconName): ReactNode {
     case "today":
       return (
         <>
-          <circle cx="12" cy="11" r="3.2" />
-          <path d="M4 18h16" />
-          <path d="M12 3v2M5.6 5.6l1.4 1.4M18.4 5.6 17 7" />
-          <path d="M6.3 14.8a6.3 6.3 0 0 1 11.4 0" />
+          <path d="M3.5 18h17" />
+          <path d="M7 18a5 5 0 0 1 10 0" />
+          <circle cx="12" cy="9" r="3.1" />
+          <path d="M12 3.2v1.7M5.8 5.4 7 6.6M18.2 5.4 17 6.6M3.4 11.5h1.7M18.9 11.5h1.7" />
         </>
       );
     case "practice":
       return (
         <>
-          <path d="M4 8.2 12 4l8 4.2-8 4.2z" />
-          <path d="M7 10.2v4.1c2.9 2.4 7.1 2.4 10 0v-4.1" />
-          <path d="M20 8.2v5.6" />
+          <path d="M4 6.1c2.7-.8 5.4-.5 8 .9 2.6-1.4 5.3-1.7 8-.9v11.5c-2.7-.8-5.4-.5-8 .9-2.6-1.4-5.3-1.7-8-.9z" />
+          <path d="M12 7v11.5" />
+          <path d="m17.4 2.8.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6z" />
         </>
       );
     case "progress":
       return (
         <>
-          <path d="M4 19h16" />
-          <path d="M5.5 16.2c3.2 0 3.2-3.1 6.3-3.1s3.2-4.1 6.3-4.1" />
-          <circle cx="5.5" cy="16.2" r="1.35" />
-          <circle cx="11.8" cy="13.1" r="1.35" />
-          <circle cx="18.1" cy="9" r="1.35" />
+          <path d="M3.5 19.5h17" />
+          <path d="M5.2 19.5V5M5.2 19.5h15.3" />
+          <rect x="7.4" y="13" width="2.7" height="4.3" rx=".7" />
+          <rect x="11.4" y="10" width="2.7" height="7.3" rx=".7" />
+          <rect x="15.4" y="6.8" width="2.7" height="10.5" rx=".7" />
+          <path d="m6.2 10.4 3.5-2.7 2.7 1.6 5-5" />
+          <path d="M15.7 4.2h1.8V6" />
         </>
       );
     case "settings":
       return (
         <>
-          <path d="M4 7h5M13 7h7M4 17h7M15 17h5" />
-          <circle cx="11" cy="7" r="2" />
-          <circle cx="13" cy="17" r="2" />
+          <path d="M4 7h7.2M17.5 7H20M4 17h2.5M11.8 17H20" />
+          <circle cx="14.2" cy="7" r="2.2" />
+          <circle cx="8.2" cy="17" r="2.2" />
         </>
       );
     case "gear":
@@ -78,8 +80,9 @@ function paths(name: StudioIconName): ReactNode {
     case "profile":
       return (
         <>
-          <circle cx="12" cy="8" r="3.2" />
-          <path d="M5.5 19.5c.7-3.2 3.2-5 6.5-5s5.8 1.8 6.5 5" />
+          <circle cx="12" cy="7.8" r="3.4" />
+          <path d="M4.5 19.6c.1-4 3.4-6.7 7.5-6.7s7.4 2.7 7.5 6.7" />
+          <path d="M4.4 19.6h15.2" />
         </>
       );
     case "sync":
@@ -192,6 +195,29 @@ function paths(name: StudioIconName): ReactNode {
     default:
       return null;
   }
+}
+
+export interface BrandLogoProps {
+  size?: number;
+  className?: string;
+}
+
+export function BrandLogo({ size = 28, className = "" }: BrandLogoProps) {
+  return (
+    <svg
+      className={`brand-logo ${className}`.trim()}
+      width={size}
+      height={size}
+      viewBox="0 0 28 28"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <rect className="brand-logo-field" x="0.8" y="0.8" width="26.4" height="26.4" rx="8.2" />
+      <path className="brand-logo-fold" d="M7.1 10.1 14 6.1l6.9 4v3.2L14 17.4l-6.9-4.1z" />
+      <path className="brand-logo-reflect" d="m7.1 15.2 6.9 4.1 6.9-4.1v3.1L14 22.5l-6.9-4.2z" />
+      <path className="brand-logo-spine" d="M14 6.1v16.4" />
+    </svg>
+  );
 }
 
 export function StudioIcon({

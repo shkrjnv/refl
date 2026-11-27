@@ -7,7 +7,7 @@ import type { SkinName, ThemeName } from "../theme/tokens";
 import { AppearanceMenu } from "./AppearanceMenu";
 import { IellaSprite } from "./IellaSprite";
 import { LanguageMenu } from "./LanguageMenu";
-import { StudioIcon, type StudioIconName } from "./StudioIcons";
+import { BrandLogo, StudioIcon, type StudioIconName } from "./StudioIcons";
 
 export type AppRoute =
   | "today"
@@ -88,9 +88,7 @@ export function AppShell({
     <div className="studio-shell" data-nav-position={navigationPosition}>
       <aside className="studio-sidebar" aria-label={t("nav-label")}>
         <div className="brand-lockup">
-          <span className="brand-mark" aria-hidden="true">
-            r
-          </span>
+          <BrandLogo size={36} />
           <span className="brand-name">{t("app-name")}</span>
         </div>
         <nav className="side-nav" aria-label={t("nav-label")}>
@@ -154,9 +152,7 @@ export function AppShell({
       <div className="studio-main">
         <header className="studio-topbar">
           <div className="mobile-brand">
-            <span className="brand-mark" aria-hidden="true">
-              r
-            </span>
+            <BrandLogo size={32} />
             <span className="brand-name">{t("app-name")}</span>
           </div>
           <div className="topbar-actions">

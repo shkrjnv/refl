@@ -374,7 +374,6 @@ domain-listening = Аудирование
 domain-writing = Письмо
 progress-memory-kicker = Модель памяти
 progress-memory-title = Возвратность FSRS
-progress-fsrs-formula = R(t) = (1 + t / (9 · S))⁻¹
 progress-fsrs-note = R — прогноз вероятности вспомнить правило через t дней. S — устойчивость FSRS, D — сложность по шкале модели.
 progress-stability = Устойчивость S
 progress-difficulty = Сложность D
@@ -415,3 +414,5 @@ today-widget-row-tall = высокий
 today-widget-row-compact = компактный
 today-widget-span = { $columns } колонки · { $row }
 progress-fsrs-badge = FSRS
+today-widget-resize-target = Цель: { $columns } колонки × { $rows } строки
+progress-iso-tooltip = { $level }: освоено { $mastered } из { $total } · { $percent }%

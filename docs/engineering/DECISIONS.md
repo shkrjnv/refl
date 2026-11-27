@@ -145,3 +145,13 @@
 - `ProgressScreen` replaces the old three-card stats view with FSRS analytics: the exact `R(t) = (1 + t / (9 · S))⁻¹` curve, average stability and difficulty, an interactive forgetting-curve SVG with a 90% target, CEFR mastery bars, domain distribution, misconception strength and cure rates, and a calibration reference chart with an explicit empty state.
 - Added Vitest coverage for span persistence/migration, pointer resize, language switching, frosted-dock clearance CSS, and Progress FSRS metrics.
 - `just fmt-check`, `just lint`, `just test`, and `just web` pass; the commit is local and not pushed.
+
+## W9 — sequenced checkmark, constrained widget grid, grounded Iella, brand mark, and isometric analytics
+
+- Auth confirmation now finishes its light 450ms ring/check sequence before `onAuthenticated` fires, so `AppShell` and the hero JPEG mount only after the GPU-composited confirmation. Reduced-motion users enter immediately.
+- Widget layout enforces `widgetMinColSpans` (`hero` and `rules` 2, telemetry 1) during normalization and pointer resizing. The rules widget is an inline-size container: five cards at full width, `3 + 2` at two columns, and a two-column reflow on narrow cards. Finger/mouse resizing now shows a translucent target ghost, numeric target badge, and spring-eased transitions.
+- Removed the floating Today hero perch. Iella lives in the sidebar companion card and the dedicated Today companion bar, with integer-scaled breathing/blink only.
+- Added `BrandLogo`, a folded-ribbon/reflection emblem on a 28-unit rounded field, and redrew Today, Practice, Progress, Profile, and Settings on the shared 1.75px stroke set.
+- `ProgressScreen` no longer shows the raw retrievability equation. The FSRS card keeps stability, difficulty, retention, and mean-interval metrics plus the interactive curve; CEFR mastery is now an animated isometric prism chart with hover/focus tooltips, and the curve/ring surfaces carry reduced-motion-aware particle and liquid-morph ambience.
+- Added Vitest coverage for minimum-span clamping, ghost resize feedback, `BrandLogo`, and equation-free analytics.
+- `just fmt-check`, `just lint`, `just test`, and `just web` pass; the commit is local and not pushed.

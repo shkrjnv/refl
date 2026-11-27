@@ -73,6 +73,18 @@ describe("dashboard layout persistence", () => {
     expect(layout.colSpan.rules).toBe(3);
   });
 
+  it("clamps widgets to their minimum readable column spans", () => {
+    const layout = normalizeLayout({
+      colSpan: { hero: 1, rules: 1, memory: 0, activity: 3 },
+    });
+    expect(layout.colSpan.hero).toBe(2);
+    expect(layout.colSpan.rules).toBe(2);
+    expect(layout.colSpan.memory).toBe(1);
+    expect(layout.colSpan.activity).toBe(3);
+    const resized = updateWidgetSpan(defaultLayout(), "rules", { colSpan: 1 });
+    expect(resized.colSpan.rules).toBe(2);
+  });
+
   it("reorders and moves widgets without dropping any card", () => {
     const order = defaultLayout().order;
     expect(moveWidget(order, "rules", -1)).toEqual([

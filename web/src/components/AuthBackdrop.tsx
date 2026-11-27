@@ -133,7 +133,7 @@ function drawFrame(
   context.putImageData(image, 0, 0);
 }
 
-export function AuthBackdrop() {
+export function AuthBackdrop({ paused = false }: { paused?: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
@@ -177,7 +177,7 @@ export function AuthBackdrop() {
 
     resize();
     window.addEventListener("resize", resize);
-    if (reduced || typeof window.requestAnimationFrame !== "function") {
+    if (paused || reduced || typeof window.requestAnimationFrame !== "function") {
       return () => window.removeEventListener("resize", resize);
     }
 
@@ -197,7 +197,7 @@ export function AuthBackdrop() {
       window.removeEventListener("resize", resize);
       window.cancelAnimationFrame(frame);
     };
-  }, []);
+  }, [paused]);
 
   return <canvas ref={canvasRef} className="auth-thermal-canvas" aria-hidden="true" />;
 }

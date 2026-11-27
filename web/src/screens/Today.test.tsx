@@ -187,5 +187,9 @@ describe("Today clean state", () => {
     fireEvent.pointerDown(handle, { pointerId: 7, clientX: 10, clientY: 10 });
     fireEvent.pointerMove(window, { pointerId: 7, clientX: 280, clientY: 10 });
     expect(changes.some((layout) => layout.colSpan.memory === 3)).toBe(true);
+    expect(document.querySelector(".widget-ghost-target")).toBeTruthy();
+    expect(document.querySelector(".widget-resize-badge")?.textContent).toContain(
+      "3 × 1",
+    );
   });
 });

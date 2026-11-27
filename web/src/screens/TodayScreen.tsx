@@ -36,6 +36,7 @@ import {
   moveWidget,
   reorderWidget,
   updateWidgetSpan,
+  widgetMinColSpans,
 } from "../prototype/layout";
 
 export interface TodayScreenProps {
@@ -53,12 +54,6 @@ export interface TodayScreenProps {
   tourOpen: boolean;
   onTourComplete: () => void;
 }
-
-const IELLA_TIPS = [
-  "iella-tip-route",
-  "iella-tip-offline",
-  "iella-tip-memory",
-] as const;
 
 const WIDGET_LABEL_KEYS: Record<WidgetId, string> = {
   hero: "today-route-title",
@@ -100,7 +95,6 @@ export function TodayScreen({
   onTourComplete,
 }: TodayScreenProps) {
   const { t, locale } = useTranslation();
-  const [tipIndex, setTipIndex] = useState<number | null>(null);
   const [editing, setEditing] = useState(false);
   const [draggingId, setDraggingId] = useState<WidgetId | null>(null);
   const [resizingId, setResizingId] = useState<WidgetId | null>(null);
@@ -176,14 +170,6 @@ export function TodayScreen({
       icon: "sync",
     });
   }
-
-  const tip = tipIndex === null ? null : t(IELLA_TIPS[tipIndex] ?? IELLA_TIPS[0]);
-
-  const nextTip = () => {
-    setTipIndex((current) =>
-      current === null ? 0 : (current + 1) % IELLA_TIPS.length,
-    );
-  };
 
   const captureRects = () => {
     if (typeof document === "undefined") {
@@ -353,7 +339,7 @@ export function TodayScreen({
       const column = Math.max(80, (current.gridWidth - gap * 2) / 3);
       const deltaCols = Math.round((event.clientX - current.startX) / (column + gap));
       const nextCol = Math.max(
-        1,
+        widgetMinColSpans[current.id],
         Math.min(3, current.startColSpan + deltaCols),
       ) as WidgetColSpan;
       const deltaY = event.clientY - current.startY;
@@ -442,12 +428,11 @@ export function TodayScreen({
     switch (id) {
       case "hero":
         return (
-          <div className="today-route-frame">
-            <section
-              className="today-route"
-              data-tour="route"
-              aria-labelledby="today-route-title"
-            >
+          <section
+            className="today-route"
+            data-tour="route"
+            aria-labelledby="today-route-title"
+          >
               <HeroIllustration />
               <div className="route-topline">
                 <span className="route-chip route-chip-time">
@@ -473,15 +458,7 @@ export function TodayScreen({
                 <span>{t("today-level")}</span>
                 <strong>{currentLevel}</strong>
               </div>
-            </section>
-            <div className="today-route-perch">
-              <IellaSprite
-                size={60}
-                label={t("iella-tip-open")}
-                onActivate={nextTip}
-              />
-            </div>
-          </div>
+          </section>
         );
       case "rules":
         return (
@@ -567,7 +544,8 @@ export function TodayScreen({
                   count: stats.inMemory,
                 })}
               >
-                <span>
+                <span className="memory-ring-particles" aria-hidden="true" />
+                <span className="memory-ring-content">
                   <strong>{retention}%</strong>
                   <small>{t("today-memory-in-memory")}</small>
                 </span>
@@ -815,6 +793,9 @@ export function TodayScreen({
               </div>
             ) : null}
             {renderWidget(id)}
+            {resizingId === id && resizeSnap ? (
+              <span className="widget-ghost-target" aria-hidden="true" />
+            ) : null}
             {editing ? (
               <button
                 type="button"
@@ -830,14 +811,15 @@ export function TodayScreen({
               </button>
             ) : null}
             {resizingId === id && resizeSnap ? (
-              <span className="widget-resize-badge" role="status">
-                {t("today-widget-span", {
+              <span
+                className="widget-resize-badge"
+                role="status"
+                aria-label={t("today-widget-resize-target", {
                   columns: resizeSnap.colSpan,
-                  row:
-                    resizeSnap.rowSpan === "tall"
-                      ? t("today-widget-row-tall")
-                      : t("today-widget-row-compact"),
+                  rows: resizeSnap.rowSpan === "tall" ? 2 : 1,
                 })}
+              >
+                {resizeSnap.colSpan} × {resizeSnap.rowSpan === "tall" ? 2 : 1}
               </span>
             ) : null}
           </section>
@@ -845,17 +827,10 @@ export function TodayScreen({
       </div>
 
       <Card tone="tinted" className="iella-note">
-        <button
-          type="button"
-          className="iella-note-icon"
-          aria-label={t("iella-tip-open")}
-          onClick={nextTip}
-        >
-          <StudioIcon name="spark" size={22} />
-        </button>
+        <IellaSprite size={48} mood="curious" />
         <div>
           <strong>{t("iella-note-title")}</strong>
-          <p aria-live="polite">{tip ?? t("iella-note-body")}</p>
+          <p>{t("iella-note-body")}</p>
         </div>
       </Card>
 

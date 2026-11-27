@@ -21,7 +21,7 @@ import { AuthBackdrop } from "../components/AuthBackdrop";
 import { PaletteToggle } from "../components/AppearanceMenu";
 import { IellaSprite, type IellaMood } from "../components/IellaSprite";
 import { LanguageMenu } from "../components/LanguageMenu";
-import { StudioIcon } from "../components/StudioIcons";
+import { BrandLogo, StudioIcon } from "../components/StudioIcons";
 import { Button } from "../components/ui";
 import { useTranslation, type Locale } from "../i18n";
 import type { SkinName, ThemeName } from "../theme/tokens";
@@ -79,6 +79,7 @@ const TELEGRAM_QUERY_KEYS = [
   "hash",
 ] as const;
 const CODE_LENGTH = 6;
+const AUTH_SUCCESS_MS = 450;
 
 function clearTelegramParams(): void {
   if (typeof window === "undefined") {
@@ -191,7 +192,7 @@ export function AuthScreen({
     confirmationTimerRef.current = window.setTimeout(() => {
       confirmationTimerRef.current = null;
       callbacksRef.current.onAuthenticated(tokens, method);
-    }, 650);
+    }, AUTH_SUCCESS_MS);
   };
 
   const handleResponse = (response: VerifyCodeResponse, method: AuthMethod) => {
@@ -438,9 +439,7 @@ export function AuthScreen({
       <section className="auth-panel" aria-label={t("auth-title")}>
         <div className="auth-panel-topbar">
           <div className="auth-brand">
-            <span className="brand-mark" aria-hidden="true">
-              r
-            </span>
+            <BrandLogo size={32} />
             <span className="brand-name">{t("app-name")}</span>
           </div>
           <div className="auth-header-controls">
@@ -587,7 +586,7 @@ export function AuthScreen({
       </section>
 
       <section className="auth-visual" aria-label={t("auth-welcome")}>
-        <AuthBackdrop />
+        <AuthBackdrop paused={confirmation !== null} />
         <div className="auth-studio-grain" aria-hidden="true" />
         <div className="auth-visual-copy">
           <h1>{t("auth-welcome-title")}</h1>

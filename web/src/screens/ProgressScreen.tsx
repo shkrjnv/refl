@@ -20,6 +20,8 @@ export interface ProgressScreenProps {
   stateJson: string | null;
 }
 
+const CEFR_TIERS = ["A1", "A2", "B1", "B2"] as const;
+
 const DOMAIN_KEYS: Record<string, string> = {
   grammar: "domain-grammar",
   phonology: "domain-phonology",
@@ -74,6 +76,7 @@ function ForgettingCurve({
 
   return (
     <div className="forgetting-curve">
+      <div className="curve-particles" aria-hidden="true" />
       <svg
         viewBox={`0 0 ${chartWidth} ${chartHeight}`}
         role="img"
@@ -155,85 +158,112 @@ function ForgettingCurve({
   );
 }
 
-function MasteryChart({
+function IsometricMastery({
   levels,
 }: {
   levels: ReturnType<typeof levelBreakdown>;
 }) {
   const { t } = useTranslation();
-  const width = 520;
-  const height = 190;
-  const left = 34;
-  const right = 12;
-  const top = 16;
-  const bottom = 30;
-  const plotWidth = width - left - right;
-  const plotHeight = height - top - bottom;
+  const [hovered, setHovered] = useState<number | null>(null);
+  const width = 560;
+  const height = 300;
+  const baseY = 252;
+  const halfWidth = 31;
+  const halfDepth = 13;
+  const step =
+    levels.length === 0
+      ? 100
+      : Math.min(108, (width - 100) / Math.max(1, levels.length));
+  const startX = width / 2 - (step * (levels.length - 1)) / 2;
   if (levels.length === 0) {
     return <p className="chart-empty">{t("progress-chart-empty")}</p>;
   }
-  const barWidth = Math.max(26, Math.min(58, plotWidth / levels.length - 12));
-  const step = plotWidth / levels.length;
+  const hoveredLevel = hovered === null ? null : levels[hovered] ?? null;
   return (
-    <svg
-      className="mastery-chart"
-      viewBox={`0 0 ${width} ${height}`}
-      role="img"
-      aria-label={t("progress-mastery-chart")}
-    >
-      <g className="chart-grid">
-        {[0, 0.5, 1].map((ratio) => (
-          <line
-            key={ratio}
-            x1={left}
-            x2={width - right}
-            y1={top + plotHeight * (1 - ratio)}
-            y2={top + plotHeight * (1 - ratio)}
-          />
-        ))}
-      </g>
-      {levels.map((level, index) => {
-        const x = left + step * index + step / 2;
-        const masteredHeight = (level.mastered / Math.max(1, level.total)) * plotHeight;
-        const percentHeight = (level.percent / 100) * plotHeight;
-        return (
-          <g key={level.level}>
-            <rect
-              className="mastery-track"
-              x={x - barWidth / 2}
-              y={top}
-              width={barWidth}
-              height={plotHeight}
-              rx="4"
-            />
-            <rect
-              className="mastery-fill"
-              x={x - barWidth / 2}
-              y={top + plotHeight - percentHeight}
-              width={barWidth}
-              height={percentHeight}
-              rx="4"
-            />
-            <rect
-              className="mastery-mastered"
-              x={x - barWidth / 2}
-              y={top + plotHeight - masteredHeight}
-              width={barWidth}
-              height={masteredHeight}
-              rx="4"
-            />
-            <text
-              className="chart-level-label"
-              x={x}
-              y={height - 8}
-              textAnchor="middle"
+    <div className="iso-chart-wrap">
+      <svg
+        className="mastery-chart iso-mastery-chart"
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label={t("progress-mastery-chart")}
+      >
+        <line
+          className="iso-ground"
+          x1={24}
+          x2={width - 24}
+          y1={baseY + halfDepth}
+          y2={baseY + halfDepth}
+        />
+        {levels.map((level, index) => {
+          const cx = startX + index * step;
+          const blockHeight = Math.max(18, (level.percent / 100) * 166);
+          const topY = baseY - blockHeight;
+          const top = { x: cx, y: topY - halfDepth };
+          const right = { x: cx + halfWidth, y: topY };
+          const bottom = { x: cx, y: topY + halfDepth };
+          const left = { x: cx - halfWidth, y: topY };
+          const baseLeft = { x: cx - halfWidth, y: baseY };
+          const baseBottom = { x: cx, y: baseY + halfDepth };
+          const baseRight = { x: cx + halfWidth, y: baseY };
+          const leftFace = `${left.x},${left.y} ${bottom.x},${bottom.y} ${baseBottom.x},${baseBottom.y} ${baseLeft.x},${baseLeft.y}`;
+          const rightFace = `${right.x},${right.y} ${bottom.x},${bottom.y} ${baseBottom.x},${baseBottom.y} ${baseRight.x},${baseRight.y}`;
+          const topFace = `${top.x},${top.y} ${right.x},${right.y} ${bottom.x},${bottom.y} ${left.x},${left.y}`;
+          const seams = [0.25, 0.5, 0.75].map((ratio) => {
+            const y = baseY - blockHeight * ratio;
+            return (
+              <path
+                key={ratio}
+                className="iso-seam"
+                d={`M${left.x} ${y} L${bottom.x} ${y + halfDepth} L${right.x} ${y}`}
+              />
+            );
+          });
+          return (
+            <g
+              key={level.level}
+              className={`iso-tier${hovered === index ? " hovered" : ""}`}
+              tabIndex={0}
+              role="button"
+              aria-label={t("progress-iso-tooltip", {
+                level: level.level,
+                mastered: level.mastered,
+                total: level.total,
+                percent: level.percent,
+              })}
+              onPointerEnter={() => setHovered(index)}
+              onPointerLeave={() => setHovered(null)}
+              onFocus={() => setHovered(index)}
+              onBlur={() => setHovered(null)}
             >
-              {level.level}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
+              <g className="iso-body">
+                <polygon className="iso-left" points={leftFace} />
+                <polygon className="iso-right" points={rightFace} />
+                <polygon className="iso-top" points={topFace} />
+                {seams}
+              </g>
+              <text className="iso-value" x={cx} y={topY - 20} textAnchor="middle">
+                {level.percent}%
+              </text>
+              <text className="iso-level" x={cx} y={baseY + 34} textAnchor="middle">
+                {level.level}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+      {hoveredLevel ? (
+        <div className="iso-tooltip" role="status">
+          <span>
+            {t("progress-iso-tooltip", {
+              level: hoveredLevel.level,
+              mastered: hoveredLevel.mastered,
+              total: hoveredLevel.total,
+              percent: hoveredLevel.percent,
+            })}
+          </span>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -299,7 +329,25 @@ export function ProgressScreen({ content, stateJson }: ProgressScreenProps) {
   const stats = statsSummary(progress);
   const retention = memoryRetention(progress);
   const elapsed = averageElapsedDays(progress);
-  const levels = levelBreakdown(progress);
+  const levels = useMemo(() => {
+    const observed = levelBreakdown(progress);
+    const byLevel = new Map(observed.map((entry) => [entry.level, entry]));
+    const base = CEFR_TIERS.map(
+      (level) =>
+        byLevel.get(level) ?? {
+          level,
+          total: 0,
+          mastered: 0,
+          percent: 0,
+        },
+    );
+    return [
+      ...base,
+      ...observed.filter(
+        (entry) => !CEFR_TIERS.includes(entry.level as (typeof CEFR_TIERS)[number]),
+      ),
+    ];
+  }, [progress]);
   const domains = domainBreakdown(progress);
   const misconceptions = misconceptionProgress(content, state, locale);
   const cureRate = misconceptionCureRate(misconceptions);
@@ -329,7 +377,6 @@ export function ProgressScreen({ content, stateJson }: ProgressScreenProps) {
             </div>
             <Badge tone="blue">{t("progress-fsrs-badge")}</Badge>
           </div>
-          <code className="fsrs-formula">{t("progress-fsrs-formula")}</code>
           <p className="progress-note">{t("progress-fsrs-note")}</p>
           <div className="fsrs-metrics">
             <div>
@@ -379,7 +426,7 @@ export function ProgressScreen({ content, stateJson }: ProgressScreenProps) {
             </div>
             <Badge tone="green">{t("stats-mastered")}</Badge>
           </div>
-          <MasteryChart levels={levels} />
+          <IsometricMastery levels={levels} />
           <p className="progress-note">
             {t("stats-mastered-note", { total: progress.length })}
           </p>
