@@ -39,6 +39,11 @@ export interface ThemeTokens extends Palette {
   successBorder: string;
   dangerSurface: string;
   dangerBorder: string;
+  iellaInk: string;
+  iellaBeak: string;
+  iellaCream: string;
+  iellaBrown: string;
+  iellaEye: string;
 }
 
 export const themes: Record<ThemeName, ThemeTokens> = {
@@ -71,6 +76,11 @@ export const themes: Record<ThemeName, ThemeTokens> = {
     successBorder: "#ccefe1",
     dangerSurface: "#fff0f0",
     dangerBorder: "#ffd2d2",
+    iellaInk: "#24346a",
+    iellaBeak: "#e0773c",
+    iellaCream: "#f3e3c3",
+    iellaBrown: "#8b5a2b",
+    iellaEye: "#0e1020",
   },
   dark: {
     ...palette,
@@ -107,6 +117,11 @@ export const themes: Record<ThemeName, ThemeTokens> = {
     successBorder: "#235743",
     dangerSurface: "#351a20",
     dangerBorder: "#66303b",
+    iellaInk: "#344b8f",
+    iellaBeak: "#f08a4b",
+    iellaCream: "#f3e3c3",
+    iellaBrown: "#a46a35",
+    iellaEye: "#0e1020",
   },
 };
 

@@ -39,6 +39,11 @@
   --success-border: #ccefe1;
   --danger-surface: #fff0f0;
   --danger-border: #ffd2d2;
+  --iella-ink: #24346a;
+  --iella-beak: #e0773c;
+  --iella-cream: #f3e3c3;
+  --iella-brown: #8b5a2b;
+  --iella-eye: #0e1020;
   --font-family: "Geologica", "Avenir Next", "Segoe UI", sans-serif;
   --radius-sm: 10px;
   --radius-md: 14px;
@@ -82,6 +87,11 @@
   --success-border: #235743;
   --danger-surface: #351a20;
   --danger-border: #66303b;
+  --iella-ink: #344b8f;
+  --iella-beak: #f08a4b;
+  --iella-cream: #f3e3c3;
+  --iella-brown: #a46a35;
+  --iella-eye: #0e1020;
   color-scheme: dark;
 }
 
@@ -120,6 +130,11 @@
     --success-border: #235743;
     --danger-surface: #351a20;
     --danger-border: #66303b;
+    --iella-ink: #344b8f;
+    --iella-beak: #f08a4b;
+    --iella-cream: #f3e3c3;
+    --iella-brown: #a46a35;
+    --iella-eye: #0e1020;
     color-scheme: dark;
   }
 }

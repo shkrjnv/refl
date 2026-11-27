@@ -40,7 +40,7 @@ export interface PlanSessionResult {
 }
 
 export type NextItemResult =
-  | { kind: "lesson"; kc: JsonValue; explanation: JsonValue }
+  | { kind: "lesson"; kc: string; explanation: string }
   | { kind: "item"; item: JsonValue; slot: number; issued: JsonValue }
   | { kind: "finished"; end: JsonValue };
 
@@ -55,8 +55,8 @@ export type AnswerCheckResult =
       kind: "checked";
       item: JsonValue;
       slot: number;
-      verdict: JsonValue;
-      misconception: JsonValue;
+      verdict: "correct" | "typo" | "wrong" | "unrecognized";
+      misconception: string | null;
       elapsed_ms: number;
     }
   | {

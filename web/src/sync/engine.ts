@@ -31,6 +31,12 @@ export interface SyncApi {
   sync(request: SyncRequest): Promise<SyncResponse | ErasedResponse>;
 }
 
+export interface SyncContentSource {
+  bundleJson: string;
+  lexiconJson: string;
+  contentVersion: string;
+}
+
 export interface SyncEngineOptions {
   storage: LearnerStorage;
   api: SyncApi;
@@ -38,6 +44,7 @@ export interface SyncEngineOptions {
   coreVersion: string;
   contentVersion: string;
   clock?: ClientClock;
+  content?: SyncContentSource;
 }
 
 export interface SyncResult {
@@ -63,6 +70,7 @@ export class SyncEngine {
   readonly #coreVersion: string;
   readonly #contentVersion: string;
   readonly #clock: ClientClock;
+  readonly #content: SyncContentSource | null;
 
   constructor(options: SyncEngineOptions) {
     this.#storage = options.storage;
@@ -71,6 +79,7 @@ export class SyncEngine {
     this.#coreVersion = options.coreVersion;
     this.#contentVersion = options.contentVersion;
     this.#clock = options.clock ?? new ClientClock();
+    this.#content = options.content ?? null;
   }
 
   async run(): Promise<SyncResult> {
@@ -220,7 +229,14 @@ export class SyncEngine {
     fullReplay: boolean,
   ): Promise<{ folded: boolean; compacted: number }> {
     const active = await this.#storage.getActiveContent();
-    if (!active) {
+    const source = active
+      ? {
+          bundleJson: active.bundle_json,
+          lexiconJson: JSON.stringify({ text: active.dictionary.text }),
+          contentVersion: active.content_version,
+        }
+      : this.#content;
+    if (!source) {
       return { folded: false, compacted: 0 };
     }
     const snapshot = await this.#storage.getSnapshot();
@@ -234,8 +250,8 @@ export class SyncEngine {
 
     const info = await this.#core.coreInfo();
     const folded = await this.#core.foldState(
-      active.bundle_json,
-      active.dictionary.text,
+      source.bundleJson,
+      source.lexiconJson,
       useFullReplay ? null : snapshot.state_json,
       events.map((event) => event.event),
     );
@@ -244,7 +260,7 @@ export class SyncEngine {
       learner_id: this.#storage.learnerId,
       core_version: info.core_version,
       fold_version: info.fold_version,
-      content_version: active.content_version,
+      content_version: source.contentVersion,
       last_event_id:
         typeof folded.last_event_id === "string"
           ? folded.last_event_id

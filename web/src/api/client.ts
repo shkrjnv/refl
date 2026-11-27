@@ -5,6 +5,7 @@ export interface RequestCodeResponse {
   sent: boolean;
   expires_in: number;
   code?: string;
+  dev_code?: string;
 }
 
 export interface AuthTokens {

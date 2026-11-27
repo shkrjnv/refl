@@ -10,9 +10,9 @@ import {
   type PropsWithChildren,
 } from "react";
 
-import enSource from "./en.ftl?raw";
-import ruSource from "./ru.ftl?raw";
-import uzSource from "./uz.ftl?raw";
+import enSource from "./locales/en.ftl?raw";
+import ruSource from "./locales/ru.ftl?raw";
+import uzSource from "./locales/uz.ftl?raw";
 
 export const locales = ["en", "ru", "uz"] as const;
 export type Locale = (typeof locales)[number];

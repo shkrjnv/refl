@@ -26,6 +26,10 @@
     "fake-indexeddb": "6.2.8",
     "typescript": "5.9.3",
     "vite": "7.1.9",
-    "vitest": "3.2.4"
+    "vitest": "3.2.4",
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/react": "16.3.3",
+    "jsdom": "31.0.1",
+    "@types/node": "26.6.11"
   }
 }

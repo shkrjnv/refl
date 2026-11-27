@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import enSource from "./en.ftl?raw";
-import ruSource from "./ru.ftl?raw";
-import uzSource from "./uz.ftl?raw";
+import enSource from "./locales/en.ftl?raw";
+import ruSource from "./locales/ru.ftl?raw";
+import uzSource from "./locales/uz.ftl?raw";
 import { createBundle, formatMessage, resolveLocale } from "./index";
 
 describe("Fluent locales", () => {

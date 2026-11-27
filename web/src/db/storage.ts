@@ -66,6 +66,17 @@ export interface ContentRecord extends ContentCandidate {
   activated_at: number;
 }
 
+/** A server bundle cached for offline lessons before a verified pair exists. */
+export interface CachedBundleRecord {
+  learner_id: string;
+  content_version: string;
+  core_version: string;
+  bundle_json: string;
+  digest: string;
+  lexicon_text: string;
+  cached_at: number;
+}
+
 type MetaKey = "cursor" | "clock_offset_ms" | "auth_session";
 
 interface MetaRecord {
@@ -73,13 +84,14 @@ interface MetaRecord {
   value: JsonValue;
 }
 
-const DATABASE_VERSION = 1;
+const DATABASE_VERSION = 2;
 const STORE_NAMES = [
   "snapshots",
   "events",
   "outbox",
   "unknown_events",
   "content",
+  "bundle_cache",
   "meta",
 ] as const;
 type StoreName = (typeof STORE_NAMES)[number];
@@ -154,6 +166,9 @@ function openDatabase(
       }
       if (!db.objectStoreNames.contains("content")) {
         db.createObjectStore("content", { keyPath: "slot" });
+      }
+      if (!db.objectStoreNames.contains("bundle_cache")) {
+        db.createObjectStore("bundle_cache", { keyPath: "learner_id" });
       }
       if (!db.objectStoreNames.contains("meta")) {
         db.createObjectStore("meta", { keyPath: "key" });
@@ -637,6 +652,32 @@ export class LearnerStorage {
   ): Promise<ContentRecord | null> {
     const record = await requestResult<ContentRecord | undefined>(
       this.#db.transaction("content", "readonly").objectStore("content").get(slot),
+    );
+    if (!record) {
+      return null;
+    }
+    checkLearner(record, this.learnerId);
+    return record;
+  }
+
+  async cacheBundle(record: CachedBundleRecord): Promise<void> {
+    checkLearner(record, this.learnerId);
+    await runTransaction(
+      this.#db,
+      "bundle_cache",
+      "readwrite",
+      async (tx) => {
+        await requestResult(tx.objectStore("bundle_cache").put(record));
+      },
+    );
+  }
+
+  async getCachedBundle(): Promise<CachedBundleRecord | null> {
+    const record = await requestResult<CachedBundleRecord | undefined>(
+      this.#db
+        .transaction("bundle_cache", "readonly")
+        .objectStore("bundle_cache")
+        .get(this.learnerId),
     );
     if (!record) {
       return null;

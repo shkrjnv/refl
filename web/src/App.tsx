@@ -1,6 +1,32 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
+import {
+  ApiClient,
+  inviteCodeFromUrl,
+  type AuthTokens,
+} from "./api/client";
+import { AppShell, type AppRoute } from "./components/AppShell";
+import { Button, Card } from "./components/ui";
+import {
+  LearnerStorage,
+  requestPersistentStorage,
+  type OutboxRecord,
+} from "./db/storage";
 import { useTranslation } from "./i18n";
+import { LessonRunner, type LessonSummary, type LessonView } from "./prototype/lesson";
+import { loadPrototypeContent } from "./prototype/load";
+import { isTourComplete, resetTour } from "./prototype/onboarding";
+import { PrototypeContent } from "./prototype/content";
+import { initialStatus, type AppStatus } from "./prototype/status";
+import { AuthGate } from "./screens/AuthGate";
+import { LessonScreen } from "./screens/LessonScreen";
+import { ProfileScreen } from "./screens/ProfileScreen";
+import { StatsScreen } from "./screens/StatsScreen";
+import { SummaryScreen } from "./screens/SummaryScreen";
+import { TodayScreen } from "./screens/TodayScreen";
+import { logoutAndWipe } from "./sync/session";
+import { SyncEngine } from "./sync/engine";
+import { ClientClock } from "./sync/uuidv7";
 import {
   applyTheme,
   storeTheme,
@@ -12,39 +38,76 @@ interface AppProps {
   initialTheme: ThemeName;
 }
 
+type VisibleRoute = AppRoute | "summary";
+
+interface Identity {
+  learnerId: string;
+  label: string;
+  method: "email" | "telegram";
+}
+
+function sessionFromTokens(tokens: AuthTokens) {
+  return {
+    learner_id: tokens.learner_id,
+    access_token: tokens.access_token,
+    refresh_token: tokens.refresh_token,
+    expires_at: Date.now() + tokens.expires_in * 1000,
+  };
+}
+
 export function App({ initialTheme }: AppProps) {
   const { locale, locales, setLocale, t } = useTranslation();
   const [theme, setTheme] = useState<ThemeName>(initialTheme);
-  const [coreVersion, setCoreVersion] = useState<string | null>(null);
-  const [coreFailed, setCoreFailed] = useState(false);
-  const [online, setOnline] = useState<boolean>(() =>
-    typeof navigator === "undefined" ? true : navigator.onLine,
+  const [route, setRoute] = useState<VisibleRoute>("today");
+  const [identity, setIdentity] = useState<Identity | null>(null);
+  const [storage, setStorage] = useState<LearnerStorage | null>(null);
+  const [content, setContent] = useState<PrototypeContent | null>(null);
+  const [contentError, setContentError] = useState(false);
+  const [stateJson, setStateJson] = useState<string | null>(null);
+  const [status, setStatus] = useState<AppStatus>(() =>
+    initialStatus(typeof navigator === "undefined" ? true : navigator.onLine),
   );
+  const [rejected, setRejected] = useState<OutboxRecord[]>([]);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [tourOpen, setTourOpen] = useState(false);
+  const [runner, setRunner] = useState<LessonRunner | null>(null);
+  const [lessonView, setLessonView] = useState<LessonView | null>(null);
+  const [summary, setSummary] = useState<LessonSummary | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const sessionRef = useRef<ReturnType<typeof sessionFromTokens> | null>(null);
+  const storageRef = useRef<LearnerStorage | null>(null);
+  const contentRef = useRef<PrototypeContent | null>(null);
+  const coreRef = useRef<CoreWorkerClient | null>(null);
+  const clockRef = useRef(new ClientClock());
+  const syncingRef = useRef(false);
+  const apiRef = useRef<ApiClient | null>(null);
+  if (!apiRef.current) {
+    apiRef.current = new ApiClient({
+      getSession: async () => sessionRef.current,
+      setSession: async (session) => {
+        sessionRef.current = session;
+        if (storageRef.current && session) {
+          await storageRef.current.setAuthSession(session);
+        }
+      },
+    });
+  }
+  const api = apiRef.current;
 
   useEffect(() => {
     const core = new CoreWorkerClient();
-    let active = true;
-    core
-      .coreInfo()
-      .then((info) => {
-        if (active) {
-          setCoreVersion(info.core_version);
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setCoreFailed(true);
-        }
-      });
+    coreRef.current = core;
     return () => {
-      active = false;
       core.terminate();
+      coreRef.current = null;
     };
   }, []);
 
   useEffect(() => {
-    const markOnline = () => setOnline(true);
-    const markOffline = () => setOnline(false);
+    const markOnline = () => setStatus((current) => ({ ...current, online: true }));
+    const markOffline = () =>
+      setStatus((current) => ({ ...current, online: false, syncing: false }));
     window.addEventListener("online", markOnline);
     window.addEventListener("offline", markOffline);
     return () => {
@@ -53,6 +116,221 @@ export function App({ initialTheme }: AppProps) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!identity || !storage || !content) {
+      return;
+    }
+    void syncNow();
+    // The sync loop is intentionally re-run when the authenticated learner
+    // or the active bundle changes.
+  }, [identity, storage, content]);
+
+  const refreshLocalState = async (store: LearnerStorage) => {
+    const snapshot = await store.getSnapshot();
+    setStateJson(snapshot?.state_json ?? null);
+    const outbox = await store.listOutbox();
+    setRejected(outbox.filter((event) => event.status === "rejected"));
+    setStatus((current) => ({
+      ...current,
+      pendingOutbox: outbox.filter((event) => event.status === "pending").length,
+      rejectedOutbox: outbox.filter((event) => event.status === "rejected").length,
+    }));
+  };
+
+  const syncNow = async (): Promise<boolean> => {
+    const store = storageRef.current;
+    const loaded = contentRef.current;
+    const core = coreRef.current;
+    if (!store || !loaded || !core || !identity || syncingRef.current) {
+      return false;
+    }
+    syncingRef.current = true;
+    setStatus((current) => ({ ...current, syncing: true }));
+    try {
+      const info = await core.coreInfo();
+      const engine = new SyncEngine({
+        storage: store,
+        api,
+        core,
+        coreVersion: info.core_version,
+        contentVersion: loaded.contentVersion,
+        clock: clockRef.current,
+        content: {
+          bundleJson: loaded.bundleJson,
+          lexiconJson: loaded.lexiconJson,
+          contentVersion: loaded.contentVersion,
+        },
+      });
+      const result = await engine.run();
+      await refreshLocalState(store);
+      setStatus((current) => ({
+        ...current,
+        syncing: false,
+        online: true,
+        clockDrift: result.clockSuspect,
+        lastSyncedAt: Date.now(),
+      }));
+      return true;
+    } catch {
+      await refreshLocalState(store).catch(() => undefined);
+      setStatus((current) => ({ ...current, syncing: false, online: false }));
+      return false;
+    } finally {
+      syncingRef.current = false;
+    }
+  };
+
+  const handleAuthenticated = async (
+    tokens: AuthTokens,
+    method: "email" | "telegram",
+  ) => {
+    const learnerId = tokens.learner_id;
+    setActionError(null);
+    sessionRef.current = sessionRef.current ?? sessionFromTokens(tokens);
+    const store = await LearnerStorage.open(learnerId);
+    storageRef.current = store;
+    setStorage(store);
+    await store.setAuthSession(sessionRef.current);
+    const persistence = await requestPersistentStorage();
+    setStatus((current) => ({ ...current, persistence }));
+    setIdentity({
+      learnerId,
+      label: learnerId.slice(0, 8),
+      method,
+    });
+    setContentError(false);
+    try {
+      const loaded = await loadPrototypeContent(api, store);
+      contentRef.current = loaded.content;
+      setContent(loaded.content);
+      setStatus((current) => ({
+        ...current,
+        updateReady: loaded.updateReady,
+      }));
+      await refreshLocalState(store);
+      setTourOpen(!isTourComplete());
+      void api
+        .pendingRequests()
+        .then(() => setIsAdmin(true))
+        .catch(() => setIsAdmin(false));
+      void syncNow();
+    } catch {
+      setContentError(true);
+    }
+  };
+
+  const startLesson = async () => {
+    const store = storageRef.current;
+    const loaded = contentRef.current;
+    const core = coreRef.current;
+    if (!store || !loaded || !core || !identity) {
+      return;
+    }
+    setActionError(null);
+    try {
+      const lesson = new LessonRunner({
+        storage: store,
+        core,
+        content: loaded,
+        learnerId: identity.learnerId,
+        locale,
+        clock: clockRef.current,
+      });
+      const view = await lesson.start();
+      setRunner(lesson);
+      setLessonView(view);
+      setRoute("lesson");
+      setTourOpen(false);
+    } catch {
+      setActionError(t("lesson-start-failed"));
+    }
+  };
+
+  const applyStagedUpdate = async () => {
+    const store = storageRef.current;
+    if (!store) {
+      return;
+    }
+    try {
+      const staged = await store.getStagedContent();
+      if (!staged) {
+        return;
+      }
+      await store.activateStagedContent();
+      const active = await store.getActiveContent();
+      if (active) {
+        const next = new PrototypeContent(
+          active.bundle_json,
+          active.content_version,
+          active.bundle_digest,
+          active.dictionary.text,
+        );
+        contentRef.current = next;
+        setContent(next);
+      }
+      setStatus((current) => ({ ...current, updateReady: false }));
+    } catch {
+      // The previous active pair remains usable.
+    }
+    if (!status.updateReady) {
+      return;
+    }
+    try {
+      const loaded = await loadPrototypeContent(api, store, true);
+      contentRef.current = loaded.content;
+      setContent(loaded.content);
+      setStatus((current) => ({ ...current, updateReady: false }));
+    } catch {
+      // Keep the previous compatible bundle until the server is reachable.
+    }
+  };
+
+  const handleLessonComplete = (result: LessonSummary) => {
+    setSummary(result);
+    setRunner(null);
+    setLessonView(null);
+    setRoute("summary");
+    void applyStagedUpdate().then(() => syncNow());
+    void storageRef.current?.getSnapshot().then((snapshot) => {
+      setStateJson(snapshot?.state_json ?? null);
+    });
+  };
+
+  const handleLogout = async () => {
+    const store = storageRef.current;
+    if (!store) {
+      return;
+    }
+    setStatus((current) => ({ ...current, syncing: true }));
+    const flushed = await syncNow();
+    if (!flushed) {
+      const pending = await store.listPendingOutbox().catch(() => []);
+      if (pending.length > 0) {
+        setStatus((current) => ({ ...current, syncing: false, online: false }));
+        setActionError(t("profile-logout-blocked"));
+        return;
+      }
+    }
+    try {
+      await logoutAndWipe(api, store);
+    } catch {
+      // Local data is still wiped when the network logout fails.
+    }
+    storageRef.current = null;
+    contentRef.current = null;
+    sessionRef.current = null;
+    setStorage(null);
+    setContent(null);
+    setIdentity(null);
+    setSummary(null);
+    setRunner(null);
+    setLessonView(null);
+    setRejected([]);
+    setIsAdmin(false);
+    setRoute("today");
+    setStatus(initialStatus(true));
+  };
+
   const toggleTheme = () => {
     const next: ThemeName = theme === "light" ? "dark" : "light";
     setTheme(next);
@@ -60,79 +338,139 @@ export function App({ initialTheme }: AppProps) {
     applyTheme(next);
   };
 
+  const replayTour = () => {
+    resetTour();
+    setRoute("today");
+    setTourOpen(true);
+  };
+
+  if (!identity) {
+    return (
+      <AuthGate
+        api={api}
+        inviteCode={inviteCodeFromUrl()}
+        onAuthenticated={(tokens, method) => {
+          void handleAuthenticated(tokens, method).catch(() =>
+            setContentError(true),
+          );
+        }}
+      />
+    );
+  }
+
+  if (contentError) {
+    return (
+      <div className="startup-screen">
+        <Card tone="plain" className="startup-card">
+          <h1>{t("app-content-error-title")}</h1>
+          <p>{t("app-content-error-body")}</p>
+          <Button type="button" variant="primary" onClick={() => window.location.reload()}>
+            {t("common-retry")}
+          </Button>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!content) {
+    return (
+      <div className="startup-screen">
+        <Card tone="plain" className="startup-card">
+          <h1>{t("app-content-loading")}</h1>
+          <p>{t("app-content-loading-body")}</p>
+        </Card>
+      </div>
+    );
+  }
+
+  const activeRoute: AppRoute =
+    route === "summary" ? "today" : route;
+  const learnerLabel = identity.label;
+
   return (
-    <div className="app-shell">
-      <header className="topbar">
-        <div className="brand">
-          <span className="brand-mark" aria-hidden="true">
-            r
-          </span>
-          <span className="brand-name">{t("app-name")}</span>
-        </div>
-        <div className="controls">
-          <div className="segmented" aria-label={t("app-language")}>
-            {locales.map((candidate) => (
-              <button
-                key={candidate}
-                type="button"
-                className={candidate === locale ? "segment active" : "segment"}
-                aria-pressed={candidate === locale}
-                onClick={() => setLocale(candidate)}
-              >
-                {t(`language.${candidate}`)}
-              </button>
-            ))}
-          </div>
-          <button
-            type="button"
-            className="button ghost"
-            aria-label={t("app-theme")}
-            onClick={toggleTheme}
-          >
-            {theme === "light" ? t("common-dark") : t("common-light")}
-          </button>
-        </div>
-      </header>
-
-      <main className="main">
-        <section className="hero">
-          <div className="hero-copy">
-            <p className="eyebrow">{t("nav-today")}</p>
-            <h1>{t("app-tagline")}</h1>
-            <p className="hero-note">{t("app-foundation")}</p>
-          </div>
-          <div className={online ? "status online" : "status offline"}>
-            <span className="status-dot" aria-hidden="true" />
-            {online ? t("sync-online") : t("sync-offline")}
-          </div>
-        </section>
-
-        <section className="foundation-grid">
-          <article className="card tile">
-            <p className="tile-label">{t("session-title")}</p>
-            <p className="tile-value">{t("app-foundation")}</p>
-            <p className="tile-note">{t("app-tagline")}</p>
-          </article>
-          <article className="card tile">
-            <p className="tile-label">{t("app-name")}</p>
-            <p className="tile-value">
-              {coreVersion
-                ? t("app-core-version", { version: coreVersion })
-                : coreFailed
-                  ? t("common-unknown-error")
-                  : t("app-core-starting")}
-            </p>
-            <p className="tile-note">{t("app-foundation")}</p>
-          </article>
-          <article className="card tile accent">
-            <p className="tile-label">{t("app-theme")}</p>
-            <p className="tile-value">
-              {theme === "light" ? t("common-light") : t("common-dark")}
-            </p>
-            <p className="tile-note">{t("session-update-locked")}</p>
-          </article>
-        </section>
-      </main>
-    </div>
+    <AppShell
+      active={activeRoute}
+      onNavigate={(next) => {
+        if (next !== "lesson") {
+          setRoute(next);
+        }
+      }}
+      learnerLabel={learnerLabel}
+      locale={locale}
+      locales={locales}
+      onLocaleChange={setLocale}
+      theme={theme}
+      onToggleTheme={toggleTheme}
+      lessonAvailable={runner !== null}
+    >
+      {actionError ? (
+        <p className="inline-alert danger" role="alert">
+          {actionError}
+        </p>
+      ) : null}
+      {route === "today" ? (
+        <TodayScreen
+          content={content}
+          stateJson={stateJson}
+          learnerLabel={learnerLabel}
+          status={status}
+          onStart={() => void startLesson()}
+          onOpenStats={() => setRoute("stats")}
+          tourOpen={tourOpen}
+          onTourComplete={() => setTourOpen(false)}
+        />
+      ) : null}
+      {route === "lesson" && runner && lessonView ? (
+        <LessonScreen
+          runner={runner}
+          initialView={lessonView}
+          onViewChange={setLessonView}
+          onComplete={handleLessonComplete}
+          onExit={() => {
+            setRoute("today");
+            setRunner(null);
+            setLessonView(null);
+            const store = storageRef.current;
+            if (store) {
+              void refreshLocalState(store);
+            }
+            void syncNow();
+          }}
+        />
+      ) : null}
+      {route === "summary" && summary ? (
+        <SummaryScreen
+          summary={summary}
+          onDone={() => {
+            setRoute("today");
+            const store = storageRef.current;
+            if (store) {
+              void refreshLocalState(store);
+            }
+            void syncNow();
+          }}
+        />
+      ) : null}
+      {route === "stats" ? (
+        <StatsScreen content={content} stateJson={stateJson} />
+      ) : null}
+      {route === "profile" ? (
+        <ProfileScreen
+          learnerLabel={learnerLabel}
+          authMethod={identity.method}
+          locale={locale}
+          locales={locales}
+          onLocaleChange={setLocale}
+          theme={theme}
+          onToggleTheme={toggleTheme}
+          onReplayTour={replayTour}
+          status={status}
+          rejected={rejected}
+          onLogout={() => void handleLogout()}
+          isAdmin={isAdmin}
+          adminApi={api}
+        />
+      ) : null}
+    </AppShell>
   );
 }

@@ -75,3 +75,11 @@
 - Added the core worker RPC, UUIDv7/clock-corrected event stamps, the auth/sync client, and outbox-driven bidirectional sync.
 - Added Living Studio light/dark tokens with tactile surfaces and Fluent `en`/`ru`/`uz` UI copy.
 - Vitest covers UUIDv7/clock drift, storage isolation/compaction/erasure, batching/pagination, rejected retention, and mid-session update deferral.
+
+## W3 — prototype screens, Iella onboarding, lesson loop, and admin access
+
+- Added auth, pending, rejected, and erased views with URL invite preservation, Telegram handoff, email codes, and dev-code display.
+- Added the pixel Iella sprite, three-stop spotlight tour, local onboarding step records, and Settings replay.
+- Added Today, the core-backed three-item lesson flow, summary, statistics disclosures, profile/settings, and admin invite/approval UI.
+- Added the per-learner bundle cache, between-session update application, sync diagnostics, and Vite `/v1` + `/health` proxying.
+- Added Vitest flow and screen tests for invite/pending, offline outbox flush, onboarding, statistics disclosures, and language/theme switching.
