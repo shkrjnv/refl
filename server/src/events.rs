@@ -143,6 +143,29 @@ impl fmt::Display for ReadError {
 
 impl std::error::Error for ReadError {}
 
+type EventRow = (Uuid, Option<Uuid>, i16, i64, i64, Value);
+type StoredEventRow = (i64, Uuid, Option<Uuid>, i16, i64, i64, Value);
+
+fn event_json(
+    learner: Uuid,
+    event_id: Uuid,
+    session_id: Option<Uuid>,
+    schema_version: i16,
+    client_ts: i64,
+    server_ts: i64,
+    payload: &Value,
+) -> Value {
+    serde_json::json!({
+        "schema_version": schema_version,
+        "event_id": event_id,
+        "learner_id": learner,
+        "session_id": session_id,
+        "client_ts": client_ts,
+        "server_ts": server_ts,
+        "payload": payload,
+    })
+}
+
 /// A learner's events in fold order (`event_id`), upcast to the current
 /// schema. Events unknown to this core (stored by a newer server before a
 /// rollback) come back as [`Decoded::Unknown`] for the fold to skip.
@@ -153,7 +176,7 @@ pub async fn learner_events(
     db: impl PgExecutor<'_>,
     learner: Uuid,
 ) -> Result<Vec<Decoded>, ReadError> {
-    let rows: Vec<(Uuid, Option<Uuid>, i16, i64, i64, Value)> = sqlx::query_as(
+    let rows: Vec<EventRow> = sqlx::query_as(
         "SELECT event_id, session_id, schema_version, client_ts, server_ts, payload \
          FROM events WHERE learner_id = $1 ORDER BY event_id",
     )
@@ -164,17 +187,66 @@ pub async fn learner_events(
     rows.into_iter()
         .map(
             |(event_id, session_id, schema_version, client_ts, server_ts, payload)| {
-                let json = serde_json::json!({
-                    "schema_version": schema_version,
-                    "event_id": event_id,
-                    "learner_id": learner,
-                    "session_id": session_id,
-                    "client_ts": client_ts,
-                    "server_ts": server_ts,
-                    "payload": payload,
-                });
+                let json = event_json(
+                    learner,
+                    event_id,
+                    session_id,
+                    schema_version,
+                    client_ts,
+                    server_ts,
+                    &payload,
+                );
                 decode_event(&json.to_string()).map_err(ReadError::Decode)
             },
         )
         .collect()
+}
+
+/// An event as stored, with the receipt number a sync cursor advances past.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredEvent {
+    pub server_seq: i64,
+    /// Envelope and payload as stored; `server_ts` is the server's receipt time.
+    pub event: Value,
+}
+
+/// A learner's events after `cursor` in receipt order, up to `limit`.
+///
+/// # Errors
+/// Database errors.
+pub async fn learner_events_since(
+    db: impl PgExecutor<'_>,
+    learner: Uuid,
+    cursor: i64,
+    limit: i64,
+) -> Result<Vec<StoredEvent>, sqlx::Error> {
+    let rows: Vec<StoredEventRow> = sqlx::query_as(
+        "SELECT server_seq, event_id, session_id, schema_version, client_ts, server_ts, payload \
+         FROM events WHERE learner_id = $1 AND server_seq > $2 \
+         ORDER BY server_seq ASC LIMIT $3",
+    )
+    .bind(learner)
+    .bind(cursor)
+    .bind(limit)
+    .fetch_all(db)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(
+            |(server_seq, event_id, session_id, schema_version, client_ts, server_ts, payload)| {
+                StoredEvent {
+                    server_seq,
+                    event: event_json(
+                        learner,
+                        event_id,
+                        session_id,
+                        schema_version,
+                        client_ts,
+                        server_ts,
+                        &payload,
+                    ),
+                }
+            },
+        )
+        .collect())
 }

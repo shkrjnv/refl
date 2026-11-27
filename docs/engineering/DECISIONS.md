@@ -35,3 +35,11 @@
 - Seed 1: `104/895` false mastery (`11.6%`), learner-cluster 95% CI `9.2%–14.3%`.
 - Seed 2: `94/906` false mastery (`10.4%`), learner-cluster 95% CI `8.0%–12.8%`.
 - Header model `knowledge-v1.3+68ea62decb36521e`; planner `session-prototype-4+c896293765c21793`.
+
+## P1a — server HTTP layer
+
+- Added an Axum router with `GET /health`, `GET /v1/content/active`, and `POST /v1/sync`.
+- Push sorts by `event_id`, runs in one transaction, is idempotent, and reports per-event rejections; pull pages by `server_seq`.
+- `AuthenticatedLearner` is the P1b seam; P1a accepts `Bearer <learner_uuid>` only behind `allow_header_learner_id`.
+- Content versions store the serialized bundle and its full SHA-256; the active endpoint returns both with `min_core_version`.
+- `just fmt-check`, `just lint`, and `just test` pass; HTTP tests cover push, pull, auth, limits, future events, and active content.
