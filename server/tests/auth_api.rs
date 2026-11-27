@@ -109,6 +109,8 @@ fn test_app(pool: PgPool, dev_auth: bool) -> Router {
             registration_mode: RegistrationMode::Open,
             telegram_bot_token: None,
             admin_telegram_chat_id: None,
+            admin_email: None,
+            admin_telegram_id: None,
             min_core_version: "0.0.0".into(),
         },
         telegram: Arc::new(MockTelegramGateway::default()),

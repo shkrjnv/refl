@@ -407,6 +407,29 @@ pub async fn decide_access(
     }
 }
 
+/// Make the account active and add the admin role for a bootstrap identity.
+/// The caller checks erasure first; this only elevates an existing account.
+///
+/// # Errors
+/// Database errors.
+pub async fn ensure_admin_role(
+    tx: &mut Transaction<'_, Postgres>,
+    learner_id: Uuid,
+) -> Result<(), AppError> {
+    sqlx::query("UPDATE users SET access_status = 'active' WHERE id = $1")
+        .bind(learner_id)
+        .execute(&mut **tx)
+        .await?;
+    sqlx::query(
+        "INSERT INTO user_roles (user_id, role) VALUES ($1, 'admin') \
+         ON CONFLICT DO NOTHING",
+    )
+    .bind(learner_id)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
 #[derive(Debug, Serialize)]
 pub struct CreatedInvite {
     pub id: Uuid,

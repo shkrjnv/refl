@@ -118,6 +118,32 @@ fn test_app(
             registration_mode: mode,
             telegram_bot_token: token.map(str::to_owned),
             admin_telegram_chat_id: Some(ADMIN_CHAT),
+            admin_email: None,
+            admin_telegram_id: None,
+            min_core_version: "0.0.0".into(),
+        },
+        telegram: gateway,
+    })
+}
+
+fn test_app_with_admin(
+    pool: PgPool,
+    mode: RegistrationMode,
+    token: Option<&str>,
+    gateway: Arc<MockTelegramGateway>,
+    admin_email: Option<&str>,
+    admin_telegram_id: Option<i64>,
+) -> Router {
+    router(AppState {
+        pool,
+        config: Config {
+            allow_header_learner_id: false,
+            dev_auth: true,
+            registration_mode: mode,
+            telegram_bot_token: token.map(str::to_owned),
+            admin_telegram_chat_id: Some(ADMIN_CHAT),
+            admin_email: admin_email.map(str::to_owned),
+            admin_telegram_id,
             min_core_version: "0.0.0".into(),
         },
         telegram: gateway,
@@ -513,6 +539,64 @@ async fn single_use_invite(c: &Cluster) {
     db.close().await;
 }
 
+async fn admin_bootstrap_under_closed_registration(c: &Cluster) {
+    let db = migrated(c, "access_admin_bootstrap").await;
+    let gateway = Arc::new(MockTelegramGateway::default());
+    let app = test_app_with_admin(
+        db.clone(),
+        RegistrationMode::Closed,
+        Some(BOT_TOKEN),
+        gateway,
+        Some("BOSS@EXAMPLE.COM"),
+        Some(19_001),
+    );
+
+    let (admin_id, _) = login_email(&app, "boss@example.com").await;
+    let (status, has_admin): (String, bool) = sqlx::query_as(
+        "SELECT u.access_status, EXISTS( \
+         SELECT 1 FROM user_roles ur WHERE ur.user_id = u.id AND ur.role = 'admin') \
+         FROM users u WHERE u.id = $1",
+    )
+    .bind(admin_id)
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(status, "active");
+    assert!(has_admin);
+
+    let (same_id, _) = login_email(&app, "boss@example.com").await;
+    assert_eq!(same_id, admin_id);
+    let admin_roles: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM user_roles WHERE user_id = $1 AND role = 'admin'")
+            .bind(admin_id)
+            .fetch_one(&db)
+            .await
+            .unwrap();
+    assert_eq!(admin_roles, 1);
+
+    let (status, body) = post(
+        app.clone(),
+        "/v1/auth/telegram",
+        telegram_body(19_001, now_seconds(), None),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let telegram_id = Uuid::parse_str(body["learner_id"].as_str().unwrap()).unwrap();
+    let (status, has_admin): (String, bool) = sqlx::query_as(
+        "SELECT u.access_status, EXISTS( \
+         SELECT 1 FROM user_roles ur WHERE ur.user_id = u.id AND ur.role = 'admin') \
+         FROM users u WHERE u.id = $1",
+    )
+    .bind(telegram_id)
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(status, "active");
+    assert!(has_admin);
+    db.close().await;
+}
+
 async fn open_mode_and_non_admin(c: &Cluster) {
     let db = migrated(c, "access_open").await;
     let gateway = Arc::new(MockTelegramGateway::default());
@@ -547,6 +631,7 @@ fn access_api() {
         closed_pending_approval_and_rejection(&cluster).await;
         pending_rejection(&cluster).await;
         single_use_invite(&cluster).await;
+        admin_bootstrap_under_closed_registration(&cluster).await;
         open_mode_and_non_admin(&cluster).await;
     });
 }

@@ -1,17 +1,40 @@
 use std::env;
+use std::error::Error;
 use std::net::SocketAddr;
+use std::path::Path;
 use std::sync::Arc;
 
+use refl_core::bundle::Bundle;
+use refl_core::lexicon::Lexicon;
+use refl_server::MIGRATOR;
 use refl_server::access::{
     HttpTelegramGateway, NoopTelegramGateway, RegistrationMode, TelegramGateway,
 };
+use refl_server::content;
 use refl_server::routes::{AppState, Config, DEFAULT_MIN_CORE_VERSION, router};
 use refl_server::telegram_bot;
 use sqlx::postgres::PgPoolOptions;
 use tokio::net::TcpListener;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<(), Box<dyn Error>> {
+    let args: Vec<String> = env::args().skip(1).collect();
+    match args.as_slice() {
+        [] => serve().await,
+        [command] if command.as_str() == "serve" => serve().await,
+        [command, path] if command.as_str() == "import-bundle" => run_import_bundle(path).await,
+        _ => Err(usage_error()),
+    }
+}
+
+fn usage_error() -> Box<dyn Error> {
+    Box::new(std::io::Error::new(
+        std::io::ErrorKind::InvalidInput,
+        "usage: refl-server [serve | import-bundle <bundle_path>]",
+    ))
+}
+
+async fn serve() -> Result<(), Box<dyn Error>> {
     let database_url = env::var("DATABASE_URL")?;
     let bind_addr: SocketAddr = match env::var("BIND_ADDR") {
         Ok(value) => value,
@@ -30,6 +53,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let admin_telegram_chat_id = match env::var("ADMIN_TELEGRAM_CHAT_ID") {
         Ok(value) => Some(value.parse::<i64>()?),
         Err(_) => None,
+    };
+    let admin_email = env::var("ADMIN_EMAIL")
+        .ok()
+        .map(|value| value.trim().to_ascii_lowercase())
+        .filter(|value| !value.is_empty());
+    let admin_telegram_id = match env::var("ADMIN_TELEGRAM_ID") {
+        Ok(value) if !value.trim().is_empty() => Some(value.trim().parse::<i64>()?),
+        _ => None,
     };
     let min_core_version = match env::var("MIN_CORE_VERSION") {
         Ok(value) => value,
@@ -59,6 +90,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             registration_mode,
             telegram_bot_token,
             admin_telegram_chat_id,
+            admin_email,
+            admin_telegram_id,
             min_core_version,
         },
         telegram,
@@ -66,4 +99,50 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let listener = TcpListener::bind(bind_addr).await?;
     axum::serve(listener, app).await?;
     Ok(())
+}
+
+async fn run_import_bundle(bundle_path: &str) -> Result<(), Box<dyn Error>> {
+    let database_url = env::var("DATABASE_URL")?;
+    let pool = PgPoolOptions::new()
+        .max_connections(2)
+        .connect(&database_url)
+        .await?;
+    MIGRATOR.run(&pool).await?;
+
+    let source = std::fs::read_to_string(bundle_path)?;
+    let bundle: Bundle = serde_json::from_str(&source)?;
+    let content_version = bundle.content_version.0.clone();
+    let lexicon = read_sibling_lexicon(bundle_path, &bundle.content.lexicon.version)?;
+
+    let mut tx = pool.begin().await?;
+    if let Some(lexicon) = lexicon {
+        content::import_lexicon(&mut tx, &lexicon).await?;
+    }
+    content::import_bundle(&mut tx, &bundle).await?;
+    content::activate(&mut tx, &content_version).await?;
+    tx.commit().await?;
+
+    println!("{content_version}");
+    pool.close().await;
+    Ok(())
+}
+
+fn read_sibling_lexicon(
+    bundle_path: &str,
+    version: &str,
+) -> Result<Option<Lexicon>, Box<dyn Error>> {
+    if version.is_empty() {
+        return Ok(None);
+    }
+    let path = Path::new(bundle_path);
+    let parent = match path.parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => parent,
+        _ => Path::new("."),
+    };
+    let candidate = parent.join(format!("lexicon-{version}.txt"));
+    if !candidate.is_file() {
+        return Ok(None);
+    }
+    let text = std::fs::read_to_string(candidate)?;
+    Ok(Some(Lexicon::parse(text)?))
 }

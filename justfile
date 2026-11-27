@@ -20,6 +20,11 @@ lint:
 test:
     cargo test --locked --workspace --all-features
 
+# Web client tests and the production build
+web:
+    pnpm --dir web test
+    pnpm --dir web build
+
 # The core and its wasm-bindgen bridge must build for the browser; the web
 # client gets the generated JS glue, while compiled wasm/js stay untracked.
 wasm:

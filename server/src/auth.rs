@@ -238,6 +238,21 @@ fn display_name(email: &str) -> &str {
         .map_or("Learner", |(local, _domain)| local)
 }
 
+fn is_bootstrap_admin(state: &AppState, kind: &str, identifier: &str) -> bool {
+    match kind {
+        "email" => state
+            .config
+            .admin_email
+            .as_deref()
+            .is_some_and(|email| email.trim().eq_ignore_ascii_case(identifier.trim())),
+        "telegram" => state
+            .config
+            .admin_telegram_id
+            .is_some_and(|id| id.to_string() == identifier),
+        _ => false,
+    }
+}
+
 #[derive(Debug)]
 struct ExistingLogin {
     learner_id: Uuid,
@@ -339,18 +354,28 @@ enum PreparedUser {
     Pending(Uuid),
 }
 
+struct LoginAttempt<'a> {
+    kind: &'a str,
+    identifier: &'a str,
+    display_name: &'a str,
+    admin: bool,
+}
+
 async fn prepare_user(
     tx: &mut Transaction<'_, Postgres>,
     mode: RegistrationMode,
     existing: Option<ExistingLogin>,
     invite_code: Option<&str>,
-    kind: &str,
-    identifier: &str,
-    display_name: &str,
+    login: LoginAttempt<'_>,
 ) -> Result<PreparedUser, AppError> {
     if let Some(existing) = existing {
         if existing.erased {
             return Err(AppError::Erased);
+        }
+        if login.admin {
+            access::ensure_admin_role(tx, existing.learner_id).await?;
+            ensure_login_role(tx, existing.learner_id, login.kind, login.identifier).await?;
+            return Ok(PreparedUser::Active(existing.learner_id));
         }
         let decision = access::decide_access(
             tx,
@@ -361,11 +386,24 @@ async fn prepare_user(
         .await?;
         return match decision {
             AccessDecision::Active => {
-                ensure_login_role(tx, existing.learner_id, kind, identifier).await?;
+                ensure_login_role(tx, existing.learner_id, login.kind, login.identifier).await?;
                 Ok(PreparedUser::Active(existing.learner_id))
             }
             AccessDecision::Pending => Err(AppError::PendingApproval),
         };
+    }
+
+    if login.admin {
+        let learner_id = create_login_user(
+            tx,
+            login.kind,
+            login.identifier,
+            login.display_name,
+            AccessStatus::Active,
+        )
+        .await?;
+        access::ensure_admin_role(tx, learner_id).await?;
+        return Ok(PreparedUser::Active(learner_id));
     }
 
     let decision = access::decide_access(tx, mode, None, invite_code).await?;
@@ -373,7 +411,8 @@ async fn prepare_user(
         AccessDecision::Active => AccessStatus::Active,
         AccessDecision::Pending => AccessStatus::Pending,
     };
-    let learner_id = create_login_user(tx, kind, identifier, display_name, status).await?;
+    let learner_id =
+        create_login_user(tx, login.kind, login.identifier, login.display_name, status).await?;
     Ok(match decision {
         AccessDecision::Active => PreparedUser::Active(learner_id),
         AccessDecision::Pending => PreparedUser::Pending(learner_id),
@@ -438,9 +477,12 @@ pub async fn verify_code(
         state.config.registration_mode,
         existing,
         payload.invite_code.as_deref(),
-        "email",
-        &email,
-        display_name(&email),
+        LoginAttempt {
+            kind: "email",
+            identifier: &email,
+            display_name: display_name(&email),
+            admin: is_bootstrap_admin(&state, "email", &email),
+        },
     )
     .await?;
     match prepared {
@@ -595,9 +637,12 @@ pub async fn telegram(
         state.config.registration_mode,
         existing,
         payload.invite_code.as_deref(),
-        "telegram",
-        &identifier,
-        &display_name,
+        LoginAttempt {
+            kind: "telegram",
+            identifier: &identifier,
+            display_name: &display_name,
+            admin: is_bootstrap_admin(&state, "telegram", &identifier),
+        },
     )
     .await?;
     match prepared {

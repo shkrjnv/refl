@@ -83,3 +83,10 @@
 - Added Today, the core-backed three-item lesson flow, summary, statistics disclosures, profile/settings, and admin invite/approval UI.
 - Added the per-learner bundle cache, between-session update application, sync diagnostics, and Vite `/v1` + `/health` proxying.
 - Added Vitest flow and screen tests for invite/pending, offline outbox flush, onboarding, statistics disclosures, and language/theme switching.
+
+## P1d — bundle import CLI and admin bootstrap
+
+- `refl-server import-bundle <path>` runs migrations, imports a sibling lexicon when present, imports and activates the bundle, and prints its content version.
+- `ADMIN_EMAIL` and `ADMIN_TELEGRAM_ID` activate matching logins and idempotently add the `admin` role even under closed registration.
+- Added `just web` for the client tests and production build.
+- The access API test covers email and Telegram bootstrap admins, closed registration, and repeated login.

@@ -31,6 +31,10 @@ pub struct Config {
     pub registration_mode: RegistrationMode,
     pub telegram_bot_token: Option<String>,
     pub admin_telegram_chat_id: Option<i64>,
+    /// Bootstrap admin email; matching logins become active admins.
+    pub admin_email: Option<String>,
+    /// Bootstrap Telegram user id; matching logins become active admins.
+    pub admin_telegram_id: Option<i64>,
     pub min_core_version: String,
 }
 
@@ -42,6 +46,8 @@ impl Default for Config {
             registration_mode: RegistrationMode::Closed,
             telegram_bot_token: None,
             admin_telegram_chat_id: None,
+            admin_email: None,
+            admin_telegram_id: None,
             min_core_version: DEFAULT_MIN_CORE_VERSION.into(),
         }
     }
