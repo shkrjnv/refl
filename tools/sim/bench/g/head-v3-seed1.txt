@@ -1,0 +1,130 @@
+# P1c measurement: content/bench/v3/bundle.json, 200 learners, 30 days, seed 1; commit 6a7ffde, p1c 0.0.0
+
+model knowledge-v1.3+68ea62decb36521e, planner session-prototype-4+c896293765c21793, budget 25 minutes; false mastery per answer (m1)
+
+## Secondary KCs in each KC's items
+
+| KC | slots where primary | secondary KCs (slots) |
+| --- | --: | --- |
+| en.gram.article.a-an-sound | 21 | en.gram.article.first-mention (21), en.gram.noun.countability (5) |
+| en.gram.article.first-mention | 11 | en.gram.noun.countability (11) |
+| en.gram.article.second-mention | 14 | en.gram.noun.countability (14) |
+| en.gram.article.zero-general | 11 | en.gram.noun.countability (11) |
+| en.gram.noun.countability | 15 | – |
+
+## False mastery per KC
+
+False pairs split by the learner's own skill on the KC 7 days later: below the simulator-scale equivalent of the model threshold θ*=1.5, or not (the items fail on something else, a secondary KC or a wrong idea). The threshold is converted per mastering item with a_eff and item difficulty.
+
+- false mastery: 104 of 895 (11.6%); learner-cluster bootstrap 95% CI 9.2%–14.3% (B=2000)
+
+| KC | mastered pairs | false | share | own skill +7 d < θ*_sim | ≥ θ*_sim |
+| --- | --: | --: | --: | --: | --: |
+| en.gram.article.a-an-sound | 191 | 41 | 21.5% | 36 | 5 |
+| en.gram.article.first-mention | 185 | 32 | 17.3% | 21 | 11 |
+| en.gram.article.second-mention | 185 | 14 | 7.6% | 6 | 8 |
+| en.gram.article.zero-general | 163 | 8 | 4.9% | 2 | 6 |
+| en.gram.noun.countability | 171 | 9 | 5.3% | 9 | 0 |
+| all | 895 | 104 | 11.6% | 74 | 30 |
+
+## Evidence of μ at mastery: false and true pairs
+
+Means over pairs: μ = μ₀ + primary + secondary + propagation + other (the sum of μ increments by source). Misconceptions have no path to μ in model v1. Bound = μ − 0.84σ. Raw μ/bound are model logits; μ(sim)/bound(sim) map them to the simulator's logistic scale with a_eff and the mastering item's difficulty.
+
+| KC | pairs | n | μ₀ | primary | secondary | propagation | other | μ | bound | μ(sim) | bound(sim) | own answers | own correct inputs |
+| --- | --- | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: |
+| en.gram.article.a-an-sound | false | 41 | -1.20 | +3.49 | +0.00 | +0.00 | +0.00 | 2.29 | 1.56 | 1.71 | 1.22 | 35.0 | 13.9 |
+| en.gram.article.a-an-sound | true | 150 | -1.20 | +3.44 | +0.00 | +0.00 | +0.00 | 2.24 | 1.56 | 1.62 | 1.16 | 54.4 | 18.9 |
+| en.gram.article.first-mention | false | 32 | -1.20 | +3.12 | +0.04 | +0.45 | +0.00 | 2.42 | 1.67 | 1.53 | 1.03 | 39.3 | 24.7 |
+| en.gram.article.first-mention | true | 153 | -1.20 | +3.04 | +0.09 | +0.54 | +0.00 | 2.47 | 1.71 | 1.48 | 0.98 | 59.8 | 35.9 |
+| en.gram.article.second-mention | false | 14 | -1.20 | +3.48 | +0.00 | +0.00 | +0.00 | 2.28 | 1.54 | 1.48 | 0.98 | 50.4 | 22.5 |
+| en.gram.article.second-mention | true | 171 | -1.20 | +3.48 | +0.00 | +0.00 | +0.00 | 2.28 | 1.53 | 1.39 | 0.90 | 86.1 | 36.2 |
+| en.gram.article.zero-general | false | 8 | -2.40 | +4.68 | +0.00 | +0.00 | +0.00 | 2.28 | 1.52 | 1.03 | 0.53 | 55.2 | 31.5 |
+| en.gram.article.zero-general | true | 155 | -2.40 | +4.72 | +0.00 | +0.00 | +0.00 | 2.32 | 1.58 | 1.34 | 0.85 | 84.1 | 44.9 |
+| en.gram.noun.countability | false | 9 | -1.20 | +3.43 | +0.09 | +0.00 | +0.00 | 2.32 | 1.55 | 1.45 | 0.93 | 26.0 | 15.2 |
+| en.gram.noun.countability | true | 162 | -1.20 | +3.31 | +0.29 | +0.02 | +0.00 | 2.42 | 1.61 | 1.47 | 0.94 | 67.8 | 32.8 |
+| all | false | 104 | -1.29 | +3.46 | +0.02 | +0.14 | +0.00 | 2.33 | 1.59 | 1.55 | 1.05 | 39.2 | 19.9 |
+| all | true | 791 | -1.44 | +3.60 | +0.08 | +0.11 | +0.00 | 2.35 | 1.60 | 1.46 | 0.96 | 70.9 | 33.9 |
+
+## Skill, memory and spacing at mastery
+
+Skill = the learner's true skill on the KC (logits, the simulator's scale) at mastery and 7 days later without practice; bound(sim) is the model's lower confidence bound mapped to that scale; S = the model's FSRS stability, days; R +7 d = the model's recall 7 days later; days = UTC days with an own answer before mastery; span = days from the first own answer; bug = the learner has a wrong idea on the KC that the content does not diagnose.
+
+| KC | pairs | n | bound(sim) | skill | skill − bound(sim) | skill +7 d | weakest secondary +7 d | true rate +7 d | S | R +7 d | days | span | bug |
+| --- | --- | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: |
+| en.gram.article.a-an-sound | false | 41 | 1.22 | 3.65 | +2.43 | 0.19 | 1.50 | 0.60 | 10.0 | 0.89 | 2.8 | 1.8 | 10% |
+| en.gram.article.a-an-sound | true | 150 | 1.16 | 4.26 | +3.10 | 2.37 | 2.39 | 0.84 | 10.0 | 0.89 | 4.5 | 3.6 | 30% |
+| en.gram.article.first-mention | false | 32 | 1.03 | 3.25 | +2.22 | 0.87 | 0.85 | 0.59 | 10.7 | 0.88 | 4.8 | 4.1 | 28% |
+| en.gram.article.first-mention | true | 153 | 0.98 | 4.19 | +3.21 | 3.02 | 3.18 | 0.85 | 11.4 | 0.89 | 7.5 | 7.1 | 33% |
+| en.gram.article.second-mention | false | 14 | 0.98 | 4.03 | +3.04 | 1.84 | 0.85 | 0.65 | 9.6 | 0.90 | 4.6 | 3.7 | 7% |
+| en.gram.article.second-mention | true | 171 | 0.90 | 4.91 | +4.02 | 4.01 | 3.22 | 0.88 | 12.9 | 0.90 | 8.1 | 7.2 | 37% |
+| en.gram.article.zero-general | false | 8 | 0.53 | 4.13 | +3.61 | 2.39 | 0.41 | 0.64 | 9.2 | 0.88 | 5.9 | 4.9 | 0% |
+| en.gram.article.zero-general | true | 155 | 0.85 | 4.74 | +3.89 | 3.99 | 3.10 | 0.88 | 8.4 | 0.88 | 10.8 | 10.2 | 27% |
+| en.gram.noun.countability | false | 9 | 0.93 | 3.20 | +2.27 | -0.16 | – | 0.63 | 7.0 | 0.87 | 2.4 | 1.4 | 11% |
+| en.gram.noun.countability | true | 162 | 0.94 | 4.28 | +3.33 | 2.79 | – | 0.88 | 10.6 | 0.90 | 5.8 | 5.0 | 28% |
+| all | false | 104 | 1.05 | 3.58 | +2.53 | 0.76 | 1.09 | 0.61 | 9.8 | 0.89 | 3.9 | 3.0 | 14% |
+| all | true | 791 | 0.96 | 4.48 | +3.52 | 3.25 | 2.98 | 0.87 | 10.7 | 0.89 | 7.4 | 6.6 | 31% |
+
+## The last mastery condition to become true
+
+Conditions false just before the answer that mastered the KC.
+
+| KC | pairs | confidence | confidence+fluency | fluency |
+| --- | --- | --: | --: | --: |
+| en.gram.article.a-an-sound | false | 41 (100%) | 0 (0%) | 0 (0%) |
+| en.gram.article.a-an-sound | true | 150 (100%) | 0 (0%) | 0 (0%) |
+| en.gram.article.first-mention | false | 29 (91%) | 0 (0%) | 3 (9%) |
+| en.gram.article.first-mention | true | 135 (88%) | 0 (0%) | 18 (12%) |
+| en.gram.article.second-mention | false | 14 (100%) | 0 (0%) | 0 (0%) |
+| en.gram.article.second-mention | true | 170 (99%) | 0 (0%) | 1 (1%) |
+| en.gram.article.zero-general | false | 8 (100%) | 0 (0%) | 0 (0%) |
+| en.gram.article.zero-general | true | 142 (92%) | 1 (1%) | 12 (8%) |
+| en.gram.noun.countability | false | 9 (100%) | 0 (0%) | 0 (0%) |
+| en.gram.noun.countability | true | 154 (95%) | 0 (0%) | 8 (5%) |
+| all | false | 101 (97%) | 0 (0%) | 3 (3%) |
+| all | true | 751 (95%) | 1 (0%) | 39 (5%) |
+
+## Fluency at mastery
+
+Right after the answer that mastered the KC. Branch 1: τ ≥ −0.2; branch 2: τ − bⱼ ≥ −0.2 and spread ≤ 0.35; both need 6 counted answers. «fluency last»: fluency was among the conditions still false just before.
+
+| KC | pairs | n | counted | τ | bⱼ | spread | fluency last | branch 2 only | learners with a branch-2-only pair |
+| --- | --- | --: | --: | --: | --: | --: | --: | --: | --: |
+| en.gram.article.a-an-sound | false | 41 | 15.2 | +1.11 | +0.01 | 0.69 | 0 (0%) | 0 | 0 |
+| en.gram.article.a-an-sound | true | 150 | 15.1 | +0.92 | +0.06 | 0.57 | 0 (0%) | 0 | 0 |
+| en.gram.article.first-mention | false | 32 | 8.2 | +0.46 | +0.01 | 0.37 | 3 (9%) | 0 | 0 |
+| en.gram.article.first-mention | true | 153 | 8.5 | +0.45 | +0.03 | 0.36 | 18 (12%) | 0 | 0 |
+| en.gram.article.second-mention | false | 14 | 10.6 | +0.70 | +0.03 | 0.52 | 0 (0%) | 0 | 0 |
+| en.gram.article.second-mention | true | 171 | 10.4 | +0.70 | +0.13 | 0.46 | 1 (1%) | 0 | 0 |
+| en.gram.article.zero-general | false | 8 | 7.6 | +0.38 | +0.00 | 0.33 | 0 (0%) | 0 | 0 |
+| en.gram.article.zero-general | true | 155 | 9.4 | +0.48 | +0.17 | 0.39 | 13 (8%) | 0 | 0 |
+| en.gram.noun.countability | false | 9 | 10.3 | +0.92 | +0.00 | 0.58 | 0 (0%) | 0 | 0 |
+| en.gram.noun.countability | true | 162 | 9.0 | +0.67 | +0.01 | 0.49 | 8 (5%) | 0 | 0 |
+| all | false | 104 | 11.4 | +0.78 | +0.01 | 0.53 | 3 (3%) | 0 | 0 |
+| all | true | 791 | 10.4 | +0.65 | +0.08 | 0.45 | 40 (5%) | 0 | 0 |
+
+- fluency among the last conditions: 43 of 895 pairs (4.8%)
+- learners with at least one KC fluent only by branch 2: 0 (0 pairs)
+
+## Correct answers and fluency
+
+Correct, non-rapid answers by the first fluency rule that leaves them out (docs/03, «Учтённые ответы»), read from the state before each answer.
+
+| rule | answers | share |
+| --- | --: | --: |
+| counted | 13552 | 14.2% |
+| first under its instruction in the session | 11784 | 12.3% |
+| item answered within 3 days | 68521 | 71.6% |
+| page hidden | 1844 | 1.9% |
+
+## Live KCs never mastered by the end
+
+(learner, KC) pairs by the mastery conditions false after the last answer, with their counted answers.
+
+| false conditions | pairs | counted answers, mean |
+| --- | --: | --: |
+| confidence | 23 | 17.7 |
+| confidence+fluency | 7 | 4.7 |
+| confidence+fluency+production | 8 | 0.1 |
+| fluency | 72 | 4.1 |
+| fluency+production | 195 | 0.0 |
