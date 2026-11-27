@@ -1,0 +1,85 @@
+app-name = refl
+app-tagline = English practice that keeps working, online or offline.
+app-foundation = Your local workspace is ready.
+app-core-starting = Starting the local core...
+app-core-version = Local core { $version }
+app-online = Connected
+app-offline = Offline
+app-language = Language
+app-theme = Theme
+
+nav-today = Today
+nav-practice = Practice
+nav-stats = Progress
+nav-settings = Settings
+
+common-light = Light
+common-dark = Dark
+common-retry = Retry
+common-close = Close
+common-loading = Loading
+common-settings = Settings
+common-cancel = Cancel
+common-unknown-error = Something went wrong. Try again.
+
+language-en = English
+language-ru = Russian
+language-uz = Uzbek
+
+auth-title = Sign in
+auth-email-label = Email
+auth-email-placeholder = you@example.com
+auth-code-label = Code from the email
+auth-send-code = Send code
+auth-verify-code = Sign in
+auth-code-sent = The code is on its way. It expires in { $minutes } minutes.
+auth-invalid-code = That code is not valid. Check the email and try again.
+auth-rate-limited = Too many attempts. Wait a minute and try again.
+auth-session-expired = Your session expired. Sign in again.
+auth-refreshing = Renewing your session...
+auth-sign-out = Sign out
+auth-telegram = Continue with Telegram
+auth-telegram-unavailable = Telegram sign-in is not available right now.
+auth-telegram-failed = Telegram could not confirm the sign-in. Try again.
+auth-invite-label = Invite code
+auth-invite-placeholder = Paste your invite code
+auth-invite-invalid = This invite is invalid, expired, or already used.
+auth-pending-title = Waiting for approval
+auth-pending-body = Your access request is with the curator. You can close this page and sign in again after approval.
+auth-rejected-title = Access not granted
+auth-rejected-body = This account was not approved. If this is a mistake, contact the curator.
+auth-erased-title = Account erased
+auth-erased-body = This account has been erased. Local data for it has been removed.
+auth-signed-in = Signed in as { $name }.
+
+sync-online = Connected
+sync-offline = Offline. New answers stay on this device.
+sync-syncing = Syncing...
+sync-synced = Everything is synced.
+sync-pending = { $count } answers waiting to sync.
+sync-partial-failure = Some answers could not sync. They are kept for diagnostics.
+sync-rejected = { $count } answers were rejected. They are kept on this device.
+sync-retry = Retry sync
+sync-clock-warning = The device clock is off by more than a day. Check the date and time.
+sync-update-ready = An update is ready. It will be applied between sessions.
+sync-update-deferred = The update will be applied after this session.
+sync-erased = This account was erased on the server. Local data has been removed.
+
+storage-persist-granted = Offline storage is persistent.
+storage-persist-denied = The browser may clear offline data. Unsynced answers will be sent as soon as possible.
+storage-logout-wipes = Signing out can remove this learner's local data.
+storage-compacted = Older synced answers were removed from this device.
+storage-unsupported = This browser cannot protect offline storage.
+
+session-title = Today's session
+session-start = Start session
+session-continue = Continue
+session-finish = Finish session
+session-next = Next
+session-checking = Checking...
+session-answer-correct = Correct.
+session-answer-wrong = Not quite. { $hint }
+session-budget = { $minutes } minutes
+session-no-items = Nothing is due right now. Come back later.
+session-plan-failed = The session could not be planned. Try again.
+session-update-locked = Finish the session before applying an update.

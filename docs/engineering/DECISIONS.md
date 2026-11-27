@@ -67,3 +67,11 @@
 - Added admin REST endpoints and `AdminUser`; pending users receive plain Approve/Reject inline buttons.
 - Added the optional Telegram Bot long-polling worker for approval callbacks and `/invite`.
 - Tests cover HMAC/freshness, pending approval and rejection, single-use invites, open registration, and non-admin denial.
+
+## W2 — PWA foundation, worker, storage, and sync client
+
+- `just wasm` now emits wasm-bindgen's web glue, strips debug sections with `wasm-opt`, and keeps only the typed wrapper tracked.
+- Added the Vite/React/TypeScript shell, offline service worker, and per-learner IndexedDB stores with atomic content activation.
+- Added the core worker RPC, UUIDv7/clock-corrected event stamps, the auth/sync client, and outbox-driven bidirectional sync.
+- Added Living Studio light/dark tokens with tactile surfaces and Fluent `en`/`ru`/`uz` UI copy.
+- Vitest covers UUIDv7/clock drift, storage isolation/compaction/erasure, batching/pagination, rejected retention, and mid-session update deferral.

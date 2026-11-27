@@ -1,0 +1,85 @@
+app-name = refl
+app-tagline = Internet bo'lmasa ham ishlaydigan ingliz tili amaliyoti.
+app-foundation = Mahalliy ish maydoni tayyor.
+app-core-starting = Mahalliy yadro ishga tushmoqda...
+app-core-version = Mahalliy yadro { $version }
+app-online = Aloqa bor
+app-offline = Aloqa yo'q
+app-language = Til
+app-theme = Mavzu
+
+nav-today = Bugun
+nav-practice = Mashq
+nav-stats = Natijalar
+nav-settings = Sozlamalar
+
+common-light = Yorug'
+common-dark = Qorong'i
+common-retry = Qayta urinish
+common-close = Yopish
+common-loading = Yuklanmoqda
+common-settings = Sozlamalar
+common-cancel = Bekor qilish
+common-unknown-error = Nimadir xato ketdi. Qayta urinib ko'ring.
+
+language-en = Ingliz tili
+language-ru = Rus tili
+language-uz = O'zbek tili
+
+auth-title = Kirish
+auth-email-label = Elektron pochta
+auth-email-placeholder = you@example.com
+auth-code-label = Xatdagi kod
+auth-send-code = Kod yuborish
+auth-verify-code = Kirish
+auth-code-sent = Kod yuborildi. U { $minutes } daqiqa amal qiladi.
+auth-invalid-code = Kod to'g'ri kelmadi. Xatni tekshirib, qayta urinib ko'ring.
+auth-rate-limited = Urinishlar juda ko'p. Bir daqiqa kuting va qayta urinib ko'ring.
+auth-session-expired = Seans tugadi. Qaytadan kiring.
+auth-refreshing = Seans yangilanmoqda...
+auth-sign-out = Chiqish
+auth-telegram = Telegram orqali davom etish
+auth-telegram-unavailable = Telegram orqali kirish hozir mavjud emas.
+auth-telegram-failed = Telegram kirishni tasdiqlamadi. Qayta urinib ko'ring.
+auth-invite-label = Taklif kodi
+auth-invite-placeholder = Taklif kodini kiriting
+auth-invite-invalid = Taklif yaroqsiz, muddati o'tgan yoki allaqachon ishlatilgan.
+auth-pending-title = Tasdiq kutilmoqda
+auth-pending-body = Arizangiz kuratorda. Sahifani yopsangiz bo'ladi; tasdiqdan keyin qayta kiring.
+auth-rejected-title = Ruxsat berilmadi
+auth-rejected-body = Bu akkaunt tasdiqlanmadi. Xato bo'lsa, kuratorga yozing.
+auth-erased-title = Akkaunt o'chirildi
+auth-erased-body = Akkaunt o'chirildi. Unga tegishli mahalliy ma'lumotlar tozalandi.
+auth-signed-in = Siz { $name } sifatida kirgansiz.
+
+sync-online = Aloqa bor
+sync-offline = Aloqa yo'q. Yangi javoblar qurilmada qoladi.
+sync-syncing = Sinxronlanmoqda...
+sync-synced = Hammasi sinxronlangan.
+sync-pending = Yuborilishini kutayotgan javoblar: { $count }.
+sync-partial-failure = Ba'zi javoblar sinxronlanmadi. Ular diagnostika uchun saqlandi.
+sync-rejected = Server { $count } javobni rad etdi. Ular qurilmada qoldi.
+sync-retry = Sinxronlashni qayta urinish
+sync-clock-warning = Qurilma soati bir kundan ko'proq farq qiladi. Sana va vaqtni tekshiring.
+sync-update-ready = Yangilanish tayyor. U mashqlar orasida qo'llanadi.
+sync-update-deferred = Yangilanish bu mashqdan keyin qo'llanadi.
+sync-erased = Akkaunt serverda o'chirildi. Mahalliy ma'lumotlar tozalandi.
+
+storage-persist-granted = Oflayn xotira himoyalangan.
+storage-persist-denied = Brauzer oflayn ma'lumotlarni tozalashi mumkin. Yuborilmagan javoblar birinchi imkoniyatda yuboriladi.
+storage-logout-wipes = Chiqish bu o'quvchining mahalliy ma'lumotlarini o'chirishi mumkin.
+storage-compacted = Eski sinxronlangan javoblar qurilmadan olib tashlandi.
+storage-unsupported = Bu brauzer oflayn xotirani himoya qila olmaydi.
+
+session-title = Bugungi mashq
+session-start = Mashqni boshlash
+session-continue = Davom etish
+session-finish = Mashqni tugatish
+session-next = Keyingi
+session-checking = Tekshirilmoqda...
+session-answer-correct = To'g'ri.
+session-answer-wrong = To'liq emas. { $hint }
+session-budget = { $minutes } daqiqa
+session-no-items = Hozir takrorlash uchun narsa yo'q. Keyinroq keling.
+session-plan-failed = Mashqni tuzib bo'lmadi. Qayta urinib ko'ring.
+session-update-locked = Yangilanishni qo'llash uchun mashqni tugating.

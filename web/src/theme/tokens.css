@@ -1,0 +1,135 @@
+@font-face {
+  font-family: "Geologica";
+  src: local("Geologica"), local("Geologica Regular");
+  font-display: swap;
+}
+
+:root {
+  --ink: #14213d;
+  --bg: #f3f5fa;
+  --blue: #2f6bff;
+  --sun: #ff9f43;
+  --green: #22b07d;
+  --coral: #ff6b6b;
+  --purp: #7c5cff;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-muted: #eef1fb;
+  --border: #e3e8f2;
+  --border-strong: #c7cfe6;
+  --text: #14213d;
+  --text-muted: #6b7489;
+  --blue-deep: #1d4fd1;
+  --sun-deep: #e07d1f;
+  --green-deep: #178a60;
+  --coral-deep: #d94f4f;
+  --purp-deep: #5b3fe0;
+  --focus-ring: #2f6bff;
+  --shadow-button: 0 4px 0 #c7cfe6;
+  --shadow-primary: 0 4px 0 #1d4fd1;
+  --shadow-card: 0 6px 0 #e3e8f2;
+  --shadow-hero: 0 8px 0 #c7cfe6;
+  --shadow-soft: 0 18px 45px rgba(20, 33, 61, 0.12);
+  --overlay: rgba(20, 33, 61, 0.45);
+  --info-surface: #eef3ff;
+  --info-border: #d6e1ff;
+  --warning-surface: #fff4e6;
+  --warning-border: #ffe0bd;
+  --success-surface: #eaf8f1;
+  --success-border: #ccefe1;
+  --danger-surface: #fff0f0;
+  --danger-border: #ffd2d2;
+  --font-family: "Geologica", "Avenir Next", "Segoe UI", sans-serif;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 24px;
+  --tap: 44px;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --bg: #0e1626;
+  --surface: #151f36;
+  --surface-raised: #1b2742;
+  --surface-muted: #202d4b;
+  --border: #2a3854;
+  --border-strong: #3a4b70;
+  --text: #eef3ff;
+  --text-muted: #9aa8c7;
+  --blue: #5b8cff;
+  --sun: #ffb35c;
+  --green: #3bd39a;
+  --coral: #ff8585;
+  --purp: #9a80ff;
+  --blue-deep: #2f6bff;
+  --sun-deep: #e08a2f;
+  --green-deep: #1f9f6f;
+  --coral-deep: #da5c5c;
+  --purp-deep: #6f52ef;
+  --focus-ring: #8fb0ff;
+  --shadow-button: 0 4px 0 #0a0f1c;
+  --shadow-primary: 0 4px 0 #1d3f99;
+  --shadow-card: 0 6px 0 #0a0f1c;
+  --shadow-hero: 0 8px 0 #0a0f1c;
+  --shadow-soft: 0 18px 45px rgba(0, 0, 0, 0.35);
+  --overlay: rgba(0, 0, 0, 0.6);
+  --info-surface: #172646;
+  --info-border: #2d4470;
+  --warning-surface: #342511;
+  --warning-border: #62451c;
+  --success-surface: #122f25;
+  --success-border: #235743;
+  --danger-surface: #351a20;
+  --danger-border: #66303b;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1626;
+    --surface: #151f36;
+    --surface-raised: #1b2742;
+    --surface-muted: #202d4b;
+    --border: #2a3854;
+    --border-strong: #3a4b70;
+    --text: #eef3ff;
+    --text-muted: #9aa8c7;
+    --blue: #5b8cff;
+    --sun: #ffb35c;
+    --green: #3bd39a;
+    --coral: #ff8585;
+    --purp: #9a80ff;
+    --blue-deep: #2f6bff;
+    --sun-deep: #e08a2f;
+    --green-deep: #1f9f6f;
+    --coral-deep: #da5c5c;
+    --purp-deep: #6f52ef;
+    --focus-ring: #8fb0ff;
+    --shadow-button: 0 4px 0 #0a0f1c;
+    --shadow-primary: 0 4px 0 #1d3f99;
+    --shadow-card: 0 6px 0 #0a0f1c;
+    --shadow-hero: 0 8px 0 #0a0f1c;
+    --shadow-soft: 0 18px 45px rgba(0, 0, 0, 0.35);
+    --overlay: rgba(0, 0, 0, 0.6);
+    --info-surface: #172646;
+    --info-border: #2d4470;
+    --warning-surface: #342511;
+    --warning-border: #62451c;
+    --success-surface: #122f25;
+    --success-border: #235743;
+    --danger-surface: #351a20;
+    --danger-border: #66303b;
+    color-scheme: dark;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

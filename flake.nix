@@ -1,5 +1,5 @@
 {
-  description = "refl: English learning platform (Rust core + WASM, axum, Postgres, SolidJS, Nickel)";
+  description = "refl: English learning platform (Rust core + WASM, axum, Postgres, React, Nickel)";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -52,7 +52,8 @@
               # sqlx::migrate! embeds the migrations at compile time.
               ./server/migrations
               # Committed TS bindings: the ts_bindings test checks they are current.
-              ./web/src/generated
+              # Generated wasm glue is ignored and must not enter the Nix source.
+              ./web/src/generated/core
             ];
           };
           commonArgs = {
@@ -175,6 +176,9 @@
               pkgs.wasmtime
               # Generates the JS glue for the browser bridge.
               pkgs.wasm-bindgen-cli
+              # Strips debug sections so the browser wasm stays inside the
+              # gzip budget.
+              pkgs.binaryen
             ];
             # Stages 3-5 bring back: piper-tts (audio), languagetool and
             # hunspell (writing checks), ffmpeg/opus-tools (audio pipeline).

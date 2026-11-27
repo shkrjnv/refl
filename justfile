@@ -20,10 +20,19 @@ lint:
 test:
     cargo test --locked --workspace --all-features
 
-# The core and its wasm-bindgen bridge must build for the browser
+# The core and its wasm-bindgen bridge must build for the browser; the web
+# client gets the generated JS glue, while compiled wasm/js stay untracked.
 wasm:
     cargo build --locked --release -p refl-core --target wasm32-unknown-unknown
     cargo build --locked --release -p refl-core-wasm --target wasm32-unknown-unknown
+    rm -rf web/src/generated/wasm
+    mkdir -p web/src/generated/wasm
+    wasm-bindgen --target web --out-dir web/src/generated/wasm target/wasm32-unknown-unknown/release/refl_core_wasm.wasm
+    wasm-opt --strip-debug --strip-producers --strip-target-features \
+        web/src/generated/wasm/refl_core_wasm_bg.wasm \
+        -o web/src/generated/wasm/refl_core_wasm_bg.opt.wasm
+    mv web/src/generated/wasm/refl_core_wasm_bg.opt.wasm \
+        web/src/generated/wasm/refl_core_wasm_bg.wasm
 
 # Fold one generated log and plan three sessions on it natively and in wasm32 (wasmtime): the hashes must match
 wasm-hash events="20000" seed="7":

@@ -1,0 +1,12 @@
+{
+  "name": "refl - Living Studio",
+  "short_name": "refl",
+  "description": "English practice that keeps working offline.",
+  "lang": "en",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "categories": ["education"],
+  "prefer_related_applications": false
+}

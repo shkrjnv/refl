@@ -1,0 +1,31 @@
+{
+  "name": "refl-web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "packageManager": "pnpm@12.9.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "vite",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit && vite build",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fluent/bundle": "0.19.1",
+    "@fluent/langneg": "0.7.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "19.3.3",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "5.0.4",
+    "fake-indexeddb": "6.2.8",
+    "typescript": "5.9.3",
+    "vite": "7.1.9",
+    "vitest": "3.2.4"
+  }
+}
