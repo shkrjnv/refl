@@ -1,35 +1,30 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { I18nProvider } from "../i18n";
-import type { SkinName, ThemeName } from "../theme/tokens";
-import { AppearanceMenu } from "./AppearanceMenu";
+import type { PaletteName, SkinName, ThemeName } from "../theme/tokens";
+import { AppearanceMenu, PaletteToggle } from "./AppearanceMenu";
 
 afterEach(cleanup);
 
-describe("custom appearance selector", () => {
-  it("opens the popover and switches skin and any of five palettes", () => {
-    let skin: SkinName = "living-studio";
+describe("appearance controls", () => {
+  it("exposes all five palettes directly", () => {
     let theme: ThemeName = "deep-umber";
+    const selected: PaletteName[] = [];
     render(
       <I18nProvider initialLocale="en">
-        <AppearanceMenu
+        <PaletteToggle
           theme={theme}
-          skin={skin}
           onThemeChange={(next) => {
             theme = next;
-          }}
-          onSkinChange={(next) => {
-            skin = next;
+            selected.push(next);
           }}
         />
       </I18nProvider>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Appearance" }));
-    expect(screen.getByRole("dialog", { name: "Appearance" })).toBeTruthy();
     for (const name of [
       "Deep Umber",
       "Burgundy Studio",
@@ -37,17 +32,50 @@ describe("custom appearance selector", () => {
       "Cream Paper",
       "Sand & Forest",
     ]) {
-      expect(screen.getByRole("button", { name: new RegExp(name) })).toBeTruthy();
+      expect(screen.getByRole("button", { name })).toBeTruthy();
     }
-    fireEvent.click(screen.getByRole("button", { name: /Laboratory/ }));
-    expect(skin).toBe("laboratory");
-    fireEvent.click(screen.getByRole("button", { name: /Pixel World/ }));
-    expect(skin).toBe("pixel-world");
-    fireEvent.click(screen.getByRole("button", { name: /Sand & Forest/ }));
-    expect(theme).toBe("sand-forest");
-    fireEvent.click(screen.getByRole("button", { name: /Midnight Cobalt/ }));
-    expect(theme).toBe("midnight-cobalt");
-    fireEvent.click(screen.getByRole("button", { name: /Burgundy Studio/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Cream Paper" }));
+    fireEvent.click(screen.getByRole("button", { name: "Burgundy Studio" }));
+    expect(selected).toEqual(["cream-paper", "burgundy"]);
     expect(theme).toBe("burgundy");
+  });
+
+  it("keeps only the four streamlined layout skins", () => {
+    let skin: SkinName = "living-studio";
+    render(
+      <I18nProvider initialLocale="en">
+        <AppearanceMenu
+          skin={skin}
+          onSkinChange={(next) => {
+            skin = next;
+          }}
+        />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Skin" }));
+    const skinDialog = screen.getByRole("dialog", { name: "Skin" });
+    for (const name of [
+      /Living Studio/,
+      /Soft Bento/,
+      /Laboratory/,
+      /Neo-brutalism/,
+    ]) {
+      expect(within(skinDialog).getByRole("button", { name })).toBeTruthy();
+    }
+    expect(
+      within(skinDialog).queryByRole("button", { name: /Pixel World/ }),
+    ).toBeNull();
+    expect(
+      within(skinDialog).queryByRole("button", { name: /Soft neo-brutalism/ }),
+    ).toBeNull();
+    expect(
+      within(skinDialog).queryByRole("button", { name: /Deep Umber/ }),
+    ).toBeNull();
+
+    fireEvent.click(within(skinDialog).getByRole("button", { name: /Soft Bento/ }));
+    expect(skin).toBe("soft-bento");
+    fireEvent.click(within(skinDialog).getByRole("button", { name: /Neo-brutalism/ }));
+    expect(skin).toBe("neo-brutalism");
   });
 });

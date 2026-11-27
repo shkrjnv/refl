@@ -23,11 +23,9 @@ export type ThemeName = PaletteName;
 
 export const skinNames = [
   "living-studio",
-  "neo-brutalism",
-  "soft-neo-brutalism",
   "soft-bento",
   "laboratory",
-  "pixel-world",
+  "neo-brutalism",
 ] as const;
 
 export type SkinName = (typeof skinNames)[number];
@@ -37,20 +35,16 @@ export const DEFAULT_THEME: PaletteName = "deep-umber";
 
 export const skinLabelKeys: Record<SkinName, string> = {
   "living-studio": "skin-living-studio",
-  "neo-brutalism": "skin-neo-brutalism",
-  "soft-neo-brutalism": "skin-soft-neo-brutalism",
   "soft-bento": "skin-soft-bento",
   laboratory: "skin-laboratory",
-  "pixel-world": "skin-pixel-world",
+  "neo-brutalism": "skin-neo-brutalism",
 };
 
 export const skinDescriptionKeys: Record<SkinName, string> = {
   "living-studio": "skin-living-studio-note",
-  "neo-brutalism": "skin-neo-brutalism-note",
-  "soft-neo-brutalism": "skin-soft-neo-brutalism-note",
   "soft-bento": "skin-soft-bento-note",
   laboratory: "skin-laboratory-note",
-  "pixel-world": "skin-pixel-world-note",
+  "neo-brutalism": "skin-neo-brutalism-note",
 };
 
 export const paletteLabelKeys: Record<PaletteName, string> = {

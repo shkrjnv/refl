@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
 
+import { HeroIllustration } from "../components/HeroIllustration";
 import { IellaTour } from "../components/IellaTour";
 import { StudioIcon } from "../components/StudioIcons";
 import { IellaSprite } from "../components/IellaSprite";
-import { Button, Card, ProgressBar } from "../components/ui";
+import { Button, Card, ProgressBar, StatusMeta } from "../components/ui";
+import type { StatusTone } from "../components/ui";
 import { useTranslation } from "../i18n";
 import type { ActivitySummary } from "../prototype/activity";
 import type { PrototypeContent } from "../prototype/content";
@@ -52,6 +54,19 @@ function masteryStatus(kc: KcProgress): MasteryStatus {
     return { key: "today-status-learning", tone: "learning" };
   }
   return { key: "today-status-not-started", tone: "not-started" };
+}
+
+function masteryTone(tone: MasteryStatus["tone"]): StatusTone {
+  switch (tone) {
+    case "mastered":
+      return "success";
+    case "fading":
+      return "danger";
+    case "learning":
+      return "accent";
+    default:
+      return "neutral";
+  }
 }
 
 function activityLevel(count: number): number {
@@ -121,6 +136,12 @@ export function TodayScreen({
   const levelPercent = currentLevel?.percent ?? 0;
   const levelMastered = currentLevel?.mastered ?? 0;
   const levelTotal = currentLevel?.total ?? 0;
+  const overallPercent =
+    progress.length === 0
+      ? 0
+      : Math.round(
+          progress.reduce((sum, kc) => sum + kc.percent, 0) / progress.length,
+        );
   const errors = useMemo(
     () =>
       misconceptionProgress(content, state, locale)
@@ -156,34 +177,29 @@ export function TodayScreen({
   const statusCues: Array<{
     label: string;
     tone: "warning" | "danger";
-    icon: "sync" | "offline";
   }> = [];
   if (!status.online) {
     statusCues.push({
       label: t("sync-offline"),
       tone: "warning",
-      icon: "offline",
     });
   }
   if (status.pendingOutbox > 0) {
     statusCues.push({
       label: t("sync-pending", { count: status.pendingOutbox }),
       tone: "warning",
-      icon: "sync",
     });
   }
   if (status.rejectedOutbox > 0) {
     statusCues.push({
       label: t("sync-rejected", { count: status.rejectedOutbox }),
       tone: "danger",
-      icon: "offline",
     });
   }
   if (status.clockDrift) {
     statusCues.push({
       label: t("sync-clock-warning"),
       tone: "warning",
-      icon: "sync",
     });
   }
 
@@ -215,20 +231,20 @@ export function TodayScreen({
           </div>
         </div>
         <div className="today-masthead-side">
-          <span className="streak-badge">
+          <span className="streak-meta">
             <StudioIcon name="streak" size={17} />
             <span>{t("today-streak", { days: streak })}</span>
           </span>
           {statusCues.length > 0 ? (
             <div className="today-status" role="status" aria-live="polite">
               {statusCues.map((cue) => (
-                <span
+                <StatusMeta
                   key={cue.label}
-                  className={`sync-cue sync-cue-${cue.tone}`}
+                  tone={cue.tone === "danger" ? "danger" : "warning"}
+                  dot
                 >
-                  <StudioIcon name={cue.icon} size={14} />
                   {cue.label}
-                </span>
+                </StatusMeta>
               ))}
             </div>
           ) : null}
@@ -243,51 +259,68 @@ export function TodayScreen({
       ) : null}
 
       <div className="today-bento">
-        <Card
-          tone="tinted"
-          className="bento-card bento-route"
+        <section
+          className="today-hero-banner"
           data-tour="route"
           aria-labelledby="today-route-title"
         >
-          <div className="bento-route-top">
-            <span className="route-iella-frame">
-              <IellaSprite size={56} mood="perched" />
-            </span>
-            <span className="bento-kicker">{t("today-route-eyebrow")}</span>
-          </div>
-          <div className="bento-route-copy">
-            <h2 id="today-route-title">{t("today-route-title")}</h2>
-            <p>{t("today-route-body")}</p>
-          </div>
-          <div
-            className="duration-pills"
-            role="group"
-            aria-label={t("today-duration-label")}
-          >
-            {DURATIONS.map((minutes) => (
-              <button
-                key={minutes}
-                type="button"
-                className={`duration-pill${duration === minutes ? " active" : ""}`}
-                aria-pressed={duration === minutes}
-                onClick={() => setDuration(minutes)}
+          <HeroIllustration />
+          <div className="today-hero-scrim" aria-hidden="true" />
+          <div className="today-hero-content">
+            <div className="today-hero-topline">
+              <span className="today-hero-companion">
+                <IellaSprite
+                  size={44}
+                  mood="perched"
+                  className="today-hero-iella"
+                />
+                <span>{t("iella-name")}</span>
+                <span className="meta-separator" aria-hidden="true">
+                  ·
+                </span>
+                <span>{t("iella-companion")}</span>
+              </span>
+            </div>
+            <div className="today-hero-copy">
+              <span className="bento-kicker">{t("today-route-eyebrow")}</span>
+              <h2 id="today-route-title">{t("today-route-title")}</h2>
+              <p>{t("today-route-body")}</p>
+            </div>
+            <div className="today-hero-actions">
+              <div
+                className="duration-pills"
+                role="group"
+                aria-label={t("today-duration-label")}
               >
-                {t("today-duration", { minutes })}
-              </button>
-            ))}
+                {DURATIONS.map((minutes) => (
+                  <button
+                    key={minutes}
+                    type="button"
+                    className={`duration-pill${duration === minutes ? " active" : ""}`}
+                    aria-pressed={duration === minutes}
+                    onClick={() => setDuration(minutes)}
+                  >
+                    {t("today-duration", { minutes })}
+                  </button>
+                ))}
+              </div>
+              <Button
+                type="button"
+                variant="primary"
+                size="lg"
+                className="route-start"
+                data-tour="start"
+                onClick={() => onStart(duration)}
+              >
+                {t("session-start")}
+                <StudioIcon name="arrow-right" size={17} />
+              </Button>
+              <StatusMeta tone="neutral" dot className="today-hero-level">
+                {levelName} → {nextLevel}
+              </StatusMeta>
+            </div>
           </div>
-          <Button
-            type="button"
-            variant="primary"
-            size="lg"
-            className="route-start"
-            data-tour="start"
-            onClick={() => onStart(duration)}
-          >
-            {t("session-start")}
-            <StudioIcon name="arrow-right" size={17} />
-          </Button>
-        </Card>
+        </section>
 
         <Card
           tone="plain"
@@ -299,16 +332,12 @@ export function TodayScreen({
             <span className="bento-kicker" id="today-level-title">
               {t("today-level-progress")}
             </span>
-            <span className="level-pair" aria-hidden="true">
-              <strong>{levelName}</strong>
-              <StudioIcon name="arrow-right" size={14} />
-              <span>{nextLevel}</span>
-            </span>
+            <StatusMeta tone="accent" dot>
+              {levelName} → {nextLevel}
+            </StatusMeta>
           </div>
-          <div className="level-rail" aria-hidden="true">
-            <span className="level-node level-node-current">{levelName}</span>
-            <span className="level-line" />
-            <span className="level-node">{nextLevel}</span>
+          <div className="level-figure">
+            <strong>{levelPercent}%</strong>
           </div>
           <ProgressBar
             value={levelPercent}
@@ -356,50 +385,6 @@ export function TodayScreen({
           >
             {t("today-review-due")}
           </Button>
-        </Card>
-
-        <Card
-          tone="plain"
-          className="bento-card bento-mastery"
-          aria-labelledby="today-articles-title"
-        >
-          <div className="bento-card-heading">
-            <div>
-              <span className="bento-kicker">{t("today-articles-eyebrow")}</span>
-              <h2 id="today-articles-title">{t("today-articles-title")}</h2>
-            </div>
-            <div className="bento-heading-actions">
-              <span className="articles-count">
-                {t("today-articles-count", { count: progress.length })}
-              </span>
-              <Button type="button" variant="ghost" size="sm" onClick={onOpenStats}>
-                {t("today-open-stats")}
-              </Button>
-            </div>
-          </div>
-          <div className="mastery-list">
-            {progress.slice(0, 5).map((kc) => {
-              const status = masteryStatus(kc);
-              return (
-                <div className="mastery-row" key={kc.kcId}>
-                  <div className="mastery-row-heading">
-                    <strong>{kc.title}</strong>
-                    <span className={`mastery-status mastery-status-${status.tone}`}>
-                      {t(status.key)}
-                    </span>
-                  </div>
-                  <div className="mastery-row-bar">
-                    <ProgressBar
-                      value={kc.percent}
-                      tone={kc.mastered ? "green" : kc.due ? "coral" : "blue"}
-                      label={kc.title}
-                    />
-                    <span>{kc.percent}%</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
         </Card>
 
         <Card
@@ -473,6 +458,55 @@ export function TodayScreen({
 
         <Card
           tone="plain"
+          className="bento-card bento-mastery"
+          aria-labelledby="today-articles-title"
+        >
+          <div className="bento-card-heading">
+            <div>
+              <span className="bento-kicker">{t("today-articles-eyebrow")}</span>
+              <h2 id="today-articles-title">{t("today-articles-title")}</h2>
+            </div>
+            <span className="articles-count">
+              {t("today-articles-count", { count: progress.length })} ·{" "}
+              {overallPercent}%
+            </span>
+          </div>
+          <div className="mastery-list">
+            {progress.slice(0, 5).map((kc) => {
+              const status = masteryStatus(kc);
+              return (
+                <div className="mastery-row" key={kc.kcId}>
+                  <div className="mastery-row-heading">
+                    <strong>{kc.title}</strong>
+                    <StatusMeta tone={masteryTone(status.tone)} dot>
+                      {t(status.key)}
+                    </StatusMeta>
+                  </div>
+                  <div className="mastery-row-bar">
+                    <ProgressBar
+                      value={kc.percent}
+                      tone={kc.mastered ? "green" : kc.due ? "coral" : "blue"}
+                      label={kc.title}
+                    />
+                    <span>{kc.percent}%</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="mastery-open"
+            onClick={onOpenStats}
+          >
+            {t("today-open-stats")}
+          </Button>
+        </Card>
+
+        <Card
+          tone="plain"
           className="bento-card bento-errors"
           aria-labelledby="today-error-title"
         >
@@ -481,7 +515,6 @@ export function TodayScreen({
               <span className="bento-kicker">{t("today-error-kicker")}</span>
               <h2 id="today-error-title">{t("today-error-notebook")}</h2>
             </div>
-            <span className="error-notebook-total">{errors.length}</span>
           </div>
           {errors.length === 0 ? (
             <p className="bento-empty">{t("today-error-empty")}</p>

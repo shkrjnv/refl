@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import type { ApiClient } from "../api/client";
 import { IellaSprite } from "../components/IellaSprite";
 import { StudioIcon } from "../components/StudioIcons";
-import { Badge, Button, Card, ProgressBar } from "../components/ui";
+import { Button, Card, ProgressBar, StatusMeta } from "../components/ui";
 import type { OutboxRecord } from "../db/storage";
 import type { Locale } from "../i18n";
 import { useTranslation } from "../i18n";
@@ -175,17 +175,29 @@ export function ProfileScreen({
             <p className="eyebrow">{t("profile-eyebrow")}</p>
             <h1>{learnerLabel}</h1>
             {!visitor ? <code>{learnerId}</code> : null}
-            <div className="profile-pills">
-              <Badge tone={isAdmin ? "sun" : "neutral"}>
+            <div className="profile-meta-line">
+              <StatusMeta tone={isAdmin ? "warning" : "neutral"}>
                 {isAdmin ? t("profile-role-admin") : t("profile-role-learner")}
-              </Badge>
-              <Badge tone="green">{t("profile-local")}</Badge>
-              {visitor ? <Badge tone="blue">{t("profile-preview-badge")}</Badge> : null}
+              </StatusMeta>
+              <span className="meta-separator" aria-hidden="true">
+                ·
+              </span>
+              <StatusMeta tone="neutral">{t("profile-local")}</StatusMeta>
+              {visitor ? (
+                <>
+                  <span className="meta-separator" aria-hidden="true">
+                    ·
+                  </span>
+                  <StatusMeta tone="accent" dot>
+                    {t("profile-preview-badge")}
+                  </StatusMeta>
+                </>
+              ) : null}
             </div>
           </div>
         </div>
         <div className="profile-heading-actions">
-          <span className="streak-badge">
+          <span className="streak-meta">
             <StudioIcon name="streak" size={17} />
             <span>{t("today-streak", { days: streak })}</span>
           </span>
@@ -249,7 +261,9 @@ export function ProfileScreen({
             <div className="profile-preview-banner" role="status">
               <IellaSprite size={28} mood="curious" />
               <span>{t("profile-preview-banner")}</span>
-              <Badge tone="blue">{t(`profile-visibility-${visibility}`)}</Badge>
+              <StatusMeta tone="accent" dot>
+                {t(`profile-visibility-`)}
+              </StatusMeta>
             </div>
           ) : null}
 
@@ -377,14 +391,15 @@ export function ProfileScreen({
                   <span className="profile-stat-label">{t("profile-reviews")}</span>
                   <strong className="profile-stat-value">{reviews}</strong>
                   <span className="profile-stat-note">{t("profile-reviews-note")}</span>
-                  <div className="profile-review-parts">
+                  <div className="profile-review-meta">
                     <span>
-                      <strong>{streak}</strong>
-                      {t("profile-streak-short")}
+                      <strong>{streak}</strong> {t("profile-streak-short")}
+                    </span>
+                    <span className="meta-separator" aria-hidden="true">
+                      ·
                     </span>
                     <span>
-                      <strong>{due}</strong>
-                      {t("today-memory-due-label")}
+                      <strong>{due}</strong> {t("today-memory-due-label")}
                     </span>
                   </div>
                 </Card>
@@ -428,9 +443,9 @@ export function ProfileScreen({
                         <h2 id="profile-errors-title">{t("profile-error-notebook")}</h2>
                         <p>{t("profile-error-note")}</p>
                       </div>
-                      <Badge tone={errors.length > 0 ? "coral" : "neutral"}>
+                      <StatusMeta tone={errors.length > 0 ? "danger" : "neutral"} dot>
                         {errors.length}
-                      </Badge>
+                      </StatusMeta>
                     </div>
                     {errors.length === 0 ? (
                       <p className="chart-empty">{t("profile-error-empty")}</p>
@@ -445,9 +460,9 @@ export function ProfileScreen({
                               <strong>{error.title}</strong>
                               <span>{t(`progress-status-${error.status}`)}</span>
                             </div>
-                            <Badge tone="coral">
+                            <StatusMeta tone="danger">
                               {t("profile-error-count", { count: error.manifested })}
-                            </Badge>
+                            </StatusMeta>
                           </div>
                         ))}
                       </div>

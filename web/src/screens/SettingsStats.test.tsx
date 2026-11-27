@@ -99,6 +99,8 @@ describe("statistics, profile, and settings", () => {
     expect(
       screen.getByRole("button", { name: /A1: 1 of 1 mastered/ }),
     ).toBeTruthy();
+    expect(document.querySelector(".ui-badge")).toBeNull();
+    expect(document.querySelectorAll(".status-meta").length).toBeGreaterThan(0);
   });
 
   it("embeds public-profile preview, visibility, and private learner cards", () => {
@@ -110,7 +112,7 @@ describe("statistics, profile, and settings", () => {
 
     expect(screen.getByRole("heading", { name: "Learner" })).toBeTruthy();
     expect(screen.getByText("learner-42")).toBeTruthy();
-    expect(screen.getByText("Learner", { selector: ".ui-badge" })).toBeTruthy();
+    expect(screen.getByText("Learner", { selector: ".status-meta" })).toBeTruthy();
     expect(screen.getByText("Milestones")).toBeTruthy();
     expect(screen.getByText("Level progress")).toBeTruthy();
     expect(screen.getByText("Public profile")).toBeTruthy();
@@ -120,6 +122,8 @@ describe("statistics, profile, and settings", () => {
       expect(screen.getByRole("button", { name: label })).toBeTruthy();
     }
     expect(screen.queryByRole("tab")).toBeNull();
+    expect(document.querySelector(".ui-badge")).toBeNull();
+    expect(document.querySelectorAll(".status-meta").length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("button", { name: "Everyone" }));
     fireEvent.click(screen.getByRole("button", { name: "Preview visitor view" }));
@@ -203,11 +207,11 @@ describe("statistics, profile, and settings", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Appearance" }));
     fireEvent.click(screen.getByRole("button", { name: /Sand & Forest/ }));
     fireEvent.click(screen.getByRole("button", { name: /Laboratory/ }));
-    fireEvent.click(screen.getByRole("button", { name: /Pixel World/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Neo-brutalism/ }));
     fireEvent.click(screen.getByRole("button", { name: "Right rail" }));
     expect(locale).toBe("ru");
     expect(selectedPalette).toBe("sand-forest");
-    expect(selectedSkin).toBe("pixel-world");
+    expect(selectedSkin).toBe("neo-brutalism");
     expect(navigation).toBe("right");
     expect(screen.getByText("Settings")).toBeTruthy();
     fireEvent.click(screen.getByRole("tab", { name: "Offline & Data" }));

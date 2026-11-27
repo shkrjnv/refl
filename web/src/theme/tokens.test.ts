@@ -92,11 +92,9 @@ describe("Living Studio tokens", () => {
   it("defines the selectable non-ASCII skins with localized label keys", () => {
     expect(skinNames).toEqual([
       "living-studio",
-      "neo-brutalism",
-      "soft-neo-brutalism",
       "soft-bento",
       "laboratory",
-      "pixel-world",
+      "neo-brutalism",
     ]);
     expect(DEFAULT_SKIN).toBe("living-studio");
     for (const skin of skinNames) {

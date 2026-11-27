@@ -68,6 +68,43 @@ describe("adaptive studio shell", () => {
     expect(routes).toEqual(["profile"]);
   });
 
+  it("exposes all five palettes directly and only the four kept skins", () => {
+    const { container } = renderShell("left");
+    const paletteButtons = container.querySelectorAll(
+      ".topbar-actions .palette-choice",
+    );
+    expect(paletteButtons).toHaveLength(5);
+    for (const name of [
+      "Deep Umber",
+      "Burgundy Studio",
+      "Midnight Cobalt",
+      "Cream Paper",
+      "Sand & Forest",
+    ]) {
+      expect(screen.getByRole("button", { name })).toBeTruthy();
+    }
+
+    fireEvent.click(screen.getByRole("button", { name: "Skin" }));
+    const skinDialog = screen.getByRole("dialog", { name: "Skin" });
+    for (const name of [
+      /Living Studio/,
+      /Soft Bento/,
+      /Laboratory/,
+      /Neo-brutalism/,
+    ]) {
+      expect(within(skinDialog).getByRole("button", { name })).toBeTruthy();
+    }
+    expect(
+      within(skinDialog).queryByRole("button", { name: /Pixel World/ }),
+    ).toBeNull();
+    expect(
+      within(skinDialog).queryByRole("button", { name: /Soft neo-brutalism/ }),
+    ).toBeNull();
+    expect(
+      within(skinDialog).queryByRole("button", { name: /Deep Umber/ }),
+    ).toBeNull();
+  });
+
   it("keeps the identity card as a Profile shortcut without a settings gear", () => {
     const routes: AppRoute[] = [];
     renderShell("left", (route) => routes.push(route));

@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
 export type StudioIconName =
   | "today"
@@ -200,136 +200,35 @@ export interface BrandLogoProps {
   className?: string;
 }
 
-// Two interlocking prism brackets: the left r stem and shoulder weave over the
-// right stem, while the mirrored blue/teal r returns the reflection.
+// Two opposing optical arcs form an abstract r and its mirror reflection.
 export function BrandLogo({ size = 28, className = "" }: BrandLogoProps) {
-  const uid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
-  const umber = `brand-umber-${uid}`;
-  const cream = `brand-cream-${uid}`;
-  const blue = `brand-blue-${uid}`;
-  const blueLight = `brand-blue-light-${uid}`;
-  const teal = `brand-teal-${uid}`;
   return (
     <svg
       className={`brand-logo ${className}`.trim()}
       width={size}
       height={size}
-      viewBox="0 0 40 40"
+      viewBox="0 0 28 28"
+      fill="none"
       aria-hidden="true"
       focusable="false"
-      data-mark="prism-reflection"
+      data-mark="reflection"
     >
-      <defs>
-        <linearGradient id={umber} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#6B4632" />
-          <stop offset=".45" stopColor="#33231B" />
-          <stop offset="1" stopColor="#1A1512" />
-        </linearGradient>
-        <linearGradient id={cream} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#FFF9EC" />
-          <stop offset=".55" stopColor="#EAE0CF" />
-          <stop offset="1" stopColor="#C7B49A" />
-        </linearGradient>
-        <linearGradient id={blue} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#63C5FF" />
-          <stop offset=".5" stopColor="#1E88E5" />
-          <stop offset="1" stopColor="#0B5AA6" />
-        </linearGradient>
-        <linearGradient id={blueLight} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#8AD5FF" />
-          <stop offset="1" stopColor="#2B8FE0" />
-        </linearGradient>
-        <linearGradient id={teal} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#2CB8AF" />
-          <stop offset=".6" stopColor="#0D7A78" />
-          <stop offset="1" stopColor="#07504F" />
-        </linearGradient>
-      </defs>
-      <g className="brand-prism">
-        {/* Left bracket: Deep Umber stem and cream shoulder crossing the blue stem. */}
-        <path
-          className="brand-prism-stem brand-prism-stem-umber"
-          d="M7 5L12 3.4L12 33L7 35Z"
-          fill={`url(#${umber})`}
-        />
-        <path
-          className="brand-prism-facet"
-          d="M7 5L9 4.4L9 34L7 35Z"
-          fill="#8A5D43"
-          opacity=".55"
-        />
-        <path
-          className="brand-prism-arm brand-prism-arm-cream"
-          d="M11.5 9.5L31 9.5L34 13L31 16.5L11.5 16.5Z"
-          fill={`url(#${cream})`}
-        />
-        <path
-          className="brand-prism-fold"
-          d="M11.5 14.2L31 14.2L33 15.4L31 16.5L11.5 16.5Z"
-          fill="#B9A488"
-          opacity=".78"
-        />
-        <path
-          className="brand-prism-highlight"
-          d="M11.5 9.5L31 9.5L33.2 11.5L13 11.5Z"
-          fill="#FFFDF5"
-          opacity=".58"
-        />
-        {/* Right bracket: Morpho Blue stem and Riso Teal shoulder crossing the umber stem. */}
-        <path
-          className="brand-prism-stem brand-prism-stem-blue"
-          d="M33 9L28 7.4L28 37L33 39Z"
-          fill={`url(#${blue})`}
-        />
-        <path
-          className="brand-prism-facet"
-          d="M33 9L31 8.4L31 38L33 39Z"
-          fill={`url(#${blueLight})`}
-          opacity=".42"
-        />
-        <path
-          className="brand-prism-arm brand-prism-arm-teal"
-          d="M28.5 21.5L9 21.5L6 25L9 28.5L28.5 28.5Z"
-          fill={`url(#${teal})`}
-        />
-        <path
-          className="brand-prism-fold"
-          d="M28.5 26.2L9 26.2L7 27.4L9 28.5L28.5 28.5Z"
-          fill="#064B49"
-          opacity=".8"
-        />
-        <path
-          className="brand-prism-highlight"
-          d="M28.5 21.5L9 21.5L6.8 23.5L27 23.5Z"
-          fill="#44CDC4"
-          opacity=".28"
-        />
-        {/* Over-under shadows make the two brackets read as one woven mark. */}
-        <path
-          className="brand-prism-shadow"
-          d="M29 9.5L34 9.5L34 16.5L31 16.5Z"
-          fill="#063E6F"
-          opacity=".35"
-        />
-        <path
-          className="brand-prism-shadow"
-          d="M6 21.5L11 21.5L11 28.5L9 28.5Z"
-          fill="#0B0705"
-          opacity=".4"
-        />
-        <path
-          className="brand-prism-bevel"
-          d="M11.5 9.5L14 12L11.5 14.5Z"
-          fill="#FFFDF5"
-          opacity=".22"
-        />
-        <path
-          className="brand-prism-bevel"
-          d="M28.5 21.5L26 24L28.5 26.5Z"
-          fill="#75E4DC"
-          opacity=".18"
-        />
-      </g>
+      <path
+        className="brand-reflection-ink"
+        d="M8 22V13C8 8.6 11.6 5 16 5h3"
+        stroke="currentColor"
+        strokeWidth="2.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        className="brand-reflection-accent"
+        d="M20 6v9c0 4.4-3.6 8-8 8H9"
+        stroke="var(--accent-primary)"
+        strokeWidth="2.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }

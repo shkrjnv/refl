@@ -4,7 +4,7 @@ import type { Locale } from "../i18n";
 import { useTranslation } from "../i18n";
 import type { NavigationPosition } from "../prototype/layout";
 import type { SkinName, ThemeName } from "../theme/tokens";
-import { AppearanceMenu } from "./AppearanceMenu";
+import { AppearanceMenu, PaletteToggle } from "./AppearanceMenu";
 import { IellaSprite } from "./IellaSprite";
 import { LanguageMenu } from "./LanguageMenu";
 import { BrandLogo, StudioIcon, type StudioIconName } from "./StudioIcons";
@@ -138,12 +138,11 @@ export function AppShell({
               locales={locales}
               onLocaleChange={onLocaleChange}
             />
-            <AppearanceMenu
+            <PaletteToggle
               theme={theme}
-              skin={skin}
               onThemeChange={onThemeChange}
-              onSkinChange={onSkinChange}
             />
+            <AppearanceMenu skin={skin} onSkinChange={onSkinChange} />
           </div>
         </header>
         <main className="studio-content">{children}</main>

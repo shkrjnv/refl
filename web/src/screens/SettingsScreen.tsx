@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import type { ApiClient } from "../api/client";
 import { StudioIcon, type StudioIconName } from "../components/StudioIcons";
-import { Badge, Button, Card } from "../components/ui";
+import { Button, Card, StatusMeta } from "../components/ui";
 import type { OutboxRecord } from "../db/storage";
 import type { Locale } from "../i18n";
 import { useTranslation } from "../i18n";
@@ -160,9 +160,9 @@ export function SettingsScreen({
     return (
       <div className="method-row" key={kind}>
         <span>{t(labelKey)}</span>
-        <Badge tone={linked ? "green" : "neutral"}>
+        <StatusMeta tone={linked ? "success" : "neutral"} dot>
           {linked ? t("settings-linked") : t("settings-not-linked")}
-        </Badge>
+        </StatusMeta>
       </div>
     );
   };
@@ -185,7 +185,7 @@ export function SettingsScreen({
             <p className="eyebrow">{t("settings-eyebrow")}</p>
             <h1>{t("settings-title")}</h1>
           </div>
-          <Badge tone="green">{t("profile-local")}</Badge>
+          <StatusMeta tone="neutral" dot>{t("profile-local")}</StatusMeta>
         </header>
       )}
 

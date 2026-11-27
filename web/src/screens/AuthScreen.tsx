@@ -461,7 +461,7 @@ export function AuthScreen({
         <div className={`auth-form-region auth-stage-${stage}`}>
           <div className="auth-card-head auth-form-header">
             <div>
-              <h2 className="auth-title-liquid">
+              <h2 className="auth-form-title">
                 {stage === "code" ? t("auth-code-title") : t("auth-title")}
               </h2>
               {stage === "code" ? (

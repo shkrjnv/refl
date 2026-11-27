@@ -180,8 +180,19 @@ describe("Today fixed bento", () => {
     expect(document.querySelector(".dashboard-widget")).toBeNull();
   });
 
-  it("renders the three fixed bento rows and semantic mastery pills", () => {
+  it("renders the photographic hero and three balanced bento rows", () => {
     renderToday();
+
+    const hero = document.querySelector(".today-hero-banner");
+    expect(hero).toBeTruthy();
+    expect(hero?.getAttribute("data-tour")).toBe("route");
+    expect(hero?.querySelector(".hero-illustration")).toBeTruthy();
+    expect(
+      hero?.querySelector(".hero-illustration")?.getAttribute("src"),
+    ).toContain("hero-nature");
+    expect(
+      hero?.querySelector("[data-tour=\"start\"]")?.textContent,
+    ).toContain("Start session");
 
     for (const heading of [
       "Today's route",
@@ -198,12 +209,16 @@ describe("Today fixed bento", () => {
     expect(screen.getByText("Fading")).toBeTruthy();
     expect(screen.getByText("Learning")).toBeTruthy();
     expect(screen.getAllByText("Not started").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("A1").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("A2").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("A1 → A2").length).toBeGreaterThan(0);
     expect(screen.getByText("×3")).toBeTruthy();
     expect(screen.queryByText("×2")).toBeNull();
     expect(screen.getAllByText("Missing article").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Review").length).toBeGreaterThan(0);
+    expect(document.querySelector(".ui-badge")).toBeNull();
+    expect(document.querySelector(".mastery-status")).toBeNull();
+    expect(document.querySelector(".streak-badge")).toBeNull();
+    expect(document.querySelector(".sync-cue")).toBeNull();
+    expect(document.querySelectorAll(".status-meta").length).toBeGreaterThan(0);
   });
 
   it("selects 10, 15, or 25 minutes and passes the choice to the session", () => {

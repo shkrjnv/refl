@@ -208,11 +208,9 @@ profile-skin = Оформление
 profile-skin-note = Выберите визуальный язык. Каждая палитра работает с любым оформлением.
 profile-mode = Цветовой режим
 skin-living-studio = Живая студия
-skin-living-studio-note = Тёплый пиксельный мир, маршрут-карта и тактильные карточки.
+skin-living-studio-note = Живая студия, маршрут-карта и тактильные карточки.
 skin-neo-brutalism = Нео-брутализм
 skin-neo-brutalism-note = Песок, лес, янтарь, чёткие границы и смещённые тени.
-skin-soft-neo-brutalism = Мягкий нео-брутализм
-skin-soft-neo-brutalism-note = Та же смелая палитра, но с округлениями и мягкими смещёнными тенями.
 skin-soft-bento = Мягкий бенто
 skin-soft-bento-note = Округлые карточки и мягкая глубина на спокойном фоне.
 skin-laboratory = Лаборатория
@@ -504,9 +502,5 @@ settings-sync-pending = { $count } { $count ->
   }
 settings-sync-clear = Всё синхронизировано.
 
-# W13 — Pixel World skin.
-
-skin-pixel-world = Пиксельный мир
-skin-pixel-world-note = Пиксельные рамки 2px, жёсткие смещённые тени, небо-сетка и чёткая пиксельная Iella.
 profile-note-progress = Освоено { $percent }%
 profile-preview-badge = Гость

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 
-import { Badge, Card, Disclosure, ProgressBar } from "../components/ui";
+import { Card, Disclosure, ProgressBar, StatusMeta } from "../components/ui";
 import { useTranslation } from "../i18n";
 import type { PrototypeContent } from "../prototype/content";
 import {
@@ -365,7 +365,7 @@ export function ProgressScreen({ content, stateJson }: ProgressScreenProps) {
           <p className="eyebrow">{t("stats-eyebrow")}</p>
           <h1>{t("stats-title")}</h1>
         </div>
-        <Badge tone="blue">{t("stats-articles")}</Badge>
+        <StatusMeta tone="neutral">{t("stats-articles")}</StatusMeta>
       </header>
 
       <div className="progress-dashboard">
@@ -375,7 +375,9 @@ export function ProgressScreen({ content, stateJson }: ProgressScreenProps) {
               <p className="eyebrow">{t("progress-memory-kicker")}</p>
               <h2>{t("progress-memory-title")}</h2>
             </div>
-            <Badge tone="blue">{t("progress-fsrs-badge")}</Badge>
+            <StatusMeta tone="accent" dot>
+              {t("progress-fsrs-badge")}
+            </StatusMeta>
           </div>
           <p className="progress-note">{t("progress-fsrs-note")}</p>
           <div className="fsrs-metrics">
@@ -424,7 +426,9 @@ export function ProgressScreen({ content, stateJson }: ProgressScreenProps) {
               <p className="eyebrow">{t("progress-mastery-kicker")}</p>
               <h2>{t("progress-mastery-title")}</h2>
             </div>
-            <Badge tone="green">{t("stats-mastered")}</Badge>
+            <StatusMeta tone="success" dot>
+              {t("stats-mastered")}
+            </StatusMeta>
           </div>
           <IsometricMastery levels={levels} />
           <p className="progress-note">
@@ -471,9 +475,9 @@ export function ProgressScreen({ content, stateJson }: ProgressScreenProps) {
               <p className="eyebrow">{t("progress-misconceptions-kicker")}</p>
               <h2>{t("progress-misconceptions-title")}</h2>
             </div>
-            <Badge tone={activeMisconceptions > 0 ? "coral" : "green"}>
+            <StatusMeta tone={activeMisconceptions > 0 ? "danger" : "success"} dot>
               {activeMisconceptions}
-            </Badge>
+            </StatusMeta>
           </div>
           <div className="misconception-summary">
             <span>{t("progress-active", { count: activeMisconceptions })}</span>
@@ -492,17 +496,18 @@ export function ProgressScreen({ content, stateJson }: ProgressScreenProps) {
                 <div className="misconception-row" key={entry.id}>
                   <div className="misconception-topline">
                     <strong>{entry.title}</strong>
-                    <Badge
+                    <StatusMeta
                       tone={
                         entry.status === "active"
-                          ? "coral"
+                          ? "danger"
                           : entry.status === "cured"
-                            ? "green"
+                            ? "success"
                             : "neutral"
                       }
+                      dot
                     >
                       {t(`progress-status-${entry.status}`)}
-                    </Badge>
+                    </StatusMeta>
                   </div>
                   <ProgressBar
                     value={Math.round(entry.strength * 100)}
@@ -527,9 +532,9 @@ export function ProgressScreen({ content, stateJson }: ProgressScreenProps) {
               <p className="eyebrow">{t("progress-calibration-kicker")}</p>
               <h2>{t("stats-calibration")}</h2>
             </div>
-            <Badge tone={stats.calibration === null ? "neutral" : "green"}>
-              {stats.calibration === null ? "—" : `${stats.calibration}%`}
-            </Badge>
+            <StatusMeta tone={stats.calibration === null ? "neutral" : "success"}>
+              {stats.calibration === null ? "—" : `%`}
+            </StatusMeta>
           </div>
           <CalibrationChart />
           <p className="progress-note">{t("progress-calibration-note")}</p>

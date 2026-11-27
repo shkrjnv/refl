@@ -8,22 +8,23 @@ import { BrandLogo, StudioIcon } from "./StudioIcons";
 afterEach(cleanup);
 
 describe("studio identity", () => {
-  it("renders the two-bracket prism reflection mark without a raster import", () => {
+  it("renders the pure-vector reflection arcs without raster or gradients", () => {
     const { container } = render(<BrandLogo size={36} />);
     const svg = container.querySelector("svg.brand-logo");
-    expect(svg?.getAttribute("viewBox")).toBe("0 0 40 40");
+    expect(svg?.getAttribute("viewBox")).toBe("0 0 28 28");
     expect(svg?.getAttribute("height")).toBe("36");
     expect(svg?.getAttribute("width")).toBe("36");
     expect(svg?.getAttribute("aria-hidden")).toBe("true");
-    expect(svg?.getAttribute("data-mark")).toBe("prism-reflection");
+    expect(svg?.getAttribute("data-mark")).toBe("reflection");
     expect(container.querySelector("image")).toBeNull();
-    expect(container.querySelectorAll("defs linearGradient")).toHaveLength(5);
-    expect(container.querySelectorAll(".brand-prism-stem")).toHaveLength(2);
-    expect(container.querySelectorAll(".brand-prism-arm")).toHaveLength(2);
-    expect(container.querySelectorAll(".brand-prism-stem-umber")).toHaveLength(1);
-    expect(container.querySelectorAll(".brand-prism-stem-blue")).toHaveLength(1);
-    expect(container.querySelectorAll(".brand-prism-arm-cream")).toHaveLength(1);
-    expect(container.querySelectorAll(".brand-prism-arm-teal")).toHaveLength(1);
+    expect(container.querySelector("defs")).toBeNull();
+    expect(container.querySelectorAll("linearGradient")).toHaveLength(0);
+    const paths = container.querySelectorAll("path");
+    expect(paths).toHaveLength(2);
+    expect(paths[0]?.getAttribute("stroke")).toBe("currentColor");
+    expect(paths[1]?.getAttribute("stroke")).toBe("var(--accent-primary)");
+    expect(paths[0]?.getAttribute("fill")).toBeNull();
+    expect(paths[1]?.getAttribute("fill")).toBeNull();
     for (const size of [24, 32, 48]) {
       const { container: sized, unmount } = render(<BrandLogo size={size} />);
       const mark = sized.querySelector("svg.brand-logo");

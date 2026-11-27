@@ -208,11 +208,9 @@ profile-skin = Visual skin
 profile-skin-note = Choose a visual language. Every color palette works with every skin.
 profile-mode = Color mode
 skin-living-studio = Living Studio
-skin-living-studio-note = A pixel-world studio, a map-like route, and tactile cards.
+skin-living-studio-note = A living studio, a map-like route, and tactile cards.
 skin-neo-brutalism = Neo-brutalism
 skin-neo-brutalism-note = Sand, forest, amber, crisp borders, and offset shadows.
-skin-soft-neo-brutalism = Soft neo-brutalism
-skin-soft-neo-brutalism-note = The same bold palette with rounded corners and softer offset shadows.
 skin-soft-bento = Soft Bento
 skin-soft-bento-note = Rounded cards and soft elevation on a quiet canvas.
 skin-laboratory = Laboratory
@@ -496,9 +494,5 @@ settings-sync-note = Answers sync in the background when this device is online.
 settings-sync-pending = { $count } answers waiting.
 settings-sync-clear = Everything is synced.
 
-# W13 — Pixel World skin.
-
-skin-pixel-world = Pixel World
-skin-pixel-world-note = 2px pixel borders, hard offset shadows, a sky grid, and crisp pixel Iella.
 profile-note-progress = { $percent }% mastered
 profile-preview-badge = Visitor

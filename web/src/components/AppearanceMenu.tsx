@@ -13,9 +13,7 @@ import {
 import { StudioIcon } from "./StudioIcons";
 
 export interface AppearanceMenuProps {
-  theme: ThemeName;
   skin: SkinName;
-  onThemeChange: (theme: PaletteName) => void;
   onSkinChange: (skin: SkinName) => void;
   className?: string;
 }
@@ -61,9 +59,7 @@ export function PaletteToggle({
 }
 
 export function AppearanceMenu({
-  theme,
   skin,
-  onThemeChange,
   onSkinChange,
   className = "",
 }: AppearanceMenuProps) {
@@ -103,16 +99,10 @@ export function AppearanceMenu({
         className="appearance-trigger"
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label={t("app-appearance")}
+        aria-label={t("app-skin")}
         onClick={() => setOpen((value) => !value)}
       >
         <StudioIcon name="palette" size={17} />
-        <span
-          className={`appearance-chip-swatch appearance-chip-swatch-tiny palette-swatch-${theme}`}
-          aria-hidden="true"
-        >
-          <span />
-        </span>
         <span className="appearance-trigger-label">
           {t(skinLabelKeys[skin])}
         </span>
@@ -122,37 +112,8 @@ export function AppearanceMenu({
         <div
           className="appearance-popover appearance-popover-compact"
           role="dialog"
-          aria-label={t("app-appearance")}
+          aria-label={t("app-skin")}
         >
-          <section className="appearance-compact-section">
-            <p className="appearance-label">{t("app-palette")}</p>
-            <div
-              className="appearance-palette-grid"
-              role="group"
-              aria-label={t("app-palette")}
-            >
-              {paletteNames.map((candidate) => (
-                <button
-                  key={candidate}
-                  type="button"
-                  className={`appearance-palette-chip${theme === candidate ? " selected" : ""}`}
-                  aria-pressed={theme === candidate}
-                  onClick={() => onThemeChange(candidate)}
-                >
-                  <span
-                    className={`appearance-chip-swatch palette-swatch-${candidate}`}
-                    aria-hidden="true"
-                  >
-                    <span />
-                  </span>
-                  <span>{t(paletteLabelKeys[candidate])}</span>
-                  {theme === candidate ? (
-                    <StudioIcon name="check" size={13} className="appearance-check" />
-                  ) : null}
-                </button>
-              ))}
-            </div>
-          </section>
           <section className="appearance-compact-section">
             <p className="appearance-label">{t("app-skin")}</p>
             <div

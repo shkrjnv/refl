@@ -239,7 +239,8 @@ describe("auth and access flow", () => {
     ).toBeNull();
     const title = document.querySelector(".auth-form-header h2");
     expect(title?.textContent).toBe("Step into the studio");
-    expect(title?.classList.contains("auth-title-liquid")).toBe(true);
+    expect(title?.classList.contains("auth-title-liquid")).toBe(false);
+    expect(title?.classList.contains("auth-form-title")).toBe(true);
     expect(document.querySelector(".auth-form-header .auth-card-subtitle")).toBeNull();
     for (const name of [
       "Deep Umber",

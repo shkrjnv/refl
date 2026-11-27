@@ -208,11 +208,9 @@ profile-skin = Vizual uslub
 profile-skin-note = Vizual tilni tanlang. Har bir palitra har qanday skin bilan ishlaydi.
 profile-mode = Rang rejimi
 skin-living-studio = Jonli studiya
-skin-living-studio-note = Issiq piksel dunyosi, xarita kabi marshrut va seziladigan kartalar.
+skin-living-studio-note = Jonli studiya, xaritaga o‘xshash marshrut va teginishga qulay kartalar.
 skin-neo-brutalism = Neo-brutalizm
 skin-neo-brutalism-note = Qum, o‘rmon, amber, aniq chegaralar va siljigan soyalar.
-skin-soft-neo-brutalism = Yumshoq neo-brutalizm
-skin-soft-neo-brutalism-note = Xuddi shu dadil palitra, ammo yumaloq burchaklar va yumshoq siljigan soyalar bilan.
 skin-soft-bento = Yumshoq bento
 skin-soft-bento-note = Xotirjam fonda yumaloq kartalar va yumshoq chuqurlik.
 skin-laboratory = Laboratoriya
@@ -490,9 +488,5 @@ settings-sync-note = Qurilma onlayn bo‘lganda javoblar fonda sinxronlanadi.
 settings-sync-pending = { $count } ta javob kutmoqda.
 settings-sync-clear = Hammasi sinxronlangan.
 
-# W13 — Pixel World skin.
-
-skin-pixel-world = Piksel dunyosi
-skin-pixel-world-note = 2px piksel ramkalar, qattiq siljigan soyalar, osmon to‘ri va aniq piksel Iella.
 profile-note-progress = { $percent }% o‘zlashtirilgan
 profile-preview-badge = Mehmon
