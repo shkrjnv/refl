@@ -98,6 +98,15 @@ export function TodayScreen({
   const [editing, setEditing] = useState(false);
   const [draggingId, setDraggingId] = useState<WidgetId | null>(null);
   const [resizingId, setResizingId] = useState<WidgetId | null>(null);
+  const [mobile, setMobile] = useState(() => {
+    if (
+      typeof window === "undefined" ||
+      typeof window.matchMedia !== "function"
+    ) {
+      return false;
+    }
+    return window.matchMedia("(max-width: 768px)").matches;
+  });
   const [resizeSnap, setResizeSnap] = useState<{
     colSpan: WidgetColSpan;
     rowSpan: WidgetRowSpan;
@@ -106,6 +115,28 @@ export function TodayScreen({
   const onLayoutChangeRef = useRef(onLayoutChange);
   layoutRef.current = layout;
   onLayoutChangeRef.current = onLayoutChange;
+  const editingActive = editing && !mobile;
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") {
+      return;
+    }
+    const query = window.matchMedia("(max-width: 768px)");
+    const update = () => setMobile(query.matches);
+    update();
+    query.addEventListener?.("change", update);
+    return () => query.removeEventListener?.("change", update);
+  }, []);
+
+  useEffect(() => {
+    if (!mobile) {
+      return;
+    }
+    setEditing(false);
+    setDraggingId(null);
+    setResizingId(null);
+    setResizeSnap(null);
+  }, [mobile]);
   const flipRef = useRef<Map<WidgetId, DOMRect> | null>(null);
   const dragRef = useRef<{
     id: WidgetId;
@@ -231,7 +262,7 @@ export function TodayScreen({
   };
 
   const startDrag = (id: WidgetId, event: ReactPointerEvent<HTMLElement>) => {
-    if (!editing) {
+    if (!editingActive) {
       return;
     }
     const target = event.target;
@@ -258,7 +289,7 @@ export function TodayScreen({
     id: WidgetId,
     event: ReactPointerEvent<HTMLElement>,
   ) => {
-    if (!editing) {
+    if (!editingActive) {
       return;
     }
     event.preventDefault();
@@ -620,27 +651,59 @@ export function TodayScreen({
                 {t("today-activity-best", { days: activity.bestStreak })}
               </span>
             </div>
-            <div
-              className="activity-heatmap"
-              role="img"
-              aria-label={t("today-activity-summary", {
-                total: activity.total,
-                best: activity.bestStreak,
-              })}
-            >
-              {activity.days.map((day) => (
-                <span
-                  key={day.day}
-                  className={`activity-cell activity-level-${activityLevel(day.count)}`}
-                  aria-hidden="true"
-                />
-              ))}
+            <div className="activity-calendar">
+              <div className="activity-weekday-labels" aria-hidden="true">
+                <span />
+                <span>{t("today-weekday-mon")}</span>
+                <span />
+                <span>{t("today-weekday-wed")}</span>
+                <span />
+                <span>{t("today-weekday-fri")}</span>
+                <span />
+              </div>
+              <div
+                className="activity-heatmap"
+                role="img"
+                aria-label={t("today-activity-summary", {
+                  total: activity.total,
+                  best: activity.bestStreak,
+                })}
+              >
+                {activity.days.map((day) => (
+                  <span
+                    key={day.day}
+                    className={`activity-cell activity-level-${activityLevel(day.count)}`}
+                    title={t("today-activity-cell", {
+                      date: new Intl.DateTimeFormat(locale, {
+                        month: "short",
+                        day: "numeric",
+                      }).format(new Date(`${day.day}T12:00:00`)),
+                      count: day.count,
+                    })}
+                    aria-hidden="true"
+                  />
+                ))}
+              </div>
             </div>
-            <p className="activity-note">
-              {activity.total === 0
-                ? t("today-activity-empty")
-                : t("today-activity-today", { count: activity.todayCount })}
-            </p>
+            <div className="activity-footer">
+              <p className="activity-note">
+                {activity.total === 0
+                  ? t("today-activity-empty")
+                  : t("today-activity-today", { count: activity.todayCount })}
+              </p>
+              <div
+                className="activity-legend"
+                aria-label={t("today-activity-legend")}
+              >
+                <span>{t("today-activity-less")}</span>
+                <i className="activity-cell activity-level-0" />
+                <i className="activity-cell activity-level-1" />
+                <i className="activity-cell activity-level-2" />
+                <i className="activity-cell activity-level-3" />
+                <i className="activity-cell activity-level-4" />
+                <span>{t("today-activity-more")}</span>
+              </div>
+            </div>
           </Card>
         );
       default:
@@ -686,38 +749,40 @@ export function TodayScreen({
               ))}
             </div>
           ) : null}
-          <div className="today-layout-actions">
-            {editing ? (
+          {!mobile ? (
+            <div className="today-layout-actions">
+              {editing ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setDraggingId(null);
+                    setResizingId(null);
+                    setResizeSnap(null);
+                    onResetLayout();
+                  }}
+                >
+                  {t("today-reset-layout")}
+                </Button>
+              ) : null}
               <Button
                 type="button"
-                variant="ghost"
+                variant={editing ? "primary" : "secondary"}
                 size="sm"
+                aria-pressed={editing}
                 onClick={() => {
+                  setEditing((value) => !value);
                   setDraggingId(null);
                   setResizingId(null);
                   setResizeSnap(null);
-                  onResetLayout();
                 }}
               >
-                {t("today-reset-layout")}
+                <StudioIcon name="grip" size={16} />
+                {editing ? t("today-done") : t("today-edit-layout")}
               </Button>
-            ) : null}
-            <Button
-              type="button"
-              variant={editing ? "primary" : "secondary"}
-              size="sm"
-              aria-pressed={editing}
-              onClick={() => {
-                setEditing((value) => !value);
-                setDraggingId(null);
-                setResizingId(null);
-                setResizeSnap(null);
-              }}
-            >
-              <StudioIcon name="grip" size={16} />
-              {editing ? t("today-done") : t("today-edit-layout")}
-            </Button>
-          </div>
+            </div>
+          ) : null}
         </div>
       </header>
 
@@ -728,7 +793,7 @@ export function TodayScreen({
         </div>
       ) : null}
 
-      <div className={`today-dashboard${editing ? " editing" : ""}`}>
+      <div className={`today-dashboard${editingActive ? " editing" : ""}`}>
         {layout.order.map((id, index) => (
           <section
             key={id}
@@ -740,7 +805,7 @@ export function TodayScreen({
             data-resizing={resizingId === id ? "true" : undefined}
             aria-label={t(WIDGET_LABEL_KEYS[id])}
           >
-            {editing ? (
+            {editingActive ? (
               <div
                 className="widget-edit-bar"
                 onPointerDown={(event) => startDrag(id, event)}
@@ -793,10 +858,10 @@ export function TodayScreen({
               </div>
             ) : null}
             {renderWidget(id)}
-            {resizingId === id && resizeSnap ? (
+            {editingActive && resizingId === id && resizeSnap ? (
               <span className="widget-ghost-target" aria-hidden="true" />
             ) : null}
-            {editing ? (
+            {editingActive ? (
               <button
                 type="button"
                 className="widget-resize-handle"
@@ -810,7 +875,7 @@ export function TodayScreen({
                 <span />
               </button>
             ) : null}
-            {resizingId === id && resizeSnap ? (
+            {editingActive && resizingId === id && resizeSnap ? (
               <span
                 className="widget-resize-badge"
                 role="status"

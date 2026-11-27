@@ -358,12 +358,15 @@ today-review-due = Review due
 today-focus-kicker = Active focus
 today-focus-title = Misconceptions and focus
 today-focus-empty = No weak spots yet. Your first answers will surface them here.
-today-activity-kicker = Seven weeks
+today-activity-kicker = Recent weeks
 today-activity-title = Activity
 today-activity-best = Best: { $days } days
-today-activity-today = Today: { $count } answers
-today-activity-summary = { $total } answers in seven weeks. Best streak: { $best } days.
-today-activity-empty = No activity in the last seven weeks yet.
+today-activity-today = Today: { $count } { $count ->
+    [one] answer
+   *[other] answers
+  }
+today-activity-summary = { $total } answers in recent weeks. Best streak: { $best } days.
+today-activity-empty = No activity in recent weeks yet.
 
 domain-grammar = Grammar
 domain-phonology = Phonology
@@ -416,3 +419,15 @@ today-widget-span = { $columns } columns · { $row }
 progress-fsrs-badge = FSRS
 today-widget-resize-target = Target: { $columns } columns × { $rows } rows
 progress-iso-tooltip = { $level }: { $mastered } of { $total } mastered · { $percent }%
+today-activity-less = Less
+today-activity-more = More
+today-weekday-mon = Mon
+today-weekday-wed = Wed
+today-weekday-fri = Fri
+
+today-activity-legend = Activity intensity
+
+today-activity-cell = { $date }: { $count } { $count ->
+    [one] answer
+   *[other] answers
+  }

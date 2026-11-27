@@ -110,7 +110,7 @@ tour-finish = Tushunarli
 
 auth-welcome = refl ga xush kelibsiz
 auth-welcome-eyebrow = Birinchi kirish
-auth-welcome-title = Ingliz tilini siz bilan qoladigan studiyada o‘rganing.
+auth-welcome-title = Siz bilan qoladigan studiyada ingliz tili.
 auth-welcome-body = Oflayn javoblar, qisqa mashqlar va artikllar bo‘ylab aniq marshrut.
 auth-subtitle = Bir martalik pochta kodi yoki Telegram orqali kiring.
 auth-dev-code = Ishlab chiqish kodi: { $code }
@@ -358,12 +358,12 @@ today-review-due = Takrorlash
 today-focus-kicker = Faol e’tibor
 today-focus-title = Xatolar va e’tibor
 today-focus-empty = Hali zaif joylar yo‘q. Birinchi javoblaringiz ularni shu yerda ko‘rsatadi.
-today-activity-kicker = Yetti hafta
+today-activity-kicker = So‘nggi haftalar
 today-activity-title = Faollik
 today-activity-best = Eng yaxshi: { $days } kun
-today-activity-today = Bugun: { $count } javob
-today-activity-summary = Yetti haftada { $total } javob. Eng yaxshi seriya: { $best } kun.
-today-activity-empty = Oxirgi yetti haftada hali faollik yo‘q.
+today-activity-today = Bugun: { $count } ta javob
+today-activity-summary = So‘nggi haftalarda { $total } javob. Eng yaxshi seriya: { $best } kun.
+today-activity-empty = So‘nggi haftalarda hali faollik yo‘q.
 
 domain-grammar = Grammatika
 domain-phonology = Fonologiya
@@ -416,3 +416,12 @@ today-widget-span = { $columns } ustun · { $row }
 progress-fsrs-badge = FSRS
 today-widget-resize-target = Maqsad: { $columns } ustun × { $rows } qator
 progress-iso-tooltip = { $level }: { $total } dan { $mastered } o‘zlashtirilgan · { $percent }%
+today-activity-less = Kam
+today-activity-more = Ko‘p
+today-weekday-mon = Dush
+today-weekday-wed = Chor
+today-weekday-fri = Jum
+
+today-activity-legend = Faollik intensivligi
+
+today-activity-cell = { $date }: { $count } ta javob

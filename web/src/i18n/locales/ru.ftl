@@ -110,7 +110,7 @@ tour-finish = Понятно
 
 auth-welcome = Добро пожаловать в refl
 auth-welcome-eyebrow = Первый вход
-auth-welcome-title = Учите английский в студии, которая остаётся с вами.
+auth-welcome-title = Английский в студии, которая остаётся с вами.
 auth-welcome-body = Ответы без сети, короткие занятия и понятный маршрут по артиклям.
 auth-subtitle = Войдите по одноразовому коду из письма или через Telegram.
 auth-dev-code = Код для разработки: { $code }
@@ -358,12 +358,17 @@ today-review-due = Повторить
 today-focus-kicker = Активный фокус
 today-focus-title = Ошибки и фокус
 today-focus-empty = Слабых мест пока нет. Первые ответы покажут их здесь.
-today-activity-kicker = Семь недель
+today-activity-kicker = Последние недели
 today-activity-title = Активность
 today-activity-best = Лучшая серия: { $days } дн.
-today-activity-today = Сегодня: { $count } ответов
-today-activity-summary = { $total } ответов за семь недель. Лучшая серия: { $best } дн.
-today-activity-empty = За последние семь недель активности пока нет.
+today-activity-today = Сегодня: { $count } { $count ->
+    [one] ответ
+    [few] ответа
+    [many] ответов
+   *[other] ответа
+  }
+today-activity-summary = { $total } ответов за последние недели. Лучшая серия: { $best } дн.
+today-activity-empty = За последние недели активности пока нет.
 
 domain-grammar = Грамматика
 domain-phonology = Фонетика
@@ -416,3 +421,17 @@ today-widget-span = { $columns } колонки · { $row }
 progress-fsrs-badge = FSRS
 today-widget-resize-target = Цель: { $columns } колонки × { $rows } строки
 progress-iso-tooltip = { $level }: освоено { $mastered } из { $total } · { $percent }%
+today-activity-less = Меньше
+today-activity-more = Больше
+today-weekday-mon = Пн
+today-weekday-wed = Ср
+today-weekday-fri = Пт
+
+today-activity-legend = Интенсивность активности
+
+today-activity-cell = { $date }: { $count } { $count ->
+    [one] ответ
+    [few] ответа
+    [many] ответов
+   *[other] ответа
+  }

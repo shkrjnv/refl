@@ -155,3 +155,12 @@
 - `ProgressScreen` no longer shows the raw retrievability equation. The FSRS card keeps stability, difficulty, retention, and mean-interval metrics plus the interactive curve; CEFR mastery is now an animated isometric prism chart with hover/focus tooltips, and the curve/ring surfaces carry reduced-motion-aware particle and liquid-morph ambience.
 - Added Vitest coverage for minimum-span clamping, ghost resize feedback, `BrandLogo`, and equation-free analytics.
 - `just fmt-check`, `just lint`, `just test`, and `just web` pass; the commit is local and not pushed.
+
+## W10 — compact multilingual auth, multi-pole thermal field, fixed mobile dashboard, and larger activity heatmap
+
+- Russian and Uzbek auth headlines use the shorter approved copy. The showcase `h1` is now `clamp(2.1rem, 3.3vw, 3.1rem)` at `1.06` leading, `-0.03em` tracking, and a `14ch` measure. Uzbek gets a `19ch` measure because the approved sentence otherwise stacks into four short lines or leaves an orphan at `14ch`.
+- Auth's right panel is now a four-source infrared field: independent drifting centres, radii, amplitudes, elongation, rotation, domain warping, five isothermal contours, a `#120729 → #3B0D6B → #9D174D → #EA580C → #FACC15 → #FEF9C3` ramp, and a fine deterministic sensor grain. The animation freezes on the last frame when the success overlay pauses it; reduced motion draws a static frame.
+- At `max-width: 768px` Today is a fixed single-column stack: Edit/Done/Reset, edit bars, drag handles, resize handles, ghosts, and badges are hidden, and drag/resize starts are guarded in code. The stored `colSpan`/`rowSpan` layout is untouched, so the desktop arrangement returns when the viewport grows.
+- The activity heatmap covers 16 full weeks (112 days) in 16 columns, with Mon/Wed/Fri cues, per-day native tooltips, a five-step Less → More legend, and singular/plural “Today” counts. Measured cell sizes are 14.9px at 1440px and 14.2px at 390px with 4px gaps, so the grid fills the card in both layouts.
+- Added coverage for the mobile edit lock (desktop edit mode → viewport change → controls removed), the 112-cell heatmap, tooltips, legend, and plural counts. All 82 web tests pass.
+- `just fmt-check`, `just lint`, `just test`, and `just web` pass; the commit is local and not pushed.

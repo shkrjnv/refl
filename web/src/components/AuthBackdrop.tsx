@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 
 type Rgb = readonly [number, number, number];
 
-interface Blob {
+interface Plume {
   cx: number;
   cy: number;
   ax: number;
@@ -12,17 +12,71 @@ interface Blob {
   radius: number;
   phase: number;
   amplitude: number;
+  stretchX: number;
+  stretchY: number;
+  rotation: number;
 }
 
-const BLOBS: readonly Blob[] = [
-  { cx: 0.22, cy: 0.3, ax: 0.08, ay: 0.05, sx: 0.07, sy: 0.05, radius: 0.25, phase: 0.4, amplitude: 1.1 },
-  { cx: 0.74, cy: 0.22, ax: 0.06, ay: 0.08, sx: 0.05, sy: 0.07, radius: 0.21, phase: 2.1, amplitude: 1.2 },
-  { cx: 0.61, cy: 0.57, ax: 0.12, ay: 0.05, sx: 0.06, sy: 0.09, radius: 0.24, phase: 4.2, amplitude: 1.35 },
-  { cx: 0.86, cy: 0.73, ax: 0.05, ay: 0.1, sx: 0.08, sy: 0.05, radius: 0.24, phase: 5.5, amplitude: 1.0 },
-  { cx: 0.25, cy: 0.8, ax: 0.1, ay: 0.06, sx: 0.04, sy: 0.08, radius: 0.2, phase: 1.3, amplitude: 0.95 },
+const PLUMES: readonly Plume[] = [
+  {
+    cx: 0.72,
+    cy: 0.2,
+    ax: 0.065,
+    ay: 0.045,
+    sx: 0.05,
+    sy: 0.043,
+    radius: 0.19,
+    phase: 0.7,
+    amplitude: 1.55,
+    stretchX: 1.32,
+    stretchY: 0.78,
+    rotation: -0.38,
+  },
+  {
+    cx: 0.22,
+    cy: 0.42,
+    ax: 0.075,
+    ay: 0.045,
+    sx: 0.04,
+    sy: 0.061,
+    radius: 0.17,
+    phase: 2.4,
+    amplitude: 1.16,
+    stretchX: 0.8,
+    stretchY: 1.5,
+    rotation: 0.4,
+  },
+  {
+    cx: 0.8,
+    cy: 0.62,
+    ax: 0.1,
+    ay: 0.045,
+    sx: 0.06,
+    sy: 0.037,
+    radius: 0.145,
+    phase: 4.1,
+    amplitude: 1.02,
+    stretchX: 1.28,
+    stretchY: 0.82,
+    rotation: -0.18,
+  },
+  {
+    cx: 0.27,
+    cy: 0.82,
+    ax: 0.055,
+    ay: 0.07,
+    sx: 0.035,
+    sy: 0.052,
+    radius: 0.15,
+    phase: 5.4,
+    amplitude: 0.9,
+    stretchX: 0.96,
+    stretchY: 1.25,
+    rotation: 0.3,
+  },
 ];
 
-const CONTOURS = [0.22, 0.38, 0.56, 0.72] as const;
+const CONTOURS = [0.18, 0.32, 0.46, 0.6, 0.74] as const;
 
 function cssColor(name: string): string {
   if (typeof window === "undefined") {
@@ -64,41 +118,64 @@ function mix(left: Rgb, right: Rgb, amount: number): Rgb {
 }
 
 function colorAt(value: number, ramp: readonly Rgb[], hot: Rgb): Rgb {
-  if (value <= 0.18) {
-    return mix(ramp[0] ?? hot, ramp[1] ?? hot, value / 0.18);
+  if (value <= 0.16) {
+    return mix(ramp[0] ?? hot, ramp[1] ?? hot, value / 0.16);
   }
-  if (value <= 0.38) {
-    return mix(ramp[1] ?? hot, ramp[2] ?? hot, (value - 0.18) / 0.2);
+  if (value <= 0.34) {
+    return mix(ramp[1] ?? hot, ramp[2] ?? hot, (value - 0.16) / 0.18);
   }
-  if (value <= 0.58) {
-    return mix(ramp[2] ?? hot, ramp[3] ?? hot, (value - 0.38) / 0.2);
+  if (value <= 0.52) {
+    return mix(ramp[2] ?? hot, ramp[3] ?? hot, (value - 0.34) / 0.18);
   }
-  if (value <= 0.78) {
-    return mix(ramp[3] ?? hot, ramp[4] ?? hot, (value - 0.58) / 0.2);
+  if (value <= 0.7) {
+    return mix(ramp[3] ?? hot, ramp[4] ?? hot, (value - 0.52) / 0.18);
   }
-  return mix(ramp[4] ?? hot, hot, (value - 0.78) / 0.22);
+  return mix(ramp[4] ?? hot, hot, (value - 0.7) / 0.3);
 }
 
 function fieldAt(x: number, y: number, time: number): number {
+  // Two low-frequency waves bend the domain, so isolines never become perfect
+  // concentric ovals. Each source also has its own elongation and orientation.
+  const warpX =
+    Math.sin(y * 7.4 + time * 0.11) * 0.009 +
+    Math.sin(x * 5.2 - time * 0.073) * 0.006;
+  const warpY =
+    Math.cos(x * 6.1 - time * 0.09) * 0.009 +
+    Math.cos(y * 4.4 + time * 0.082) * 0.006;
   let total = 0;
-  for (const blob of BLOBS) {
+  for (const plume of PLUMES) {
     const cx =
-      blob.cx +
-      Math.sin(time * blob.sx + blob.phase) * blob.ax +
-      Math.sin(time * blob.sx * 0.43 + blob.phase * 2.3) * blob.ax * 0.35;
+      plume.cx +
+      Math.sin(time * plume.sx + plume.phase) * plume.ax +
+      Math.sin(time * plume.sx * 0.43 + plume.phase * 2.3) * plume.ax * 0.35;
     const cy =
-      blob.cy +
-      Math.cos(time * blob.sy + blob.phase) * blob.ay +
-      Math.cos(time * blob.sy * 0.37 + blob.phase * 1.7) * blob.ay * 0.3;
+      plume.cy +
+      Math.cos(time * plume.sy + plume.phase) * plume.ay +
+      Math.cos(time * plume.sy * 0.37 + plume.phase * 1.7) * plume.ay * 0.3;
     const radius =
-      blob.radius * (0.92 + Math.sin(time * 0.05 + blob.phase) * 0.08);
-    const dx = x - cx;
-    const dy = y - cy;
+      plume.radius * (0.92 + Math.sin(time * 0.05 + plume.phase) * 0.08);
+    const dx = x + warpX - cx;
+    const dy = y + warpY - cy;
+    const cosine = Math.cos(plume.rotation);
+    const sine = Math.sin(plume.rotation);
+    const localX = (dx * cosine + dy * sine) / plume.stretchX;
+    const localY = (-dx * sine + dy * cosine) / plume.stretchY;
     total +=
-      blob.amplitude *
-      Math.exp(-(dx * dx + dy * dy) / (2 * radius * radius));
+      plume.amplitude *
+      Math.exp(-(localX * localX + localY * localY) / (2 * radius * radius));
   }
-  return 1 - Math.exp(-total * 0.235);
+  return Math.min(1, total * 0.56);
+}
+
+function sensorGrain(x: number, y: number, time: number): number {
+  let value =
+    (x * 374761393 + y * 668265263 + Math.floor(time * 12) * 1442695041) | 0;
+  value = (value ^ (value >>> 13)) * 1274126177 | 0;
+  return (((value ^ (value >>> 16)) & 255) / 255 - 0.5) * 7;
+}
+
+function clampChannel(value: number): number {
+  return Math.max(0, Math.min(255, Math.round(value)));
 }
 
 function drawFrame(
@@ -118,15 +195,17 @@ function drawFrame(
       const value = fieldAt(nx, ny, time);
       let color = colorAt(value, ramp, hot);
       for (const contour of CONTOURS) {
-        const distance = Math.abs(value - contour);
-        if (distance < 0.017) {
-          color = mix(color, hot, 0.5 * (1 - distance / 0.017));
+        const wobble = Math.sin(nx * 13 + ny * 8 + time * 0.35) * 0.006;
+        const distance = Math.abs(value - (contour + wobble));
+        if (distance < 0.015) {
+          color = mix(color, hot, 0.38 * (1 - distance / 0.015));
         }
       }
+      const grain = sensorGrain(x, y, time);
       const offset = (y * width + x) * 4;
-      data[offset] = color[0];
-      data[offset + 1] = color[1];
-      data[offset + 2] = color[2];
+      data[offset] = clampChannel(color[0] + grain);
+      data[offset + 1] = clampChannel(color[1] + grain);
+      data[offset + 2] = clampChannel(color[2] + grain);
       data[offset + 3] = 255;
     }
   }
@@ -135,6 +214,7 @@ function drawFrame(
 
 export function AuthBackdrop({ paused = false }: { paused?: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const lastTimeRef = useRef(0);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -149,13 +229,13 @@ export function AuthBackdrop({ paused = false }: { paused?: boolean }) {
     if (!context) {
       return;
     }
-    const base = parseHex(cssColor("--thermal-base"), [27, 11, 59]);
-    const violet = parseHex(cssColor("--thermal-violet"), [63, 28, 120]);
-    const crimson = parseHex(cssColor("--thermal-crimson"), [232, 74, 39]);
-    const magenta = parseHex(cssColor("--thermal-magenta"), [217, 70, 239]);
-    const amber = parseHex(cssColor("--thermal-amber"), [254, 240, 138]);
-    const hot = parseHex(cssColor("--thermal-hot"), [255, 247, 198]);
-    const ramp: readonly Rgb[] = [base, violet, crimson, magenta, amber];
+    const base = parseHex(cssColor("--thermal-base"), [18, 7, 41]);
+    const violet = parseHex(cssColor("--thermal-violet"), [59, 13, 107]);
+    const crimson = parseHex(cssColor("--thermal-crimson"), [157, 23, 77]);
+    const orange = parseHex(cssColor("--thermal-orange"), [234, 88, 12]);
+    const gold = parseHex(cssColor("--thermal-gold"), [250, 204, 21]);
+    const hot = parseHex(cssColor("--thermal-hot"), [254, 249, 195]);
+    const ramp: readonly Rgb[] = [base, violet, crimson, orange, gold];
     const reduced =
       typeof window.matchMedia === "function" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -172,7 +252,14 @@ export function AuthBackdrop({ paused = false }: { paused?: boolean }) {
         canvas.width = width;
         canvas.height = height;
       }
-      drawFrame(context, width, height, reduced ? 4.2 : last < 0 ? 0 : last / 1000, ramp, hot);
+      drawFrame(
+        context,
+        width,
+        height,
+        reduced ? 4.2 : lastTimeRef.current,
+        ramp,
+        hot,
+      );
     };
 
     resize();
@@ -187,7 +274,15 @@ export function AuthBackdrop({ paused = false }: { paused?: boolean }) {
       }
       if (now - last >= 45) {
         last = now;
-        drawFrame(context, canvas.width, canvas.height, now / 1000, ramp, hot);
+        lastTimeRef.current = now / 1000;
+        drawFrame(
+          context,
+          canvas.width,
+          canvas.height,
+          lastTimeRef.current,
+          ramp,
+          hot,
+        );
       }
       frame = window.requestAnimationFrame(tick);
     };

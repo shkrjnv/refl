@@ -19,7 +19,9 @@ export interface ActivitySummary {
   todayCount: number;
 }
 
-export const ACTIVITY_DAYS = 49;
+// Sixteen full weeks keep the GitHub-style grid filling the card while each
+// cell stays in the readable 14-18px range on desktop.
+export const ACTIVITY_DAYS = 112;
 
 export function localDay(now = Date.now()): string {
   const date = new Date(now);
