@@ -23,7 +23,7 @@ import { PaletteToggle } from "../components/AppearanceMenu";
 import { IellaSprite, type IellaMood } from "../components/IellaSprite";
 import { LanguageMenu } from "../components/LanguageMenu";
 import { BrandLogo, StudioIcon } from "../components/StudioIcons";
-import { Button, PulseConfirm } from "../components/ui";
+import { Button } from "../components/ui";
 import { useTranslation, type Locale } from "../i18n";
 import type { SkinName, ThemeName } from "../theme/tokens";
 import {
@@ -80,7 +80,6 @@ const TELEGRAM_QUERY_KEYS = [
   "hash",
 ] as const;
 const CODE_LENGTH = 6;
-const AUTH_SUCCESS_MS = 450;
 
 function clearTelegramParams(): void {
   if (typeof window === "undefined") {
@@ -135,14 +134,6 @@ function maskEmail(email: string): string {
   return `${visible}${"*".repeat(Math.max(2, local.length - 1))}@${domain}`;
 }
 
-function confirmationSkipped(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    typeof window.matchMedia === "function" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches
-  );
-}
-
 export function AuthScreen({
   api,
   inviteCode,
@@ -165,10 +156,6 @@ export function AuthScreen({
     Array.from({ length: CODE_LENGTH }, () => ""),
   );
   const [sent, setSent] = useState<RequestCodeResponse | null>(null);
-  const [confirmation, setConfirmation] = useState<{
-    tokens: AuthTokens;
-    method: AuthMethod;
-  } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [telegram] = useState(() => telegramInitData());
@@ -182,7 +169,6 @@ export function AuthScreen({
   const formContentRef = useRef<HTMLDivElement | null>(null);
   const handledReturnRef = useRef(false);
   const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
-  const confirmationTimerRef = useRef<number | null>(null);
   const callbacksRef = useRef({ onAuthenticated, onPending, onAccessBlocked });
   callbacksRef.current = { onAuthenticated, onPending, onAccessBlocked };
   const code = digits.join("");
@@ -206,18 +192,7 @@ export function AuthScreen({
   }, [stage, error, sent, inviteCode]);
 
   const completeAuthentication = (tokens: AuthTokens, method: AuthMethod) => {
-    if (confirmationSkipped()) {
-      callbacksRef.current.onAuthenticated(tokens, method);
-      return;
-    }
-    setConfirmation({ tokens, method });
-    if (confirmationTimerRef.current !== null) {
-      window.clearTimeout(confirmationTimerRef.current);
-    }
-    confirmationTimerRef.current = window.setTimeout(() => {
-      confirmationTimerRef.current = null;
-      callbacksRef.current.onAuthenticated(tokens, method);
-    }, AUTH_SUCCESS_MS);
+    callbacksRef.current.onAuthenticated(tokens, method);
   };
 
   const handleResponse = (response: VerifyCodeResponse, method: AuthMethod) => {
@@ -310,15 +285,6 @@ export function AuthScreen({
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [authenticateTelegram, consumeTelegramReturn]);
-
-  useEffect(
-    () => () => {
-      if (confirmationTimerRef.current !== null) {
-        window.clearTimeout(confirmationTimerRef.current);
-      }
-    },
-    [],
-  );
 
   const requestCode = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -447,21 +413,6 @@ export function AuthScreen({
 
   return (
     <div className="auth-screen" data-skin={skin}>
-      {confirmation ? (
-        <div className="auth-success" role="status" aria-live="polite">
-          <PulseConfirm active={confirmation !== null} className="auth-success-pulse" />
-          <svg
-            className="auth-success-mark"
-            viewBox="0 0 120 120"
-            aria-hidden="true"
-          >
-            <circle className="auth-success-ring" cx="60" cy="60" r="46" />
-            <path className="auth-success-check" d="M37 61l15 15 31-36" />
-          </svg>
-          <p>{t("auth-success")}</p>
-        </div>
-      ) : null}
-
       <section className="auth-panel" aria-label={t("auth-title")}>
         <div className="auth-panel-topbar">
           <div className="auth-brand-group">
@@ -626,7 +577,7 @@ export function AuthScreen({
       </section>
 
       <section className="auth-visual" aria-label={t("auth-welcome")}>
-        <AuthBackdrop paused={confirmation !== null} focus={thermalFocus} />
+        <AuthBackdrop focus={thermalFocus} />
         <div className="auth-studio-grain" aria-hidden="true" />
         <div className="auth-visual-copy">
           <h1>{t("auth-welcome-title")}</h1>

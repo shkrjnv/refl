@@ -83,10 +83,13 @@ describe("studio identity", () => {
     ).toBe("true");
 
     const css = readFileSync("src/app.css", "utf8");
-    expect(css).toMatch(/opacity 180ms cubic-bezier\(0\.22, 1, 0\.36, 1\)/);
-    expect(css).toMatch(/filter: blur\(4px\)/);
-    expect(css).toMatch(/scale\(0\.78\)/);
-    expect(css).toMatch(/prefers-reduced-motion: reduce[\s\S]*?\.crossfade-icon-state/);
+    const crossfade = css.slice(css.lastIndexOf(".crossfade-icon-state {"));
+    expect(crossfade).toContain("opacity 140ms ease");
+    expect(crossfade).not.toContain("filter: blur(4px)");
+    expect(crossfade).toContain("scale(0.94)");
+    expect(css).toMatch(
+      /prefers-reduced-motion: reduce[\s\S]*?\.crossfade-icon-state/,
+    );
   });
 
   it("keeps the navigation icon set on the same stroke geometry", () => {

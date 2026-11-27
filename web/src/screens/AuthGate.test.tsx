@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 
+import { readFileSync } from "node:fs";
+
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, describe, expect, it } from "vitest";
@@ -18,6 +20,15 @@ afterEach(() => {
   document.documentElement.removeAttribute("data-palette");
   document.documentElement.style.removeProperty("color-scheme");
 });
+
+function cssRule(css: string, selector: string): string {
+  const marker = css.indexOf("/* W17");
+  const start = css.indexOf(selector, marker >= 0 ? marker : 0);
+  expect(start, selector).toBeGreaterThanOrEqual(0);
+  const open = css.indexOf("{", start);
+  const close = css.indexOf("}", open);
+  return css.slice(open + 1, close);
+}
 
 describe("auth and access flow", () => {
   it("keeps the invite and moves to pending approval", async () => {
@@ -251,9 +262,116 @@ describe("auth and access flow", () => {
     ]) {
       expect(screen.getByRole("button", { name })).toBeTruthy();
     }
+
+    const choices = Array.from(
+      document.querySelectorAll<HTMLButtonElement>(
+        ".auth-panel-topbar .palette-choice",
+      ),
+    );
+    expect(choices).toHaveLength(5);
+    expect(
+      document.querySelectorAll(".auth-panel-topbar .appearance-chip-swatch"),
+    ).toHaveLength(5);
+    expect(choices.filter((choice) => choice.classList.contains("active"))).toHaveLength(
+      1,
+    );
+    expect(
+      choices
+        .find((choice) => choice.classList.contains("active"))
+        ?.querySelector(".palette-swatch-burgundy"),
+    ).not.toBeNull();
+
+    const css = readFileSync("src/app.css", "utf8");
+    const toggle = cssRule(css, ".auth-panel-topbar .palette-toggle {");
+    expect(toggle).toContain("gap: 6px");
+    expect(toggle).toContain("padding: 4px");
+    const choice = cssRule(
+      css,
+      ".auth-panel-topbar .palette-choice,\n.auth-panel-topbar .palette-choice.active {",
+    );
+    expect(choice).toContain("width: 28px");
+    expect(choice).toContain("min-height: 28px");
+    const activeSwatch = cssRule(
+      css,
+      ".auth-panel-topbar .palette-choice.active .appearance-chip-swatch {",
+    );
+    expect(activeSwatch).toContain("outline: 2px solid var(--text)");
+    expect(activeSwatch).toContain("outline-offset: 2px");
+    expect(activeSwatch).not.toContain("0 0 0 3.5px");
   });
 
-  it("shows the confirmation check before entering the app", async () => {
+  it("renders one clean email input with a single inset focus ring", () => {
+    render(
+      <I18nProvider initialLocale="en">
+        <AuthGate
+          api={{
+            requestCode: async () => ({ sent: true, expires_in: 600 }),
+            verifyCode: async () => ({
+              access_token: "a",
+              refresh_token: "r",
+              learner_id: "learner-42",
+              expires_in: 900,
+            }),
+            telegramLogin: async () => ({
+              access_token: "a",
+              refresh_token: "r",
+              learner_id: "learner-42",
+              expires_in: 900,
+            }),
+          }}
+          inviteCode={null}
+          theme="deep-umber"
+          skin="living-studio"
+          locale="en"
+          locales={["en", "ru", "uz"]}
+          onLocaleChange={() => undefined}
+          onThemeChange={() => undefined}
+          onAuthenticated={() => undefined}
+        />
+      </I18nProvider>,
+    );
+
+    const inputs = Array.from(
+      document.querySelectorAll<HTMLInputElement>(".auth-form input"),
+    );
+    expect(inputs).toHaveLength(1);
+    expect(inputs[0]?.type).toBe("email");
+    expect(inputs[0]?.getAttribute("style")).toBeNull();
+
+    const css = readFileSync("src/app.css", "utf8");
+    const emailFocus = cssRule(
+      css,
+      ".auth-form input:not(.auth-code-slot):focus,\n.auth-form input:not(.auth-code-slot):focus-visible {",
+    );
+    expect(emailFocus).toContain("outline: none");
+    expect(emailFocus).toContain(
+      "box-shadow: inset 0 0 0 1px var(--focus-ring)",
+    );
+    expect(emailFocus).not.toContain("outline-offset");
+    expect(emailFocus).not.toContain("0 0 0 4px");
+
+    const otpBase = cssRule(css, ".auth-code-slot {");
+    expect(otpBase).toContain("box-shadow: none");
+    const otpFocus = cssRule(
+      css,
+      ".auth-code-slot:focus,\n.auth-code-slot:focus-visible {",
+    );
+    expect(otpFocus).toContain("outline: none");
+    expect(otpFocus).toContain(
+      "box-shadow: inset 0 0 0 1px var(--focus-ring)",
+    );
+    expect(otpFocus).toContain("transform: none");
+    expect(otpFocus).not.toContain("0 5px 0");
+
+    const reducedMotion = css.slice(
+      css.lastIndexOf("@media (prefers-reduced-motion: reduce)"),
+    );
+    expect(reducedMotion).toContain(".auth-form-code");
+    expect(reducedMotion).toContain(".auth-form-region .ui-button");
+    expect(reducedMotion).toContain(".studio-main");
+  });
+
+  it("enters the app directly without a duplicate success overlay", async () => {
     let authenticated: AuthTokens | null = null;
     const api: AuthApi = {
       requestCode: async () => ({ sent: true, expires_in: 600, code: "123456" }),
@@ -298,8 +416,8 @@ describe("auth and access flow", () => {
       target: { value: "123456" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
-    await screen.findByText("Signed in");
-    expect(authenticated).toBeNull();
     await waitFor(() => expect(authenticated).not.toBeNull(), { timeout: 2000 });
+    expect(screen.queryByText("Signed in")).toBeNull();
+    expect(document.querySelector(".auth-success")).toBeNull();
   });
 });

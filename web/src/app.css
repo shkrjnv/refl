@@ -10223,18 +10223,6 @@ input:focus-visible {
   overflow: hidden;
 }
 
-.auth-success-pulse {
-  inset: 50% auto auto 50%;
-  width: 148px;
-  height: 148px;
-  margin: -74px 0 0 -74px;
-  border-radius: 50%;
-}
-
-.auth-success {
-  position: relative;
-}
-
 /* Disclosure and rule-row grid expansion. */
 .ui-disclosure-body {
   display: grid;
@@ -10520,5 +10508,312 @@ input:focus-visible {
     animation: none;
     transition: none;
     transform: none;
+  }
+}
+
+/* ========================================================================== */
+/* W17 — crisp auth controls, a direct entry, and restrained motion.          */
+/* ========================================================================== */
+
+/* One border, one inset focus ring. No offset outline or extra glow. */
+.auth-form input:not(.auth-code-slot) {
+  border: 1px solid var(--border-strong);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 4%, transparent);
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.auth-form input:not(.auth-code-slot):focus,
+.auth-form input:not(.auth-code-slot):focus-visible {
+  border-color: var(--focus-ring);
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--focus-ring);
+}
+
+.auth-code-slot {
+  border: 1px solid var(--border-strong);
+  box-shadow: none;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.auth-code-slot:focus,
+.auth-code-slot:focus-visible {
+  border-color: var(--focus-ring);
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--focus-ring);
+  transform: none;
+}
+
+/* Five even swatches, one quiet active ring, and room between every choice. */
+.auth-panel-topbar .palette-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+.auth-panel-topbar .palette-choice,
+.auth-panel-topbar .palette-choice.active {
+  display: inline-grid;
+  width: 28px;
+  min-height: 28px;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  padding: 0;
+  transition: transform 140ms ease;
+}
+
+.auth-panel-topbar .palette-choice:active {
+  transform: scale(0.94);
+}
+
+.auth-panel-topbar .appearance-chip-swatch,
+.auth-panel-topbar .appearance-chip-swatch-tiny {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  outline: none;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border-strong) 86%, transparent);
+}
+
+.auth-panel-topbar .appearance-chip-swatch::before {
+  inset: 4px;
+  border-radius: 3px;
+}
+
+.auth-panel-topbar .appearance-chip-swatch > span {
+  right: 3px;
+  bottom: 3px;
+  width: 5px;
+  height: 5px;
+  border-radius: 2px;
+}
+
+.auth-panel-topbar .palette-choice.active .appearance-chip-swatch {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border-strong) 86%, transparent);
+}
+
+.auth-panel-topbar .palette-choice:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+@media (max-width: 620px) {
+  .auth-panel-topbar .palette-toggle {
+    gap: 4px;
+    padding: 3px;
+  }
+
+  .auth-panel-topbar .palette-choice,
+  .auth-panel-topbar .palette-choice.active {
+    width: 24px;
+    min-height: 24px;
+  }
+
+  .auth-panel-topbar .appearance-chip-swatch,
+  .auth-panel-topbar .appearance-chip-swatch-tiny {
+    width: 18px;
+    height: 18px;
+  }
+
+  .auth-panel-topbar .palette-choice.active .appearance-chip-swatch {
+    outline-offset: 1px;
+  }
+}
+
+/* Auth controls answer once: no hover lift, spring, or blurring label. */
+.auth-form-region .ui-button {
+  transition:
+    transform 140ms ease,
+    box-shadow 140ms ease,
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.auth-form-region .ui-button:hover:not(:disabled) {
+  transform: none;
+}
+
+.auth-form-region .ui-button:active:not(:disabled) {
+  transform: scale(0.985);
+  transition-duration: 120ms;
+}
+
+.auth-submit-label {
+  transition: none;
+}
+
+.auth-form-region .ui-button:hover:not(:disabled) .auth-submit-label {
+  letter-spacing: 0;
+  transform: none;
+}
+
+.auth-form-region .ui-button[aria-busy="true"],
+.auth-form-region .ui-button[aria-busy="true"] .auth-submit-label {
+  animation: none;
+}
+
+.auth-form-code,
+.auth-stage-code .auth-card-head {
+  animation: auth-form-in 140ms ease-out both;
+}
+
+@keyframes auth-form-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.auth-form-region {
+  transition: height 140ms ease;
+}
+
+.studio-main {
+  animation: studio-enter 140ms ease-out both;
+}
+
+@keyframes studio-enter {
+  from {
+    transform: translateY(2px);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+/* Icons and disclosures crossfade in a single crisp step. */
+.crossfade-icon-state {
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
+}
+
+.crossfade-icon-state-from {
+  opacity: 1;
+  transform: scale(1);
+  filter: none;
+}
+
+.crossfade-icon-state-to {
+  opacity: 0;
+  transform: scale(0.94);
+  filter: none;
+}
+
+.crossfade-icon[data-active="true"] .crossfade-icon-state-from {
+  opacity: 0;
+  transform: scale(1.04);
+  filter: none;
+}
+
+.crossfade-icon[data-active="true"] .crossfade-icon-state-to {
+  opacity: 1;
+  transform: scale(1);
+  filter: none;
+}
+
+.ui-disclosure-body,
+.mastery-detail {
+  transition:
+    grid-template-rows 140ms ease,
+    opacity 120ms ease;
+}
+
+.choice-option.snapping,
+.curve-range.snapping {
+  transition: transform 140ms ease-out;
+}
+
+.ui-button,
+.duration-pill,
+.choice-option,
+.sentence-token,
+.nav-item,
+.mobile-nav-item,
+.palette-choice,
+.language-option {
+  transition-duration: 140ms;
+}
+
+.ui-progress-fill {
+  transition-duration: 140ms;
+}
+
+.iso-tier {
+  transition: transform 140ms ease;
+}
+
+.iso-tier:hover,
+.iso-tier:focus-visible,
+.iso-tier.hovered {
+  transform: translateY(-2px);
+}
+
+/* Confirmation is a brief flash, not a pair of expanding rings. */
+.pulse-confirm.active::before {
+  animation: pulse-confirm 140ms ease-out forwards;
+}
+
+.pulse-confirm.active::after {
+  animation: none;
+  content: none;
+}
+
+@keyframes pulse-confirm {
+  0% {
+    opacity: 0.55;
+    transform: scale(0.985);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.02);
+  }
+}
+
+/* Reveals are immediate; content should never be hidden for effect. */
+.chart-area,
+.chart-curve,
+.iso-body,
+.mastery-row-bar .ui-progress-fill {
+  animation: none;
+  clip-path: none;
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-form input:not(.auth-code-slot),
+  .auth-code-slot,
+  .auth-form-region .ui-button,
+  .auth-panel-topbar .palette-choice,
+  .crossfade-icon-state,
+  .ui-disclosure-body,
+  .mastery-detail,
+  .choice-option.snapping,
+  .curve-range.snapping,
+  .studio-main {
+    animation: none;
+    transition: none;
+  }
+
+  .auth-form-code,
+  .auth-stage-code .auth-card-head,
+  .pulse-confirm.active::before {
+    animation: none;
   }
 }

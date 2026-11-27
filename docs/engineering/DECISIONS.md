@@ -225,3 +225,12 @@
 - Primary targets are at least 44px (durational pills, check/answer buttons; Start session 52px), while destructive settings actions are compact and separated. Pressed states respond in 70ms; local WASM interactions keep the optimistic busy state without a blocking spinner.
 - Coverage now includes the 3-item rail plus bottom Profile card, APCA thresholds and CSS/TS parity, the open logo gap, CrossfadeIcon state transitions, and Iella focus staging. All 94 web tests pass.
 - `just fmt-check`, `just lint`, `just test`, and `just web` pass; the commit is local and not pushed.
+
+## W17 — crisp auth fields, direct entry, even palette swatches, and restrained motion
+
+- Auth inputs and OTP slots now have exactly one 1px border. Their focus state changes that border colour and adds a single 1px inset focus ring; the previous offset outline, outer glow, bottom-offset shadow, and OTP translateY jump are gone. This also removes the ghost panel that appeared under a focused email field.
+- The confirmation overlay (`Signed in`, backdrop tint, animated mark, and pulse rings) was removed from AuthScreen. Verification calls `onAuthenticated` directly, so the workspace appears once with no duplicated auth state or reflowed thermal panel during entry.
+- The five palette choices are uniform 28 × 28 px hit areas with 20 × 20 px swatches, a 6 px gap, and one quiet 2 px active outline; mobile keeps all five visible at 24 × 24 px choices and 18 × 18 px swatches. The earlier double outline/box-shadow active treatment was removed.
+- Motion is standardised at 140 ms for interactive controls (120 ms for auth press feedback): auth buttons no longer lift, spring, or blur their label; auth form/card entrances are 140 ms; CrossfadeIcon is a 140 ms opacity/scale change without blur; PulseConfirm is one 140 ms flash; disclosure, auth-height, rubber-band, and entry transitions are 140 ms. Decorative clip-path reveals were removed so content is visible immediately. The reduced-motion block disables the new auth and entry transitions.
+- Coverage now includes all five palette buttons and their active ring, single-email-input rendering plus source checks for the one-border/one-inset-ring rules, immediate entry with no success overlay, and the updated reduced-motion and crossfade contracts. All 95 web tests pass.
+- `just fmt-check`, `just lint`, `just test`, and `just web` pass; the commit is local and not pushed.
