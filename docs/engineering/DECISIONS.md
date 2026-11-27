@@ -132,3 +132,16 @@
 - Iella is redrawn from the 12×11 canonical artboard (28 exact one-unit rects, canonical paper colors) with integer scale steps, `crispEdges`, `image-rendering: pixelated`, and overflow clipping. The flying companion is removed; she is anchored in the companion card and the Today route perch with only a 1 px stepped breath and a slow opacity blink.
 - Added Vitest coverage for the four palettes, palette persistence/migration, Profile/Settings separation, shell route buttons and nav positions, Today telemetry and editable widgets, layout order/size/nav persistence and reset, activity folding, and canonical Iella geometry.
 - `just fmt-check`, `just lint`, `just test`, and `just web` pass; the commit is local and not pushed.
+
+## W8 — tactile thermal auth, real photo hero, Grafana widgets, frosted dock, and FSRS analytics
+
+- Auth now draws a woven felt surface from a local multi-layer `feTurbulence`/`feDiffuseLighting` tile and woven gradients; the rotating beam is removed. The right side is a local Canvas 2D infrared field on `#1B0B3B`, with procedural drifting blobs, crimson/magenta/amber ramps, and isothermal contour bands; the headline sits directly on the field with a text shadow and no translucent panel.
+- Auth carries the same compact `EN / RU / UZ` language pill as the shell, so locale can be chosen before sign-in. The pill expands on hover, focus-within, or tap and remains fully keyboard accessible.
+- The shell topbar now has only the hover language pill and the appearance control; the duplicate top gear is gone. Settings remains available from the learner footer gear and from the bottom dock.
+- The appearance popover is a 340px two-section surface: compact rounded-square palette chips and a five-row skin list with crisp checks, replacing the oversized rows and diagonal swatch dots.
+- Bottom navigation uses a translucent frosted dock with `blur(18px) saturate(165%)`, an inner specular rim, a soft ambient shadow, and `96px` scroll clearance. Narrow screens always use the bottom dock.
+- Today's dashboard is now a 3-column Grafana-style grid. Edit mode supports pointer drag with live neighbor reflow and FLIP transitions, keyboard move buttons, and a corner resize handle that snaps column spans `1/2/3` and row spans `compact/tall` with a dashed live outline. `refl.layout.v1` stores `order`, `colSpan`, `rowSpan`, and `nav`; the previous `sizes` shape migrates on read.
+- The hero uses a locally bundled 3000×1792 CC0 photograph (Bernard Spragg, Lake Pukaki / Mt Cook, Wikimedia Commons; attribution in `web/src/assets/ATTRIBUTION.md`) with no runtime network request. Iella's perch moved to the hero's upper rim, clear of the level readout.
+- `ProgressScreen` replaces the old three-card stats view with FSRS analytics: the exact `R(t) = (1 + t / (9 · S))⁻¹` curve, average stability and difficulty, an interactive forgetting-curve SVG with a 90% target, CEFR mastery bars, domain distribution, misconception strength and cure rates, and a calibration reference chart with an explicit empty state.
+- Added Vitest coverage for span persistence/migration, pointer resize, language switching, frosted-dock clearance CSS, and Progress FSRS metrics.
+- `just fmt-check`, `just lint`, `just test`, and `just web` pass; the commit is local and not pushed.

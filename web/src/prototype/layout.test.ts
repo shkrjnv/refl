@@ -5,15 +5,19 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   LAYOUT_KEY,
   defaultLayout,
-  type DashboardLayout,
+  defaultWidgetColSpans,
+  defaultWidgetRowSpans,
   moveWidget,
   normalizeLayout,
   readLayout,
   reorderWidget,
   resetLayout,
   storeLayout,
-  toggleWidgetSize,
+  updateWidgetSpan,
   widgetIds,
+  cycleWidgetColSpan,
+  toggleWidgetRowSpan,
+  type DashboardLayout,
 } from "./layout";
 
 afterEach(() => {
@@ -21,35 +25,52 @@ afterEach(() => {
 });
 
 describe("dashboard layout persistence", () => {
-  it("stores widget order, sizes, and navigation position under refl.layout.v1", () => {
+  it("stores order, column spans, row spans, and navigation under refl.layout.v1", () => {
     const layout = defaultLayout();
     const next: DashboardLayout = {
       ...layout,
-      nav: "bottom" as const,
-      order: [
-        "activity",
-        ...layout.order.filter((id) => id !== "activity"),
-      ],
-      sizes: { ...layout.sizes, activity: "wide" as const },
+      nav: "bottom",
+      order: ["activity", ...layout.order.filter((id) => id !== "activity")],
+      colSpan: { ...layout.colSpan, activity: 2 },
+      rowSpan: { ...layout.rowSpan, activity: "tall" },
     };
     storeLayout(next);
     const raw = window.localStorage.getItem(LAYOUT_KEY);
     expect(raw).not.toBeNull();
     expect(readLayout()).toEqual(next);
+    expect(raw).toContain('"colSpan"');
+    expect(raw).toContain('"rowSpan"');
   });
 
   it("repairs missing, duplicate, and unknown widgets", () => {
     const layout = normalizeLayout({
       nav: "sideways",
       order: ["activity", "activity", "unknown", "hero"],
-      sizes: { activity: "huge", rules: "compact" },
+      colSpan: { activity: 2, rules: 9 },
+      rowSpan: { memory: "tall", rules: "huge" },
     });
     expect(layout.nav).toBe("left");
     expect(layout.order.slice(0, 2)).toEqual(["activity", "hero"]);
     expect(layout.order).toHaveLength(widgetIds.length);
     expect(new Set(layout.order).size).toBe(widgetIds.length);
-    expect(layout.sizes.activity).toBe("compact");
-    expect(layout.sizes.rules).toBe("compact");
+    expect(layout.colSpan.activity).toBe(2);
+    expect(layout.colSpan.rules).toBe(defaultWidgetColSpans.rules);
+    expect(layout.rowSpan.memory).toBe("tall");
+    expect(layout.rowSpan.rules).toBe(defaultWidgetRowSpans.rules);
+  });
+
+  it("migrates the previous sizes field to three-column spans", () => {
+    const layout = normalizeLayout({
+      order: ["activity", "memory", "hero", "rules", "misconceptions"],
+      sizes: {
+        activity: "wide",
+        memory: "compact",
+        rules: "wide",
+      },
+    });
+    expect(layout.colSpan.activity).toBe(3);
+    expect(layout.colSpan.memory).toBe(1);
+    expect(layout.colSpan.rules).toBe(3);
   });
 
   it("reorders and moves widgets without dropping any card", () => {
@@ -73,18 +94,25 @@ describe("dashboard layout persistence", () => {
     );
   });
 
-  it("toggles compact and wide sizes and resets both order and navigation", () => {
+  it("updates spans, cycles controls, and resets the stored layout", () => {
     const layout = defaultLayout();
-    expect(toggleWidgetSize(layout.sizes, "memory").memory).toBe("wide");
+    const resized = updateWidgetSpan(layout, "memory", {
+      colSpan: 2,
+      rowSpan: "tall",
+    });
+    expect(resized.colSpan.memory).toBe(2);
+    expect(resized.rowSpan.memory).toBe("tall");
+    expect(cycleWidgetColSpan(1)).toBe(2);
+    expect(cycleWidgetColSpan(2)).toBe(3);
+    expect(cycleWidgetColSpan(3)).toBe(1);
+    expect(toggleWidgetRowSpan("compact")).toBe("tall");
     storeLayout({
-      ...layout,
+      ...resized,
       nav: "right",
       order: ["activity", "memory", "hero", "rules", "misconceptions"],
-      sizes: { ...layout.sizes, memory: "wide" },
     });
     expect(readLayout().nav).toBe("right");
-    const reset = resetLayout();
-    expect(reset).toEqual(defaultLayout());
+    expect(resetLayout()).toEqual(defaultLayout());
     expect(readLayout()).toEqual(defaultLayout());
     expect(window.localStorage.getItem(LAYOUT_KEY)).toContain('"nav":"left"');
   });

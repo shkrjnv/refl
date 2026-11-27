@@ -60,6 +60,9 @@ describe("auth and access flow", () => {
           inviteCode="INVITE-42"
           theme="deep-umber"
           skin="living-studio"
+          locale="en"
+          locales={["en", "ru", "uz"]}
+          onLocaleChange={() => undefined}
           onThemeChange={() => undefined}
           onAuthenticated={(tokens) => {
             authenticated = tokens;
@@ -130,6 +133,9 @@ describe("auth and access flow", () => {
           inviteCode="INVITE-42"
           theme="deep-umber"
           skin="living-studio"
+          locale="en"
+          locales={["en", "ru", "uz"]}
+          onLocaleChange={() => undefined}
           onThemeChange={() => undefined}
           onAuthenticated={(tokens) => {
             authenticated = tokens;
@@ -169,6 +175,9 @@ describe("auth and access flow", () => {
             inviteCode={null}
             theme={theme}
             skin="living-studio"
+            locale="en"
+            locales={["en", "ru", "uz"]}
+            onLocaleChange={() => undefined}
             onThemeChange={(next) => {
               selected = next;
               storeTheme(next);
@@ -213,6 +222,9 @@ describe("auth and access flow", () => {
           inviteCode={null}
           theme="deep-umber"
           skin="living-studio"
+          locale="en"
+          locales={["en", "ru", "uz"]}
+          onLocaleChange={() => undefined}
           onThemeChange={() => undefined}
           onAuthenticated={(tokens) => {
             authenticated = tokens;

@@ -35,7 +35,7 @@ import { AuthGate } from "./screens/AuthGate";
 import { LessonScreen } from "./screens/LessonScreen";
 import { ProfileScreen } from "./screens/ProfileScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
-import { StatsScreen } from "./screens/StatsScreen";
+import { ProgressScreen } from "./screens/ProgressScreen";
 import { SummaryScreen } from "./screens/SummaryScreen";
 import { TodayScreen } from "./screens/TodayScreen";
 import { logoutAndWipe } from "./sync/session";
@@ -525,6 +525,9 @@ export function App({ initialTheme, initialSkin }: AppProps) {
         inviteCode={inviteCodeFromUrl()}
         theme={theme}
         skin={skin}
+        locale={locale}
+        locales={locales}
+        onLocaleChange={setLocale}
         onThemeChange={changeAuthTheme}
         onAuthenticated={(tokens, method) => {
           void handleAuthenticated(tokens, method).catch(() =>
@@ -638,7 +641,7 @@ export function App({ initialTheme, initialSkin }: AppProps) {
         />
       ) : null}
       {route === "stats" ? (
-        <StatsScreen content={content} stateJson={stateJson} />
+        <ProgressScreen content={content} stateJson={stateJson} />
       ) : null}
       {route === "profile" ? (
         <ProfileScreen

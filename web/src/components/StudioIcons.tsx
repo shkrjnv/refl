@@ -21,7 +21,8 @@ export type StudioIconName =
   | "streak"
   | "spark"
   | "sun"
-  | "moon";
+  | "moon"
+  | "globe";
 
 export interface StudioIconProps {
   name: StudioIconName;
@@ -178,6 +179,14 @@ function paths(name: StudioIconName): ReactNode {
         <>
           <path d="M19.5 15.2A8.2 8.2 0 0 1 8.8 4.5 8.2 8.2 0 1 0 19.5 15.2Z" />
           <path d="M16.5 4.5v2M15.5 5.5h2" />
+        </>
+      );
+    case "globe":
+      return (
+        <>
+          <circle cx="12" cy="12" r="8.5" />
+          <path d="M3.8 9.5h16.4M3.8 14.5h16.4" />
+          <path d="M12 3.5c2.2 2.4 3.3 5.3 3.3 8.5s-1.1 6.1-3.3 8.5c-2.2-2.4-3.3-5.3-3.3-8.5s1.1-6.1 3.3-8.5Z" />
         </>
       );
     default:

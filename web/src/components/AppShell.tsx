@@ -6,6 +6,7 @@ import type { NavigationPosition } from "../prototype/layout";
 import type { SkinName, ThemeName } from "../theme/tokens";
 import { AppearanceMenu } from "./AppearanceMenu";
 import { IellaSprite } from "./IellaSprite";
+import { LanguageMenu } from "./LanguageMenu";
 import { StudioIcon, type StudioIconName } from "./StudioIcons";
 
 export type AppRoute =
@@ -70,6 +71,11 @@ export function AppShell({
     route: "profile",
     label: t("nav-profile"),
     glyph: "profile",
+  };
+  const settingsItem: NavItem = {
+    route: "settings",
+    label: t("nav-settings"),
+    glyph: "gear",
   };
 
   const navigate = (item: NavItem) => {
@@ -154,30 +160,11 @@ export function AppShell({
             <span className="brand-name">{t("app-name")}</span>
           </div>
           <div className="topbar-actions">
-            <div className="segmented" aria-label={t("app-language")}>
-              {locales.map((candidate) => (
-                <button
-                  key={candidate}
-                  type="button"
-                  className={
-                    candidate === locale ? "segment active" : "segment"
-                  }
-                  aria-pressed={candidate === locale}
-                  onClick={() => onLocaleChange(candidate)}
-                >
-                  {t(`language-${candidate}`)}
-                </button>
-              ))}
-            </div>
-            <button
-              type="button"
-              className={`topbar-settings${active === "settings" ? " active" : ""}`}
-              aria-label={t("nav-settings")}
-              aria-current={active === "settings" ? "page" : undefined}
-              onClick={() => onNavigate("settings")}
-            >
-              <StudioIcon name="gear" size={18} />
-            </button>
+            <LanguageMenu
+              locale={locale}
+              locales={locales}
+              onLocaleChange={onLocaleChange}
+            />
             <AppearanceMenu
               theme={theme}
               skin={skin}
@@ -190,7 +177,7 @@ export function AppShell({
       </div>
 
       <nav className="mobile-nav" aria-label={t("nav-label")}>
-        {[...primaryItems, profileItem].map((item) => (
+        {[...primaryItems, profileItem, settingsItem].map((item) => (
           <button
             key={item.route}
             type="button"

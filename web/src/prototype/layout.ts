@@ -9,20 +9,32 @@ export const widgetIds = [
 ] as const;
 
 export type WidgetId = (typeof widgetIds)[number];
-export type WidgetSize = "compact" | "wide";
+export const widgetColSpans = [1, 2, 3] as const;
+export type WidgetColSpan = (typeof widgetColSpans)[number];
+export const widgetRowSpans = ["compact", "tall"] as const;
+export type WidgetRowSpan = (typeof widgetRowSpans)[number];
 export type NavigationPosition = "left" | "right" | "bottom";
 
 export interface DashboardLayout {
   nav: NavigationPosition;
   order: WidgetId[];
-  sizes: Record<WidgetId, WidgetSize>;
+  colSpan: Record<WidgetId, WidgetColSpan>;
+  rowSpan: Record<WidgetId, WidgetRowSpan>;
 }
 
 export const LAYOUT_KEY = "refl.layout.v1";
 
-export const defaultWidgetSizes: Record<WidgetId, WidgetSize> = {
-  hero: "wide",
-  rules: "wide",
+export const defaultWidgetColSpans: Record<WidgetId, WidgetColSpan> = {
+  hero: 3,
+  rules: 3,
+  memory: 1,
+  misconceptions: 1,
+  activity: 1,
+};
+
+export const defaultWidgetRowSpans: Record<WidgetId, WidgetRowSpan> = {
+  hero: "tall",
+  rules: "compact",
   memory: "compact",
   misconceptions: "compact",
   activity: "compact",
@@ -32,23 +44,25 @@ export function defaultLayout(): DashboardLayout {
   return {
     nav: "left",
     order: [...widgetIds],
-    sizes: { ...defaultWidgetSizes },
+    colSpan: { ...defaultWidgetColSpans },
+    rowSpan: { ...defaultWidgetRowSpans },
   };
 }
 
 function isWidgetId(value: unknown): value is WidgetId {
-  return (
-    typeof value === "string" &&
-    widgetIds.includes(value as WidgetId)
-  );
+  return typeof value === "string" && widgetIds.includes(value as WidgetId);
 }
 
 function isNavigationPosition(value: unknown): value is NavigationPosition {
   return value === "left" || value === "right" || value === "bottom";
 }
 
-function isWidgetSize(value: unknown): value is WidgetSize {
-  return value === "compact" || value === "wide";
+function isWidgetColSpan(value: unknown): value is WidgetColSpan {
+  return value === 1 || value === 2 || value === 3;
+}
+
+function isWidgetRowSpan(value: unknown): value is WidgetRowSpan {
+  return value === "compact" || value === "tall";
 }
 
 export function normalizeLayout(value: unknown): DashboardLayout {
@@ -70,17 +84,36 @@ export function normalizeLayout(value: unknown): DashboardLayout {
       order.push(id);
     }
   }
-  const sizes = { ...base.sizes };
-  const storedSizes = value["sizes"];
-  if (isJsonObject(storedSizes)) {
+  const colSpan = { ...base.colSpan };
+  const storedColSpans = value["colSpan"];
+  if (isJsonObject(storedColSpans)) {
     for (const id of widgetIds) {
-      const size = storedSizes[id];
-      if (isWidgetSize(size)) {
-        sizes[id] = size;
+      const span = storedColSpans[id];
+      if (isWidgetColSpan(span)) {
+        colSpan[id] = span;
+      }
+    }
+  } else if (isJsonObject(value["sizes"])) {
+    for (const id of widgetIds) {
+      const legacy = value["sizes"][id];
+      if (legacy === "wide") {
+        colSpan[id] = 3;
+      } else if (legacy === "compact") {
+        colSpan[id] = 1;
       }
     }
   }
-  return { nav, order, sizes };
+  const rowSpan = { ...base.rowSpan };
+  const storedRowSpans = value["rowSpan"];
+  if (isJsonObject(storedRowSpans)) {
+    for (const id of widgetIds) {
+      const span = storedRowSpans[id];
+      if (isWidgetRowSpan(span)) {
+        rowSpan[id] = span;
+      }
+    }
+  }
+  return { nav, order, colSpan, rowSpan };
 }
 
 export function readLayout(): DashboardLayout {
@@ -103,7 +136,10 @@ export function storeLayout(layout: DashboardLayout): void {
     return;
   }
   try {
-    window.localStorage.setItem(LAYOUT_KEY, JSON.stringify(normalizeLayout(layout)));
+    window.localStorage.setItem(
+      LAYOUT_KEY,
+      JSON.stringify(normalizeLayout(layout)),
+    );
   } catch {
     // Storage can be unavailable in private or blocked contexts.
   }
@@ -150,12 +186,28 @@ export function reorderWidget(
   return next;
 }
 
-export function toggleWidgetSize(
-  sizes: Record<WidgetId, WidgetSize>,
+export function updateWidgetSpan(
+  layout: DashboardLayout,
   id: WidgetId,
-): Record<WidgetId, WidgetSize> {
+  span: { colSpan?: WidgetColSpan; rowSpan?: WidgetRowSpan },
+): DashboardLayout {
   return {
-    ...sizes,
-    [id]: sizes[id] === "wide" ? "compact" : "wide",
+    ...layout,
+    colSpan: {
+      ...layout.colSpan,
+      [id]: span.colSpan ?? layout.colSpan[id],
+    },
+    rowSpan: {
+      ...layout.rowSpan,
+      [id]: span.rowSpan ?? layout.rowSpan[id],
+    },
   };
+}
+
+export function cycleWidgetColSpan(current: WidgetColSpan): WidgetColSpan {
+  return current === 1 ? 2 : current === 2 ? 3 : 1;
+}
+
+export function toggleWidgetRowSpan(current: WidgetRowSpan): WidgetRowSpan {
+  return current === "compact" ? "tall" : "compact";
 }

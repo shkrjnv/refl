@@ -1,4 +1,4 @@
-import heroNature from "../assets/hero-nature.png";
+import heroNature from "../assets/hero-nature.jpg";
 
 export function HeroIllustration() {
   return (

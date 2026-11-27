@@ -929,12 +929,15 @@
    ========================================================================== */
 
 :root {
-  --thermal-amber: #FFB25C;
-  --thermal-coral: #FF4D8D;
-  --thermal-morpho: #4D74FF;
-  --thermal-teal: #0B7E78;
-  --thermal-plum: #8A63E8;
-  --felt-texture: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cfilter id='felt'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.72' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='.55'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23felt)' opacity='.7'/%3E%3C/svg%3E");
+  --thermal-base: #1B0B3B;
+  --thermal-violet: #3F1C78;
+  --thermal-crimson: #E84A27;
+  --thermal-magenta: #D946EF;
+  --thermal-amber: #FEF08A;
+  --thermal-hot: #FFF7C6;
+  --thermal-deep: #12051F;
+  --thermal-shadow: #100419;
+  --felt-texture: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='0 0 240 240'%3E%3Cfilter id='felt' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.014 .16' numOctaves='5' seed='11' stitchTiles='stitch' result='noise'/%3E%3CfeDiffuseLighting in='noise' lighting-color='%23ffffff' surfaceScale='1.8' diffuseConstant='1.2' result='lit'%3E%3CfeDistantLight azimuth='45' elevation='38'/%3E%3C/feDiffuseLighting%3E%3CfeComposite in='lit' in2='SourceGraphic' operator='arithmetic' k1='1' k2='0' k3='0' k4='0'/%3E%3C/filter%3E%3Crect width='240' height='240' fill='%23808080' filter='url(%23felt)' opacity='.92'/%3E%3C/svg%3E");
   --palette-swatch-bg: #161210;
   --palette-swatch-surface: #201A17;
   --palette-swatch-accent: #2B9AF3;
@@ -983,7 +986,7 @@
   --iella-eye: #0E1020;
   --hero-text: #FAF4E8;
   --hero-muted: rgba(250, 244, 232, 0.84);
-  --auth-panel: #221A16;
+  --auth-panel: #1A1512;
   --auth-panel-text: #EFE6D5;
   --auth-panel-muted: #CDBCA3;
   --auth-scrim: rgba(8, 5, 4, 0.64);
@@ -1036,7 +1039,7 @@
   --iella-eye: #0E1020;
   --hero-text: #FAF4E8;
   --hero-muted: rgba(250, 244, 232, 0.84);
-  --auth-panel: #F0E4CF;
+  --auth-panel: #EFE5D1;
   --auth-panel-text: #24342F;
   --auth-panel-muted: #5E6E63;
   --auth-scrim: rgba(23, 39, 35, 0.48);

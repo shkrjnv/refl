@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { I18nProvider } from "../i18n";
@@ -8,7 +8,7 @@ import type { NavigationPosition } from "../prototype/layout";
 import { initialStatus } from "../prototype/status";
 import { ProfileScreen } from "./ProfileScreen";
 import { SettingsScreen } from "./SettingsScreen";
-import { StatsScreen } from "./StatsScreen";
+import { ProgressScreen } from "./ProgressScreen";
 import { testContent } from "./testContent";
 
 afterEach(cleanup);
@@ -22,28 +22,40 @@ const stateJson = JSON.stringify({
       card: { stability: 12, difficulty: 5, last_review: 1_700_000_000_000 },
     },
   },
+  misconceptions: {
+    "m.active": { alpha: 2, beta: 2, manifested: 3, updated_at: 1_700_000_000_000 },
+    "m.cured": { alpha: 0.5, beta: 8.5, manifested: 1, updated_at: 1_700_000_000_000 },
+  },
 });
 
 describe("statistics, profile, and settings", () => {
-  it("opens the source explanation behind a statistic", async () => {
+  it("renders the FSRS model formula, metrics, and analytical charts", () => {
     render(
       <I18nProvider initialLocale="en">
-        <StatsScreen content={testContent()} stateJson={stateJson} />
+        <ProgressScreen content={testContent()} stateJson={stateJson} />
       </I18nProvider>,
     );
 
-    const buttons = screen.getAllByRole("button", {
-      name: /Where does this come from\?/,
-    });
-    const first = buttons[0];
-    if (!first) {
-      throw new Error("missing disclosure");
-    }
-    fireEvent.click(first);
+    expect(screen.getByText("FSRS retrievability")).toBeTruthy();
     expect(
-      await screen.findByText(/mastery criterion has held/),
+      screen.getByText("R(t) = (1 + t / (9 · S))⁻¹"),
     ).toBeTruthy();
-    expect(screen.getByText("Mastered KCs")).toBeTruthy();
+    const stabilityMetric = screen.getByText("Stability S").parentElement;
+    expect(stabilityMetric).not.toBeNull();
+    if (stabilityMetric) {
+      expect(within(stabilityMetric).getByText("12")).toBeTruthy();
+    }
+    const difficultyMetric = screen.getByText("Difficulty D").parentElement;
+    expect(difficultyMetric).not.toBeNull();
+    if (difficultyMetric) {
+      expect(within(difficultyMetric).getByText("5.0")).toBeTruthy();
+    }
+    expect(screen.getByRole("img", { name: "Forgetting curve" })).toBeTruthy();
+    expect(screen.getByText("Progress by CEFR band")).toBeTruthy();
+    expect(screen.getByText("Domain distribution")).toBeTruthy();
+    expect(screen.getByText("Misconceptions")).toBeTruthy();
+    expect(screen.getByText("Cure rate 50%")).toBeTruthy();
+    expect(screen.getByText("Forecast quality")).toBeTruthy();
   });
 
   it("keeps Profile separate from the compact Settings surface", () => {

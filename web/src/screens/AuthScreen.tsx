@@ -20,9 +20,10 @@ import {
 import { AuthBackdrop } from "../components/AuthBackdrop";
 import { PaletteToggle } from "../components/AppearanceMenu";
 import { IellaSprite, type IellaMood } from "../components/IellaSprite";
+import { LanguageMenu } from "../components/LanguageMenu";
 import { StudioIcon } from "../components/StudioIcons";
 import { Button } from "../components/ui";
-import { useTranslation } from "../i18n";
+import { useTranslation, type Locale } from "../i18n";
 import type { SkinName, ThemeName } from "../theme/tokens";
 import {
   markTelegramReady,
@@ -59,6 +60,9 @@ export interface AuthScreenProps {
   inviteCode: string | null;
   theme: ThemeName;
   skin: SkinName;
+  locale: Locale;
+  locales: readonly Locale[];
+  onLocaleChange: (locale: Locale) => void;
   onThemeChange: (theme: ThemeName) => void;
   onAuthenticated: (tokens: AuthTokens, method: AuthMethod) => void;
   onPending: (notice: PendingNotice) => void;
@@ -142,6 +146,9 @@ export function AuthScreen({
   inviteCode,
   theme,
   skin,
+  locale,
+  locales,
+  onLocaleChange,
   onThemeChange,
   onAuthenticated,
   onPending,
@@ -436,7 +443,14 @@ export function AuthScreen({
             </span>
             <span className="brand-name">{t("app-name")}</span>
           </div>
-          <PaletteToggle theme={theme} onThemeChange={onThemeChange} />
+          <div className="auth-header-controls">
+            <LanguageMenu
+              locale={locale}
+              locales={locales}
+              onLocaleChange={onLocaleChange}
+            />
+            <PaletteToggle theme={theme} onThemeChange={onThemeChange} />
+          </div>
         </div>
 
         <div className={`auth-form-region auth-stage-${stage}`}>

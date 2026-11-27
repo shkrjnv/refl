@@ -7,6 +7,7 @@ describe("FSRS telemetry", () => {
   it("returns 0.9 retrievability when elapsed time equals stability", () => {
     const now = 1_700_000_000_000;
     expect(retrievability(10, now - 10 * 86_400_000, now)).toBeCloseTo(0.9, 5);
+    expect(retrievability(10, now - 90 * 86_400_000, now)).toBeCloseTo(0.5, 5);
     expect(retrievability(10, now, now)).toBe(1);
     expect(retrievability(0, now - 86_400_000, now)).toBe(0);
   });

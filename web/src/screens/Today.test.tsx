@@ -141,7 +141,12 @@ describe("Today clean state", () => {
     expect(
       screen.getByRole("button", { name: "Move Five rules, one route down" }),
     ).toBeTruthy();
-    expect(screen.getAllByRole("button", { name: "Wide" }).length).toBeGreaterThan(0);
+    expect(
+      screen.getByRole("button", { name: "Drag Articles in context" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Resize FSRS memory" }),
+    ).toBeTruthy();
   });
   it("reorders, resizes, and resets widgets through accessible controls", () => {
     const changes: DashboardLayout[] = [];
@@ -168,9 +173,19 @@ describe("Today clean state", () => {
       "misconceptions",
       "activity",
     ]);
-    fireEvent.click(screen.getAllByRole("button", { name: "Wide" })[0]!);
-    expect(changes[1]?.sizes.memory).toBe("wide");
     fireEvent.click(screen.getByRole("button", { name: "Reset layout" }));
     expect(reset).toBe(true);
+  });
+
+  it("resizes a widget through its pointer resize handle", () => {
+    const changes: DashboardLayout[] = [];
+    renderToday(initialStatus(true), null, (layout) => {
+      changes.push(layout);
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Edit layout" }));
+    const handle = screen.getByRole("button", { name: "Resize FSRS memory" });
+    fireEvent.pointerDown(handle, { pointerId: 7, clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(window, { pointerId: 7, clientX: 280, clientY: 10 });
+    expect(changes.some((layout) => layout.colSpan.memory === 3)).toBe(true);
   });
 });

@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import type { AuthTokens } from "../api/client";
+import type { Locale } from "../i18n";
 import type { SkinName, ThemeName } from "../theme/tokens";
 import {
   AuthScreen,
@@ -14,6 +15,9 @@ export interface AuthGateProps {
   inviteCode: string | null;
   theme: ThemeName;
   skin: SkinName;
+  locale: Locale;
+  locales: readonly Locale[];
+  onLocaleChange: (locale: Locale) => void;
   onThemeChange: (theme: ThemeName) => void;
   onAuthenticated: (tokens: AuthTokens, method: "email" | "telegram") => void;
 }
@@ -23,6 +27,9 @@ export function AuthGate({
   inviteCode,
   theme,
   skin,
+  locale,
+  locales,
+  onLocaleChange,
   onThemeChange,
   onAuthenticated,
 }: AuthGateProps) {
@@ -46,6 +53,9 @@ export function AuthGate({
       inviteCode={inviteCode}
       theme={theme}
       skin={skin}
+      locale={locale}
+      locales={locales}
+      onLocaleChange={onLocaleChange}
       onThemeChange={onThemeChange}
       onAuthenticated={onAuthenticated}
       onPending={setPending}

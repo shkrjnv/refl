@@ -1,6 +1,7 @@
 import type { ActiveContentResponse } from "../api/client";
 import type { Explanation } from "../generated/core/Explanation";
 import type { Instruction } from "../generated/core/Instruction";
+import type { Misconception } from "../generated/core/Misconception";
 import type { Item } from "../generated/core/Item";
 import type { Kc } from "../generated/core/Kc";
 import type { LangReviews } from "../generated/core/LangReviews";
@@ -123,6 +124,7 @@ export class PrototypeContent {
   readonly items: ItemEntry[];
   readonly explanations: Explanation[];
   readonly instructions: Instruction[];
+  readonly misconceptions: Misconception[];
   readonly lexiconText: string;
   readonly lexiconJson: string;
 
@@ -148,6 +150,7 @@ export class PrototypeContent {
     this.items = parseItems(content["items"]);
     this.explanations = parseObjects<Explanation>(content["explanations"]);
     this.instructions = parseObjects<Instruction>(content["instructions"]);
+    this.misconceptions = parseObjects<Misconception>(content["misconceptions"]);
     this.lexiconText = lexiconText ?? lexiconTextForBundle(parsed);
     this.lexiconJson = JSON.stringify({ text: this.lexiconText });
   }
@@ -223,6 +226,13 @@ export class PrototypeContent {
 
   explanation(id: string): Explanation | null {
     return this.explanations.find((entry) => entry.id === id) ?? null;
+  }
+
+  misconceptionTitle(misconceptionId: string, locale: Locale): string {
+    const entry = this.misconceptions.find(
+      (candidate) => candidate.id === misconceptionId,
+    );
+    return entry ? localizedText(entry.title, locale) : misconceptionId;
   }
 
   misconceptionExplanation(

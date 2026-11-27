@@ -4,7 +4,6 @@ import { useTranslation } from "../i18n";
 import {
   paletteLabelKeys,
   paletteNames,
-  paletteNoteKeys,
   skinLabelKeys,
   skinNames,
   type PaletteName,
@@ -50,10 +49,11 @@ export function PaletteToggle({
           onClick={() => onThemeChange(candidate)}
         >
           <span
-            className={`palette-dot palette-dot-${candidate}`}
+            className={`appearance-chip-swatch appearance-chip-swatch-tiny palette-swatch-${candidate}`}
             aria-hidden="true"
-          />
-          <span>{t(paletteLabelKeys[candidate])}</span>
+          >
+            <span />
+          </span>
         </button>
       ))}
     </div>
@@ -106,35 +106,70 @@ export function AppearanceMenu({
         aria-label={t("app-appearance")}
         onClick={() => setOpen((value) => !value)}
       >
-        <StudioIcon name="palette" size={18} />
+        <StudioIcon name="palette" size={17} />
         <span
-          className={`palette-swatch palette-swatch-${theme}`}
+          className={`appearance-chip-swatch appearance-chip-swatch-tiny palette-swatch-${theme}`}
           aria-hidden="true"
-        />
+        >
+          <span />
+        </span>
         <span className="appearance-trigger-label">
           {t(skinLabelKeys[skin])}
         </span>
-        <StudioIcon name="chevron-down" size={14} />
+        <StudioIcon name="chevron-down" size={13} />
       </button>
       {open ? (
         <div
-          className="appearance-popover"
+          className="appearance-popover appearance-popover-compact"
           role="dialog"
           aria-label={t("app-appearance")}
         >
-          <div className="appearance-section">
+          <section className="appearance-compact-section">
+            <p className="appearance-label">{t("app-palette")}</p>
+            <div
+              className="appearance-palette-grid"
+              role="group"
+              aria-label={t("app-palette")}
+            >
+              {paletteNames.map((candidate) => (
+                <button
+                  key={candidate}
+                  type="button"
+                  className={`appearance-palette-chip${theme === candidate ? " selected" : ""}`}
+                  aria-pressed={theme === candidate}
+                  onClick={() => onThemeChange(candidate)}
+                >
+                  <span
+                    className={`appearance-chip-swatch palette-swatch-${candidate}`}
+                    aria-hidden="true"
+                  >
+                    <span />
+                  </span>
+                  <span>{t(paletteLabelKeys[candidate])}</span>
+                  {theme === candidate ? (
+                    <StudioIcon name="check" size={13} className="appearance-check" />
+                  ) : null}
+                </button>
+              ))}
+            </div>
+          </section>
+          <section className="appearance-compact-section">
             <p className="appearance-label">{t("app-skin")}</p>
-            <div className="appearance-skins" role="group" aria-label={t("app-skin")}>
+            <div
+              className="appearance-skins appearance-skins-compact"
+              role="group"
+              aria-label={t("app-skin")}
+            >
               {skinNames.map((candidate) => (
                 <button
                   key={candidate}
                   type="button"
-                  className={`appearance-skin-option${skin === candidate ? " selected" : ""}`}
+                  className={`appearance-skin-option appearance-skin-option-compact${skin === candidate ? " selected" : ""}`}
                   aria-pressed={skin === candidate}
                   onClick={() => onSkinChange(candidate)}
                 >
                   <span
-                    className={`appearance-swatch skin-swatch-${candidate}`}
+                    className={`appearance-swatch appearance-swatch-small skin-swatch-${candidate}`}
                     aria-hidden="true"
                   />
                   <span>{t(skinLabelKeys[candidate])}</span>
@@ -144,37 +179,7 @@ export function AppearanceMenu({
                 </button>
               ))}
             </div>
-          </div>
-          <div className="appearance-section">
-            <p className="appearance-label">{t("app-palette")}</p>
-            <div className="appearance-palettes">
-              {paletteNames.map((candidate) => (
-                <button
-                  key={candidate}
-                  type="button"
-                  className={`appearance-palette-option${theme === candidate ? " selected" : ""}`}
-                  aria-pressed={theme === candidate}
-                  onClick={() => onThemeChange(candidate)}
-                >
-                  <span
-                    className={`palette-swatch palette-swatch-${candidate}`}
-                    aria-hidden="true"
-                  />
-                  <span>
-                    <strong>{t(paletteLabelKeys[candidate])}</strong>
-                    <small>{t(paletteNoteKeys[candidate])}</small>
-                  </span>
-                  {theme === candidate ? (
-                    <StudioIcon
-                      name="check"
-                      size={15}
-                      className="appearance-check"
-                    />
-                  ) : null}
-                </button>
-              ))}
-            </div>
-          </div>
+          </section>
         </div>
       ) : null}
     </div>

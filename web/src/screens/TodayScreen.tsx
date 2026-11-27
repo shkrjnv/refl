@@ -1,8 +1,11 @@
 import {
+  useEffect,
+  useLayoutEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
-  type DragEvent,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
 
@@ -16,8 +19,9 @@ import type { ActivitySummary } from "../prototype/activity";
 import type { PrototypeContent } from "../prototype/content";
 import type {
   DashboardLayout,
+  WidgetColSpan,
   WidgetId,
-  WidgetSize,
+  WidgetRowSpan,
 } from "../prototype/layout";
 import {
   dueCount,
@@ -31,7 +35,7 @@ import type { AppStatus } from "../prototype/status";
 import {
   moveWidget,
   reorderWidget,
-  toggleWidgetSize,
+  updateWidgetSpan,
 } from "../prototype/layout";
 
 export interface TodayScreenProps {
@@ -64,14 +68,6 @@ const WIDGET_LABEL_KEYS: Record<WidgetId, string> = {
   activity: "today-activity-title",
 };
 
-const SIZE_SUPPORTED: Record<WidgetId, boolean> = {
-  hero: false,
-  rules: false,
-  memory: true,
-  misconceptions: true,
-  activity: true,
-};
-
 function activityLevel(count: number): number {
   if (count <= 0) {
     return 0;
@@ -86,10 +82,6 @@ function activityLevel(count: number): number {
     return 3;
   }
   return 4;
-}
-
-function isTelemetryWidget(id: WidgetId): boolean {
-  return id === "memory" || id === "misconceptions" || id === "activity";
 }
 
 export function TodayScreen({
@@ -110,7 +102,31 @@ export function TodayScreen({
   const { t, locale } = useTranslation();
   const [tipIndex, setTipIndex] = useState<number | null>(null);
   const [editing, setEditing] = useState(false);
-  const [dragging, setDragging] = useState<WidgetId | null>(null);
+  const [draggingId, setDraggingId] = useState<WidgetId | null>(null);
+  const [resizingId, setResizingId] = useState<WidgetId | null>(null);
+  const [resizeSnap, setResizeSnap] = useState<{
+    colSpan: WidgetColSpan;
+    rowSpan: WidgetRowSpan;
+  } | null>(null);
+  const layoutRef = useRef(layout);
+  const onLayoutChangeRef = useRef(onLayoutChange);
+  layoutRef.current = layout;
+  onLayoutChangeRef.current = onLayoutChange;
+  const flipRef = useRef<Map<WidgetId, DOMRect> | null>(null);
+  const dragRef = useRef<{
+    id: WidgetId;
+    pointerId: number;
+    lastTarget: WidgetId;
+  } | null>(null);
+  const resizeRef = useRef<{
+    id: WidgetId;
+    pointerId: number;
+    startX: number;
+    startY: number;
+    startColSpan: WidgetColSpan;
+    startRowSpan: WidgetRowSpan;
+    gridWidth: number;
+  } | null>(null);
   const progress = useMemo(
     () => kcProgress(content, parseLearnerState(stateJson), locale),
     [content, stateJson, locale],
@@ -169,42 +185,254 @@ export function TodayScreen({
     );
   };
 
+  const captureRects = () => {
+    if (typeof document === "undefined") {
+      return;
+    }
+    const next = new Map<WidgetId, DOMRect>();
+    const nodes = document.querySelectorAll<HTMLElement>(
+      ".dashboard-widget[data-widget]",
+    );
+    for (const node of nodes) {
+      const id = node.dataset["widget"];
+      if (id && layoutRef.current.order.includes(id as WidgetId)) {
+        next.set(id as WidgetId, node.getBoundingClientRect());
+      }
+    }
+    flipRef.current = next;
+  };
+
   const changeOrder = (order: WidgetId[]) => {
-    onLayoutChange({ ...layout, order });
+    captureRects();
+    onLayoutChange({ ...layoutRef.current, order });
   };
 
   const move = (id: WidgetId, direction: -1 | 1) => {
-    changeOrder(moveWidget(layout.order, id, direction));
+    changeOrder(moveWidget(layoutRef.current.order, id, direction));
   };
 
-  const toggleSize = (id: WidgetId) => {
-    onLayoutChange({
-      ...layout,
-      sizes: toggleWidgetSize(layout.sizes, id),
-    });
+  const widgetAtPoint = (
+    x: number,
+    y: number,
+    exclude: WidgetId,
+  ): WidgetId | null => {
+    const nodes = document.querySelectorAll<HTMLElement>(
+      ".dashboard-widget[data-widget]",
+    );
+    let nearest: { id: WidgetId; distance: number } | null = null;
+    for (const node of nodes) {
+      const id = node.dataset["widget"];
+      if (!id || id === exclude || !layoutRef.current.order.includes(id as WidgetId)) {
+        continue;
+      }
+      const rect = node.getBoundingClientRect();
+      if (
+        x >= rect.left &&
+        x <= rect.right &&
+        y >= rect.top &&
+        y <= rect.bottom
+      ) {
+        return id as WidgetId;
+      }
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      const distance = Math.hypot(x - centerX, y - centerY);
+      if (distance < 180 && (!nearest || distance < nearest.distance)) {
+        nearest = { id: id as WidgetId, distance };
+      }
+    }
+    return nearest?.id ?? null;
   };
 
-  const onDragStart = (id: WidgetId, event: DragEvent<HTMLElement>) => {
+  const startDrag = (id: WidgetId, event: ReactPointerEvent<HTMLElement>) => {
     if (!editing) {
-      event.preventDefault();
       return;
     }
-    setDragging(id);
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", id);
+    const target = event.target;
+    if (
+      target instanceof Element &&
+      target.closest("button:not(.widget-drag-handle)")
+    ) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    dragRef.current = {
+      id,
+      pointerId: event.pointerId,
+      lastTarget: id,
+    };
+    setDraggingId(id);
+    setResizingId(null);
+    setResizeSnap(null);
+    document.body.classList.add("widget-drag-active");
   };
 
-  const onDrop = (target: WidgetId, event: DragEvent<HTMLElement>) => {
-    event.preventDefault();
-    const source =
-      dragging ??
-      (event.dataTransfer.getData("text/plain") as WidgetId | null);
-    setDragging(null);
-    if (!source || !layout.order.includes(source)) {
+  const startResize = (
+    id: WidgetId,
+    event: ReactPointerEvent<HTMLElement>,
+  ) => {
+    if (!editing) {
       return;
     }
-    changeOrder(reorderWidget(layout.order, source, target));
+    event.preventDefault();
+    event.stopPropagation();
+    const dashboard = event.currentTarget.closest(
+      ".today-dashboard",
+    ) as HTMLElement | null;
+    if (!dashboard) {
+      return;
+    }
+    resizeRef.current = {
+      id,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startColSpan: layoutRef.current.colSpan[id],
+      startRowSpan: layoutRef.current.rowSpan[id],
+      gridWidth: dashboard.getBoundingClientRect().width,
+    };
+    setResizingId(id);
+    setDraggingId(null);
+    setResizeSnap({
+      colSpan: layoutRef.current.colSpan[id],
+      rowSpan: layoutRef.current.rowSpan[id],
+    });
+    document.body.classList.add("widget-resize-active");
   };
+
+  useEffect(() => {
+    if (!draggingId) {
+      return;
+    }
+    const onMove = (event: PointerEvent) => {
+      const current = dragRef.current;
+      if (!current || event.pointerId !== current.pointerId) {
+        return;
+      }
+      const target = widgetAtPoint(event.clientX, event.clientY, draggingId);
+      if (!target || target === current.lastTarget) {
+        return;
+      }
+      const layoutNow = layoutRef.current;
+      const nextOrder = reorderWidget(layoutNow.order, draggingId, target);
+      current.lastTarget = target;
+      if (nextOrder.join("|") === layoutNow.order.join("|")) {
+        return;
+      }
+      captureRects();
+      layoutRef.current = { ...layoutNow, order: nextOrder };
+      onLayoutChangeRef.current({ ...layoutNow, order: nextOrder });
+    };
+    const end = () => {
+      dragRef.current = null;
+      setDraggingId(null);
+      document.body.classList.remove("widget-drag-active");
+    };
+    window.addEventListener("pointermove", onMove, { passive: true });
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+      document.body.classList.remove("widget-drag-active");
+    };
+  }, [draggingId]);
+
+  useEffect(() => {
+    if (!resizingId) {
+      return;
+    }
+    const onMove = (event: PointerEvent) => {
+      const current = resizeRef.current;
+      if (!current || event.pointerId !== current.pointerId) {
+        return;
+      }
+      const gap = 14;
+      const column = Math.max(80, (current.gridWidth - gap * 2) / 3);
+      const deltaCols = Math.round((event.clientX - current.startX) / (column + gap));
+      const nextCol = Math.max(
+        1,
+        Math.min(3, current.startColSpan + deltaCols),
+      ) as WidgetColSpan;
+      const deltaY = event.clientY - current.startY;
+      const nextRow: WidgetRowSpan =
+        deltaY > 84 ? "tall" : deltaY < -84 ? "compact" : current.startRowSpan;
+      setResizeSnap({ colSpan: nextCol, rowSpan: nextRow });
+      const layoutNow = layoutRef.current;
+      if (
+        layoutNow.colSpan[current.id] === nextCol &&
+        layoutNow.rowSpan[current.id] === nextRow
+      ) {
+        return;
+      }
+      captureRects();
+      const next = updateWidgetSpan(layoutNow, current.id, {
+        colSpan: nextCol,
+        rowSpan: nextRow,
+      });
+      layoutRef.current = next;
+      onLayoutChangeRef.current(next);
+    };
+    const end = () => {
+      resizeRef.current = null;
+      setResizingId(null);
+      setResizeSnap(null);
+      document.body.classList.remove("widget-resize-active");
+    };
+    window.addEventListener("pointermove", onMove, { passive: true });
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+      document.body.classList.remove("widget-resize-active");
+    };
+  }, [resizingId]);
+
+  useLayoutEffect(() => {
+    const previous = flipRef.current;
+    if (!previous) {
+      return;
+    }
+    flipRef.current = null;
+    if (
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      return;
+    }
+    const nodes = document.querySelectorAll<HTMLElement>(
+      ".dashboard-widget[data-widget]",
+    );
+    for (const node of nodes) {
+      const id = node.dataset["widget"] as WidgetId | undefined;
+      if (!id || id === draggingId || id === resizingId) {
+        continue;
+      }
+      const old = previous.get(id);
+      if (!old) {
+        continue;
+      }
+      const now = node.getBoundingClientRect();
+      const dx = old.left - now.left;
+      const dy = old.top - now.top;
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) {
+        continue;
+      }
+      node.style.transition = "none";
+      node.style.transform = `translate(${dx}px, ${dy}px)`;
+      window.requestAnimationFrame(() => {
+        node.style.transition = "transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1)";
+        node.style.transform = "";
+        window.setTimeout(() => {
+          node.style.transition = "";
+        }, 300);
+      });
+    }
+  }, [layout.order, layout.colSpan, layout.rowSpan, draggingId, resizingId]);
 
   const ringStyle = {
     "--ring-angle": `${retention * 3.6}deg`,
@@ -214,12 +442,38 @@ export function TodayScreen({
     switch (id) {
       case "hero":
         return (
-          <section
-            className="today-route"
-            data-tour="route"
-            aria-labelledby="today-route-title"
-          >
-            <HeroIllustration />
+          <div className="today-route-frame">
+            <section
+              className="today-route"
+              data-tour="route"
+              aria-labelledby="today-route-title"
+            >
+              <HeroIllustration />
+              <div className="route-topline">
+                <span className="route-chip route-chip-time">
+                  {t("session-budget", { minutes: 25 })}
+                </span>
+              </div>
+              <div className="route-copy">
+                <h2 id="today-route-title">{t("today-route-title")}</h2>
+                <p>{t("today-route-body")}</p>
+                <div className="today-hero-actions">
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="lg"
+                    data-tour="start"
+                    onClick={onStart}
+                  >
+                    {t("session-start")}
+                  </Button>
+                </div>
+              </div>
+              <div className="route-level" data-tour="level">
+                <span>{t("today-level")}</span>
+                <strong>{currentLevel}</strong>
+              </div>
+            </section>
             <div className="today-route-perch">
               <IellaSprite
                 size={60}
@@ -227,31 +481,7 @@ export function TodayScreen({
                 onActivate={nextTip}
               />
             </div>
-            <div className="route-topline">
-              <span className="route-chip route-chip-time">
-                {t("session-budget", { minutes: 25 })}
-              </span>
-            </div>
-            <div className="route-copy">
-              <h2 id="today-route-title">{t("today-route-title")}</h2>
-              <p>{t("today-route-body")}</p>
-              <div className="today-hero-actions">
-                <Button
-                  type="button"
-                  variant="primary"
-                  size="lg"
-                  data-tour="start"
-                  onClick={onStart}
-                >
-                  {t("session-start")}
-                </Button>
-              </div>
-            </div>
-            <div className="route-level" data-tour="level">
-              <span>{t("today-level")}</span>
-              <strong>{currentLevel}</strong>
-            </div>
-          </section>
+          </div>
         );
       case "rules":
         return (
@@ -440,17 +670,16 @@ export function TodayScreen({
     }
   };
 
-  const widgetClass = (id: WidgetId): string => {
-    const size = layout.sizes[id];
-    return [
+  const widgetClass = (id: WidgetId): string =>
+    [
       "dashboard-widget",
       `dashboard-widget-${id}`,
-      isTelemetryWidget(id) ? "dashboard-widget-telemetry" : "",
-      `widget-size-${size}`,
+      id === "memory" || id === "misconceptions" || id === "activity"
+        ? "dashboard-widget-telemetry"
+        : "",
     ]
       .filter(Boolean)
       .join(" ");
-  };
 
   return (
     <div className="today-screen">
@@ -486,7 +715,9 @@ export function TodayScreen({
                 variant="ghost"
                 size="sm"
                 onClick={() => {
-                  setDragging(null);
+                  setDraggingId(null);
+                  setResizingId(null);
+                  setResizeSnap(null);
                   onResetLayout();
                 }}
               >
@@ -500,7 +731,9 @@ export function TodayScreen({
               aria-pressed={editing}
               onClick={() => {
                 setEditing((value) => !value);
-                setDragging(null);
+                setDraggingId(null);
+                setResizingId(null);
+                setResizeSnap(null);
               }}
             >
               <StudioIcon name="grip" size={16} />
@@ -523,25 +756,31 @@ export function TodayScreen({
             key={id}
             className={widgetClass(id)}
             data-widget={id}
-            data-size={layout.sizes[id] satisfies WidgetSize}
-            draggable={editing}
-            onDragStart={(event) => onDragStart(id, event)}
-            onDragOver={(event) => {
-              if (editing && dragging && dragging !== id) {
-                event.preventDefault();
-                event.dataTransfer.dropEffect = "move";
-              }
-            }}
-            onDrop={(event) => onDrop(id, event)}
-            onDragEnd={() => setDragging(null)}
+            data-col-span={layout.colSpan[id]}
+            data-row-span={layout.rowSpan[id]}
+            data-dragging={draggingId === id ? "true" : undefined}
+            data-resizing={resizingId === id ? "true" : undefined}
             aria-label={t(WIDGET_LABEL_KEYS[id])}
           >
             {editing ? (
-              <div className="widget-edit-bar">
+              <div
+                className="widget-edit-bar"
+                onPointerDown={(event) => startDrag(id, event)}
+              >
                 <span className="widget-drag-copy">
-                  <span className="widget-drag-handle" aria-hidden="true">
+                  <button
+                    type="button"
+                    className="widget-drag-handle"
+                    aria-label={t("today-widget-drag", {
+                      title: t(WIDGET_LABEL_KEYS[id]),
+                    })}
+                    onPointerDown={(event) => {
+                      event.stopPropagation();
+                      startDrag(id, event);
+                    }}
+                  >
                     <StudioIcon name="grip" size={16} />
-                  </span>
+                  </button>
                   <span>{t(WIDGET_LABEL_KEYS[id])}</span>
                 </span>
                 <span className="widget-edit-actions">
@@ -567,22 +806,40 @@ export function TodayScreen({
                   >
                     <StudioIcon name="arrow-down" size={15} />
                   </button>
-                  {SIZE_SUPPORTED[id] ? (
-                    <button
-                      type="button"
-                      className="widget-size-button"
-                      aria-pressed={layout.sizes[id] === "wide"}
-                      onClick={() => toggleSize(id)}
-                    >
-                      {layout.sizes[id] === "wide"
-                        ? t("today-widget-compact")
-                        : t("today-widget-wide")}
-                    </button>
-                  ) : null}
+                  <span className="widget-span-chip" aria-hidden="true">
+                    {layout.colSpan[id]} × {layout.rowSpan[id] === "tall"
+                      ? t("today-widget-row-tall")
+                      : t("today-widget-row-compact")}
+                  </span>
                 </span>
               </div>
             ) : null}
             {renderWidget(id)}
+            {editing ? (
+              <button
+                type="button"
+                className="widget-resize-handle"
+                aria-label={t("today-widget-resize", {
+                  title: t(WIDGET_LABEL_KEYS[id]),
+                })}
+                onPointerDown={(event) => startResize(id, event)}
+              >
+                <span />
+                <span />
+                <span />
+              </button>
+            ) : null}
+            {resizingId === id && resizeSnap ? (
+              <span className="widget-resize-badge" role="status">
+                {t("today-widget-span", {
+                  columns: resizeSnap.colSpan,
+                  row:
+                    resizeSnap.rowSpan === "tall"
+                      ? t("today-widget-row-tall")
+                      : t("today-widget-row-compact"),
+                })}
+              </span>
+            ) : null}
           </section>
         ))}
       </div>
