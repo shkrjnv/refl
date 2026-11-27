@@ -5,7 +5,7 @@ import type {
   CreatedInvite,
   PendingUser,
 } from "../api/client";
-import { Button, Card, PulseConfirm } from "../components/ui";
+import { Button, Card } from "../components/ui";
 import { CrossfadeIcon } from "../components/StudioIcons";
 import { useTranslation } from "../i18n";
 
@@ -146,18 +146,15 @@ export function AdminAccessSection({ api }: AdminAccessSectionProps) {
         <div className="invite-result">
           <p className="eyebrow">{t("admin-invite-ready")}</p>
           <code>{invite.invite_code}</code>
-          <span className="copy-action">
-            <Button type="button" variant="secondary" size="sm" onClick={() => void copy()}>
-              <CrossfadeIcon
-                name="copy"
-                activeName="check"
-                active={copied}
-                size={16}
-              />
-              {copied ? t("admin-copied") : t("admin-copy-link")}
-            </Button>
-            <PulseConfirm active={copied} />
-          </span>
+          <Button type="button" variant="secondary" size="sm" onClick={() => void copy()}>
+            <CrossfadeIcon
+              name="copy"
+              activeName="check"
+              active={copied}
+              size={16}
+            />
+            {copied ? t("admin-copied") : t("admin-copy-link")}
+          </Button>
           <p>{inviteUrl(invite.invite_code)}</p>
         </div>
       ) : null}

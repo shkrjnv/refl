@@ -364,14 +364,14 @@ describe("auth and access flow", () => {
     expect(otpFocus).not.toContain("0 5px 0");
 
     const reducedMotion = css.slice(
-      css.lastIndexOf("@media (prefers-reduced-motion: reduce)"),
+      css.indexOf("@media (prefers-reduced-motion: reduce)", css.indexOf("/* W17")),
     );
     expect(reducedMotion).toContain(".auth-form-code");
     expect(reducedMotion).toContain(".auth-form-region .ui-button");
     expect(reducedMotion).toContain(".studio-main");
   });
 
-  it("enters the app directly without a duplicate success overlay", async () => {
+  it("shows a brief confirmation check, then enters without an overlay", async () => {
     let authenticated: AuthTokens | null = null;
     const api: AuthApi = {
       requestCode: async () => ({ sent: true, expires_in: 600, code: "123456" }),
@@ -416,8 +416,20 @@ describe("auth and access flow", () => {
       target: { value: "123456" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    const check = await screen.findByLabelText("Signed in");
+    expect(check.classList.contains("auth-confirm-check")).toBe(true);
+    expect(check.querySelector(".studio-icon")).not.toBeNull();
+    expect(document.querySelector(".pulse-confirm")).toBeNull();
     await waitFor(() => expect(authenticated).not.toBeNull(), { timeout: 2000 });
     expect(screen.queryByText("Signed in")).toBeNull();
     expect(document.querySelector(".auth-success")).toBeNull();
+
+    const css = readFileSync("src/app.css", "utf8");
+    const checkRule = css.slice(css.indexOf(".auth-confirm-check {"));
+    expect(checkRule).toContain("animation: auth-confirm-in 140ms");
+    expect(checkRule).not.toContain("blur");
+    expect(css).toMatch(
+      /prefers-reduced-motion: reduce[\s\S]*?\.auth-confirm-check/,
+    );
   });
 });

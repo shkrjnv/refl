@@ -6,7 +6,7 @@ import {
   StudioIcon,
   type StudioIconName,
 } from "../components/StudioIcons";
-import { Button, Card, PulseConfirm, StatusMeta } from "../components/ui";
+import { Button, Card, StatusMeta } from "../components/ui";
 import type { OutboxRecord } from "../db/storage";
 import type { Locale } from "../i18n";
 import { useTranslation } from "../i18n";
@@ -97,7 +97,7 @@ export function SettingsScreen({
   onSyncNow,
 }: SettingsScreenProps) {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<SettingsTab>("appearance");
+  const [tab, setTab] = useState<SettingsTab>("account");
   const [resetArmed, setResetArmed] = useState(false);
   const [dataNotice, setDataNotice] = useState<string | null>(null);
   const [dataError, setDataError] = useState<string | null>(null);
@@ -115,9 +115,9 @@ export function SettingsScreen({
   );
 
   const tabs: SettingsTabItem[] = [
-    { id: "appearance", labelKey: "settings-tab-appearance", icon: "palette" },
     { id: "account", labelKey: "settings-tab-account", icon: "profile" },
     { id: "offline", labelKey: "settings-tab-offline", icon: "offline" },
+    { id: "appearance", labelKey: "settings-tab-appearance", icon: "palette" },
     ...(isAdmin
       ? [
           {
@@ -401,18 +401,22 @@ export function SettingsScreen({
                 </span>
               </div>
               {onSyncNow ? (
-                <span className="sync-action">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    busy={syncBusy}
-                    onClick={() => void syncNow()}
-                  >
-                    {t("sync-retry")}
-                  </Button>
-                  <PulseConfirm active={syncPulse} />
-                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="sync-action"
+                  busy={syncBusy}
+                  onClick={() => void syncNow()}
+                >
+                  <CrossfadeIcon
+                    name="sync"
+                    activeName="check"
+                    active={syncPulse}
+                    size={16}
+                  />
+                  {t("sync-retry")}
+                </Button>
               ) : null}
             </Card>
           </div>

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { RichText } from "../components/RichText";
 import { StudioIcon } from "../components/StudioIcons";
-import { Button, Card, ProgressBar, PulseConfirm } from "../components/ui";
+import { Button, Card, ProgressBar } from "../components/ui";
 import { useTranslation } from "../i18n";
 import {
   type LessonRunner,
@@ -400,10 +400,6 @@ export function LessonScreen({
 
       {view.phase === "explanation" && view.explanation ? (
         <Card tone="tinted" className="explanation-card">
-          <PulseConfirm
-            active={view.feedback?.correct === true}
-            className="feedback-pulse"
-          />
           <p className="eyebrow">{t("lesson-explanation-eyebrow")}</p>
           <h2>{view.explanation.title}</h2>
           <p className="explanation-body">
@@ -494,11 +490,11 @@ export function LessonScreen({
             view.feedback.correct ? "feedback-correct" : "feedback-wrong"
           }`}
         >
-          <PulseConfirm
-            active={view.feedback.correct}
-            className="feedback-pulse"
-          />
           <p className="feedback-verdict">
+            <StudioIcon
+              name={view.feedback.correct ? "check" : "close"}
+              size={18}
+            />
             {view.feedback.correct
               ? t("lesson-answer-correct")
               : t("lesson-answer-wrong")}

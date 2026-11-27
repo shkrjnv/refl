@@ -80,6 +80,7 @@ const TELEGRAM_QUERY_KEYS = [
   "hash",
 ] as const;
 const CODE_LENGTH = 6;
+const CONFIRMATION_HOLD_MS = 160;
 
 function clearTelegramParams(): void {
   if (typeof window === "undefined") {
@@ -156,6 +157,7 @@ export function AuthScreen({
     Array.from({ length: CODE_LENGTH }, () => ""),
   );
   const [sent, setSent] = useState<RequestCodeResponse | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [telegram] = useState(() => telegramInitData());
@@ -169,6 +171,7 @@ export function AuthScreen({
   const formContentRef = useRef<HTMLDivElement | null>(null);
   const handledReturnRef = useRef(false);
   const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const confirmationTimerRef = useRef<number | null>(null);
   const callbacksRef = useRef({ onAuthenticated, onPending, onAccessBlocked });
   callbacksRef.current = { onAuthenticated, onPending, onAccessBlocked };
   const code = digits.join("");
@@ -192,7 +195,14 @@ export function AuthScreen({
   }, [stage, error, sent, inviteCode]);
 
   const completeAuthentication = (tokens: AuthTokens, method: AuthMethod) => {
-    callbacksRef.current.onAuthenticated(tokens, method);
+    setConfirmed(true);
+    if (confirmationTimerRef.current !== null) {
+      window.clearTimeout(confirmationTimerRef.current);
+    }
+    confirmationTimerRef.current = window.setTimeout(() => {
+      confirmationTimerRef.current = null;
+      callbacksRef.current.onAuthenticated(tokens, method);
+    }, CONFIRMATION_HOLD_MS);
   };
 
   const handleResponse = (response: VerifyCodeResponse, method: AuthMethod) => {
@@ -285,6 +295,15 @@ export function AuthScreen({
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [authenticateTelegram, consumeTelegramReturn]);
+
+  useEffect(
+    () => () => {
+      if (confirmationTimerRef.current !== null) {
+        window.clearTimeout(confirmationTimerRef.current);
+      }
+    },
+    [],
+  );
 
   const requestCode = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -443,6 +462,15 @@ export function AuthScreen({
               <div>
                 <h2 className="auth-form-title">
                   {stage === "code" ? t("auth-code-title") : t("auth-title")}
+                  {confirmed ? (
+                    <span
+                      className="auth-confirm-check"
+                      role="status"
+                      aria-label={t("auth-success")}
+                    >
+                      <StudioIcon name="check" size={18} />
+                    </span>
+                  ) : null}
                 </h2>
                 {stage === "code" ? (
                   <p className="auth-card-subtitle">
@@ -543,7 +571,7 @@ export function AuthScreen({
                   variant="primary"
                   block
                   busy={busy}
-                  disabled={code.length !== CODE_LENGTH}
+                  disabled={code.length !== CODE_LENGTH || confirmed}
                 >
                   <StudioIcon name="check" size={16} />
                   <span className="auth-submit-label">{t("auth-verify-code")}</span>

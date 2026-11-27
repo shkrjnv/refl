@@ -148,12 +148,18 @@ describe("statistics, profile, and settings", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
-    for (const label of ["Appearance", "Account & Sync", "Offline & Data"]) {
-      expect(screen.getByRole("tab", { name: label })).toBeTruthy();
-    }
+    const tabs = screen.getAllByRole("tab");
+    expect(tabs.map((tab) => tab.textContent?.trim())).toEqual([
+      "Account & Sync",
+      "Offline & Data",
+      "Appearance",
+    ]);
+    expect(tabs[0]?.getAttribute("aria-selected")).toBe("true");
     expect(screen.queryByRole("tab", { name: "Admin" })).toBeNull();
-    fireEvent.click(screen.getByRole("tab", { name: "Account & Sync" }));
     expect(screen.getByText("Learner identity")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: "Appearance" }));
+    expect(screen.getByRole("heading", { name: "Appearance" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Back to profile" }));
     expect(screen.getByRole("heading", { name: "Learner" })).toBeTruthy();
   });
@@ -199,7 +205,11 @@ describe("statistics, profile, and settings", () => {
       </I18nProvider>,
     );
 
-    fireEvent.click(screen.getByRole("tab", { name: "Account & Sync" }));
+    expect(
+      screen.getByRole("tab", { name: "Account & Sync" }).getAttribute(
+        "aria-selected",
+      ),
+    ).toBe("true");
     fireEvent.click(screen.getByRole("button", { name: "Russian" }));
     expect(screen.getByText("learner-42")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
@@ -250,6 +260,9 @@ describe("statistics, profile, and settings", () => {
         <SettingsScreen {...props} isAdmin />
       </I18nProvider>,
     );
+    expect(
+      screen.getAllByRole("tab").map((tab) => tab.textContent?.trim()),
+    ).toEqual(["Account & Sync", "Offline & Data", "Appearance", "Admin"]);
     fireEvent.click(screen.getByRole("tab", { name: "Admin" }));
     expect(screen.getByText("Registration mode")).toBeTruthy();
   });

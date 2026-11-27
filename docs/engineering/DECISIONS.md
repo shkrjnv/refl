@@ -243,3 +243,11 @@
 - Laboratory's graph paper drops from 10px/100px cells to 28px/140px and its line opacity is more than halved in both light and dark themes. Cards gain 24px padding (30px on exercise cards), the bento gap widens to 18px, answer rows reach 60px, buttons and settings tabs 46px, and navigation items 48px; the mobile layout keeps 20px cards and a 14px bento gap.
 - Coverage now includes the exit label in all three locales, quiet-vs-Neo shadow math and geometry, nav/button border treatment, and the Laboratory grid scale plus spacing rules. All 99 web tests pass.
 - `just fmt-check`, `just lint`, `just test`, and `just web` pass; the commit is local and not pushed.
+
+## W19 — restrained confirmation checkmarks and account-first settings
+
+- Sign-in now shows a bare 18px checkmark beside the form title for 160ms after a successful verification, then enters the workspace. It has no overlay, backdrop, pill, pulse, shadow, or blur; the check fades/scales in over 140ms, and the animation is disabled under `prefers-reduced-motion`. The check is announced as a `status` with the existing `auth-success` label, so no duplicate visible “Signed in” block returns.
+- Copy, sync, and practice feedback no longer use confirmation pulses. Invite copying and manual sync show the existing 140ms `CrossfadeIcon` check state, and correct/incorrect practice feedback carries a check/close icon directly in the verdict. The now-unused `PulseConfirm` component and its CSS were removed.
+- Settings now opens on Account & Sync, with tabs ordered Account & Sync → Offline & Data → Appearance → Admin. Learner identity, linked methods, language, sync, and sign-out are reachable immediately; sign-out remains inside the account card and was not moved to the workspace. The embedded settings note was updated in EN/RU/UZ to match the new order.
+- Coverage now includes the auth confirmation checkmark (label, 140ms animation, zero pulse), the copy action's checkmark with no pulse, and the account-first tab order/default selection in both ProfileScreen's embedded settings and the settings screen. All 100 web tests pass.
+- `just fmt-check`, `just lint`, `just test`, and `just web` pass; the commit is local and not pushed.
