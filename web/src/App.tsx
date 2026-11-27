@@ -663,6 +663,7 @@ export function App({ initialTheme, initialSkin }: AppProps) {
           onResetCache={resetLocalCache}
           adminApi={api}
           onLogout={() => void handleLogout()}
+          onSyncNow={() => syncNow()}
         />
       ) : null}
     </AppShell>

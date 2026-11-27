@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 
+import { readFileSync } from "node:fs";
+
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -41,6 +43,16 @@ describe("Iella onboarding", () => {
     ).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Skip" }));
     expect(completed).toBe(true);
+  });
+
+  it("stages focus with blur, smooth centering, and exact bounds", () => {
+    const source = readFileSync("src/components/IellaTour.tsx", "utf8");
+    const css = readFileSync("src/app.css", "utf8");
+    expect(source).toContain("behavior: reduceMotion ? \"auto\" : \"smooth\"");
+    expect(source).toContain("block: \"center\"");
+    expect(css).toMatch(
+      /\.iella-tour-shade,[\s\S]*?\.iella-tour-blocker[\s\S]*?backdrop-filter: blur\(2px\)/,
+    );
   });
 
   it("targets the route card with exact padded bounds and no full-page spotlight", () => {

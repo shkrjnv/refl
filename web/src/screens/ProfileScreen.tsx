@@ -48,6 +48,7 @@ export interface ProfileScreenProps {
   onResetCache: () => Promise<void>;
   adminApi: ApiClient | null;
   onLogout: () => void;
+  onSyncNow?: () => Promise<boolean>;
 }
 
 const CEFR_ORDER = ["A1", "A2", "B1", "B2"] as const;
@@ -88,6 +89,7 @@ export function ProfileScreen({
   onResetCache,
   adminApi,
   onLogout,
+  onSyncNow,
 }: ProfileScreenProps) {
   const { t } = useTranslation();
   const [view, setView] = useState<"profile" | "settings">("profile");
@@ -254,6 +256,7 @@ export function ProfileScreen({
           authMethod={authMethod}
           learnerId={learnerId}
           onLogout={onLogout}
+          onSyncNow={onSyncNow}
         />
       ) : (
         <>

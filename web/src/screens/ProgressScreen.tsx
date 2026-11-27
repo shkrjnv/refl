@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Card, Disclosure, ProgressBar, StatusMeta } from "../components/ui";
 import { useTranslation } from "../i18n";
@@ -53,6 +53,32 @@ function ForgettingCurve({
   const [selected, setSelected] = useState(() =>
     Math.max(0, Math.min(maxDays, Math.round(elapsed))),
   );
+  const [rubberOffset, setRubberOffset] = useState(0);
+  const [rubberSnapping, setRubberSnapping] = useState(false);
+  const rubberPointerRef = useRef<number | null>(null);
+  const rubberTimerRef = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (rubberTimerRef.current !== null) {
+        window.clearTimeout(rubberTimerRef.current);
+      }
+    },
+    [],
+  );
+
+  const settleRubber = () => {
+    rubberPointerRef.current = null;
+    setRubberOffset(0);
+    setRubberSnapping(true);
+    if (rubberTimerRef.current !== null) {
+      window.clearTimeout(rubberTimerRef.current);
+    }
+    rubberTimerRef.current = window.setTimeout(() => {
+      rubberTimerRef.current = null;
+      setRubberSnapping(false);
+    }, 340);
+  };
   const chartWidth = 560;
   const chartHeight = 210;
   const left = 42;
@@ -139,13 +165,35 @@ function ForgettingCurve({
         <label>
           <span>{t("progress-curve-time", { days: selected })}</span>
           <input
+            className={`curve-range${rubberSnapping ? " snapping" : ""}`}
             type="range"
             min={0}
             max={maxDays}
             step={1}
             value={selected}
+            style={{ transform: `translateX(${rubberOffset}px)` }}
             aria-label={t("progress-curve-scrub")}
             onChange={(event) => setSelected(Number(event.target.value))}
+            onPointerDown={(event) => {
+              rubberPointerRef.current = event.pointerId;
+              setRubberSnapping(false);
+              event.currentTarget.setPointerCapture?.(event.pointerId);
+            }}
+            onPointerMove={(event) => {
+              if (rubberPointerRef.current !== event.pointerId) {
+                return;
+              }
+              const bounds = event.currentTarget.getBoundingClientRect();
+              let overscroll = 0;
+              if (event.clientX < bounds.left) {
+                overscroll = (event.clientX - bounds.left) * 0.28;
+              } else if (event.clientX > bounds.right) {
+                overscroll = (event.clientX - bounds.right) * 0.28;
+              }
+              setRubberOffset(Math.max(-18, Math.min(18, overscroll)));
+            }}
+            onPointerUp={settleRubber}
+            onPointerCancel={settleRubber}
           />
         </label>
         <strong>
@@ -235,7 +283,10 @@ function IsometricMastery({
               onFocus={() => setHovered(index)}
               onBlur={() => setHovered(null)}
             >
-              <g className="iso-body">
+              <g
+                className="iso-body"
+                style={{ animationDelay: `${index * 70}ms` }}
+              >
                 <polygon className="iso-left" points={leftFace} />
                 <polygon className="iso-right" points={rightFace} />
                 <polygon className="iso-top" points={topFace} />

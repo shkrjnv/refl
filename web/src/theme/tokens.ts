@@ -98,6 +98,14 @@ export interface ThemeTokens extends Palette {
   iellaCream: string;
   iellaBrown: string;
   iellaEye: string;
+  authPanel: string;
+  authPanelText: string;
+  authPanelMuted: string;
+  actionPrimaryBg: string;
+  actionPrimaryText: string;
+  actionDangerBg: string;
+  actionDangerText: string;
+  actionGhostText: string;
 }
 
 export const themes: Record<PaletteName, ThemeTokens> = {
@@ -137,6 +145,14 @@ export const themes: Record<PaletteName, ThemeTokens> = {
     iellaCream: "#F3E3C3",
     iellaBrown: "#8B5A2B",
     iellaEye: "#0E1020",
+    authPanel: "#EFE5D1",
+    authPanelText: "#24342F",
+    authPanelMuted: "#5E6E63",
+    actionPrimaryBg: "#0D7A78",
+    actionPrimaryText: "#FAF4E8",
+    actionDangerBg: "#B00050",
+    actionDangerText: "#FAF4E8",
+    actionGhostText: "#0A6C6A",
   },
   "deep-umber": {
     ...palette,
@@ -148,7 +164,7 @@ export const themes: Record<PaletteName, ThemeTokens> = {
     border: "#45382E",
     borderStrong: "#6A5644",
     text: "#EFE6D5",
-    textMuted: "#B7A892",
+    textMuted: "#C8B89F",
     blue: "#2B9AF3",
     sun: "#D99B52",
     green: "#4CC9A0",
@@ -180,6 +196,14 @@ export const themes: Record<PaletteName, ThemeTokens> = {
     iellaCream: "#F3E3C3",
     iellaBrown: "#8B5A2B",
     iellaEye: "#0E1020",
+    authPanel: "#1A1512",
+    authPanelText: "#EFE6D5",
+    authPanelMuted: "#CDBCA3",
+    actionPrimaryBg: "#A9DDFF",
+    actionPrimaryText: "#0B0A09",
+    actionDangerBg: "#FFB3C4",
+    actionDangerText: "#2A0710",
+    actionGhostText: "#9AD8FF",
   },
   burgundy: {
     ...palette,
@@ -191,7 +215,7 @@ export const themes: Record<PaletteName, ThemeTokens> = {
     border: "#5E1A22",
     borderStrong: "#8E2430",
     text: "#FAF2E8",
-    textMuted: "#C29297",
+    textMuted: "#E0B9BE",
     blue: "#E5A55A",
     sun: "#E5A55A",
     green: "#8FAE8B",
@@ -223,6 +247,14 @@ export const themes: Record<PaletteName, ThemeTokens> = {
     iellaCream: "#F3E3C3",
     iellaBrown: "#8B5A2B",
     iellaEye: "#0E1020",
+    authPanel: "#5A1219",
+    authPanelText: "#FAF2E8",
+    authPanelMuted: "#E0B9BE",
+    actionPrimaryBg: "#F2C98E",
+    actionPrimaryText: "#2A070A",
+    actionDangerBg: "#FFB0B8",
+    actionDangerText: "#2A070A",
+    actionGhostText: "#F2C98E",
   },
   "sand-forest": {
     ...palette,
@@ -234,7 +266,7 @@ export const themes: Record<PaletteName, ThemeTokens> = {
     border: "#C9B58C",
     borderStrong: "#183A2E",
     text: "#183A2E",
-    textMuted: "#576958",
+    textMuted: "#4F5F50",
     blue: "#1F5C48",
     blueDeep: "#113C2E",
     sun: "#E7A438",
@@ -266,6 +298,14 @@ export const themes: Record<PaletteName, ThemeTokens> = {
     iellaCream: "#F3E3C3",
     iellaBrown: "#8B5A2B",
     iellaEye: "#0E1020",
+    authPanel: "#EAD9B9",
+    authPanelText: "#183A2E",
+    authPanelMuted: "#4F5D45",
+    actionPrimaryBg: "#1F5C48",
+    actionPrimaryText: "#F3E6CD",
+    actionDangerBg: "#A23F2E",
+    actionDangerText: "#F3E6CD",
+    actionGhostText: "#1F5C48",
   },
   "midnight-cobalt": {
     ...palette,
@@ -277,7 +317,7 @@ export const themes: Record<PaletteName, ThemeTokens> = {
     border: "#2A3E60",
     borderStrong: "#405B87",
     text: "#E9EEF9",
-    textMuted: "#A8B6CF",
+    textMuted: "#B5C2D9",
     blue: "#3D6BFF",
     sun: "#E9B45E",
     green: "#50C9A4",
@@ -309,6 +349,14 @@ export const themes: Record<PaletteName, ThemeTokens> = {
     iellaCream: "#F3E3C3",
     iellaBrown: "#8B5A2B",
     iellaEye: "#0E1020",
+    authPanel: "#111E35",
+    authPanelText: "#E9EEF9",
+    authPanelMuted: "#B7C6E2",
+    actionPrimaryBg: "#A8C4FF",
+    actionPrimaryText: "#070C15",
+    actionDangerBg: "#FFB3C1",
+    actionDangerText: "#0A0710",
+    actionGhostText: "#A8C4FF",
   },
 };
 

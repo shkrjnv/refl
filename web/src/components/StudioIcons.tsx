@@ -22,7 +22,11 @@ export type StudioIconName =
   | "spark"
   | "sun"
   | "moon"
-  | "globe";
+  | "globe"
+  | "copy"
+  | "plus"
+  | "minus"
+  | "chevron-up";
 
 export interface StudioIconProps {
   name: StudioIconName;
@@ -190,6 +194,19 @@ function paths(name: StudioIconName): ReactNode {
           <path d="M12 3.5c2.2 2.4 3.3 5.3 3.3 8.5s-1.1 6.1-3.3 8.5c-2.2-2.4-3.3-5.3-3.3-8.5s1.1-6.1 3.3-8.5Z" />
         </>
       );
+    case "copy":
+      return (
+        <>
+          <rect x="8" y="8" width="11" height="12" rx="2" />
+          <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h2" />
+        </>
+      );
+    case "plus":
+      return <path d="M12 5v14M5 12h14" />;
+    case "minus":
+      return <path d="M5 12h14" />;
+    case "chevron-up":
+      return <path d="m6 15 6-6 6 6" />;
     default:
       return null;
   }
@@ -215,7 +232,7 @@ export function BrandLogo({ size = 28, className = "" }: BrandLogoProps) {
     >
       <path
         className="brand-reflection-ink"
-        d="M8 22V13C8 8.6 11.6 5 16 5h3"
+        d="M6.5 22V13C6.5 8.5 10 5 14.5 5L16 5"
         stroke="currentColor"
         strokeWidth="2.8"
         strokeLinecap="round"
@@ -223,7 +240,7 @@ export function BrandLogo({ size = 28, className = "" }: BrandLogoProps) {
       />
       <path
         className="brand-reflection-accent"
-        d="M20 6v9c0 4.4-3.6 8-8 8H9"
+        d="M21.5 6V15C21.5 19.5 18 23 13.5 23L12 23"
         stroke="var(--accent-primary)"
         strokeWidth="2.8"
         strokeLinecap="round"
@@ -255,5 +272,37 @@ export function StudioIcon({
     >
       {paths(name)}
     </svg>
+  );
+}
+
+export interface CrossfadeIconProps {
+  name: StudioIconName;
+  activeName?: StudioIconName;
+  active?: boolean;
+  size?: number;
+  className?: string;
+}
+
+export function CrossfadeIcon({
+  name,
+  activeName = name,
+  active = false,
+  size = 20,
+  className = "",
+}: CrossfadeIconProps) {
+  return (
+    <span
+      className={`crossfade-icon ${className}`.trim()}
+      data-active={active ? "true" : "false"}
+      aria-hidden="true"
+      style={{ width: size, height: size }}
+    >
+      <span className="crossfade-icon-state crossfade-icon-state-from">
+        <StudioIcon name={name} size={size} />
+      </span>
+      <span className="crossfade-icon-state crossfade-icon-state-to">
+        <StudioIcon name={activeName} size={size} />
+      </span>
+    </span>
   );
 }

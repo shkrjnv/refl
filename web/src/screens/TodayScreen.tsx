@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 
 import { HeroIllustration } from "../components/HeroIllustration";
 import { IellaTour } from "../components/IellaTour";
-import { StudioIcon } from "../components/StudioIcons";
+import { CrossfadeIcon, StudioIcon } from "../components/StudioIcons";
 import { IellaSprite } from "../components/IellaSprite";
 import { Button, Card, ProgressBar, StatusMeta } from "../components/ui";
 import type { StatusTone } from "../components/ui";
@@ -107,6 +107,7 @@ export function TodayScreen({
 }: TodayScreenProps) {
   const { t, locale } = useTranslation();
   const [duration, setDuration] = useState<(typeof DURATIONS)[number]>(25);
+  const [openRule, setOpenRule] = useState<string | null>(null);
   const state = useMemo(() => parseLearnerState(stateJson), [stateJson]);
   const progress = useMemo(
     () => kcProgress(content, state, locale),
@@ -476,12 +477,29 @@ export function TodayScreen({
               const status = masteryStatus(kc);
               return (
                 <div className="mastery-row" key={kc.kcId}>
-                  <div className="mastery-row-heading">
+                  <button
+                    type="button"
+                    className="mastery-row-heading"
+                    aria-expanded={openRule === kc.kcId}
+                    onClick={() =>
+                      setOpenRule((current) =>
+                        current === kc.kcId ? null : kc.kcId,
+                      )
+                    }
+                  >
                     <strong>{kc.title}</strong>
-                    <StatusMeta tone={masteryTone(status.tone)} dot>
-                      {t(status.key)}
-                    </StatusMeta>
-                  </div>
+                    <span className="mastery-row-state">
+                      <StatusMeta tone={masteryTone(status.tone)} dot>
+                        {t(status.key)}
+                      </StatusMeta>
+                      <CrossfadeIcon
+                        name="chevron-down"
+                        activeName="chevron-up"
+                        active={openRule === kc.kcId}
+                        size={14}
+                      />
+                    </span>
+                  </button>
                   <div className="mastery-row-bar">
                     <ProgressBar
                       value={kc.percent}
@@ -489,6 +507,18 @@ export function TodayScreen({
                       label={kc.title}
                     />
                     <span>{kc.percent}%</span>
+                  </div>
+                  <div
+                    className={`mastery-detail${openRule === kc.kcId ? " open" : ""}`}
+                    aria-hidden={openRule !== kc.kcId}
+                  >
+                    <div className="mastery-detail-inner">
+                      {kc.stabilityDays > 0
+                        ? t("today-kc-stability", {
+                            days: Math.max(1, Math.round(kc.stabilityDays)),
+                          })
+                        : t("today-kc-no-memory")}
+                    </div>
                   </div>
                 </div>
               );

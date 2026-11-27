@@ -74,7 +74,7 @@ describe("Living Studio tokens", () => {
     expect(themes.burgundy.surfaceCard).toBe("#38090E");
     expect(themes.burgundy.borderStrong).toBe("#8E2430");
     expect(themes.burgundy.text).toBe("#FAF2E8");
-    expect(themes.burgundy.textMuted).toBe("#C29297");
+    expect(themes.burgundy.textMuted).toBe("#E0B9BE");
     expect(themes.burgundy.blue).toBe("#E5A55A");
     expect(themes.burgundy.sun).toBe("#E5A55A");
   });

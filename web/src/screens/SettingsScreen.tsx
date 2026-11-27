@@ -1,8 +1,12 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { ApiClient } from "../api/client";
-import { StudioIcon, type StudioIconName } from "../components/StudioIcons";
-import { Button, Card, StatusMeta } from "../components/ui";
+import {
+  CrossfadeIcon,
+  StudioIcon,
+  type StudioIconName,
+} from "../components/StudioIcons";
+import { Button, Card, PulseConfirm, StatusMeta } from "../components/ui";
 import type { OutboxRecord } from "../db/storage";
 import type { Locale } from "../i18n";
 import { useTranslation } from "../i18n";
@@ -42,6 +46,7 @@ export interface SettingsScreenProps {
   authMethod?: "email" | "telegram";
   learnerId?: string;
   onLogout?: () => void;
+  onSyncNow?: () => Promise<boolean>;
 }
 
 interface SettingsTabItem {
@@ -89,12 +94,26 @@ export function SettingsScreen({
   authMethod,
   learnerId,
   onLogout,
+  onSyncNow,
 }: SettingsScreenProps) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<SettingsTab>("appearance");
   const [resetArmed, setResetArmed] = useState(false);
   const [dataNotice, setDataNotice] = useState<string | null>(null);
   const [dataError, setDataError] = useState<string | null>(null);
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [syncPulse, setSyncPulse] = useState(false);
+  const syncPulseTimerRef = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (syncPulseTimerRef.current !== null) {
+        window.clearTimeout(syncPulseTimerRef.current);
+      }
+    },
+    [],
+  );
+
   const tabs: SettingsTabItem[] = [
     { id: "appearance", labelKey: "settings-tab-appearance", icon: "palette" },
     { id: "account", labelKey: "settings-tab-account", icon: "profile" },
@@ -145,6 +164,30 @@ export function SettingsScreen({
       await onResetCache();
     } catch {
       setDataError(t("settings-reset-failed"));
+    }
+  };
+
+  const syncNow = async () => {
+    if (!onSyncNow || syncBusy) {
+      return;
+    }
+    setSyncBusy(true);
+    setSyncPulse(false);
+    try {
+      if (await onSyncNow()) {
+        setSyncPulse(true);
+        if (syncPulseTimerRef.current !== null) {
+          window.clearTimeout(syncPulseTimerRef.current);
+        }
+        syncPulseTimerRef.current = window.setTimeout(() => {
+          syncPulseTimerRef.current = null;
+          setSyncPulse(false);
+        }, 900);
+      }
+    } catch {
+      // The sync status remains the source of truth on failure.
+    } finally {
+      setSyncBusy(false);
     }
   };
 
@@ -241,9 +284,13 @@ export function SettingsScreen({
                   <strong>{t(paletteLabelKeys[candidate])}</strong>
                   <span>{t(paletteNoteKeys[candidate])}</span>
                 </span>
-                {theme === candidate ? (
-                  <StudioIcon name="check" size={16} className="appearance-check" />
-                ) : null}
+                <CrossfadeIcon
+                  name="palette"
+                  activeName="check"
+                  active={theme === candidate}
+                  size={16}
+                  className="appearance-check"
+                />
               </button>
             ))}
           </div>
@@ -339,7 +386,13 @@ export function SettingsScreen({
               <h2>{t("settings-sync-title")}</h2>
               <p className="settings-note">{t("settings-sync-note")}</p>
               <div className="settings-sync-status">
-                <span className={`sync-status-dot${status.online ? " online" : ""}`} />
+                <CrossfadeIcon
+                  name="sync"
+                  activeName="check"
+                  active={status.online && status.pendingOutbox === 0}
+                  size={16}
+                  className="sync-status-icon"
+                />
                 <strong>{status.online ? t("sync-online") : t("sync-offline")}</strong>
                 <span>
                   {status.pendingOutbox > 0
@@ -347,6 +400,20 @@ export function SettingsScreen({
                     : t("settings-sync-clear")}
                 </span>
               </div>
+              {onSyncNow ? (
+                <span className="sync-action">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    busy={syncBusy}
+                    onClick={() => void syncNow()}
+                  >
+                    {t("sync-retry")}
+                  </Button>
+                  <PulseConfirm active={syncPulse} />
+                </span>
+              ) : null}
             </Card>
           </div>
 

@@ -126,14 +126,18 @@ export function IellaTour({ open, onComplete }: IellaTourProps) {
 
     if (stop.target) {
       const element = document.querySelector(stop.target);
-      if (element instanceof HTMLElement) {
-        const bounds = element.getBoundingClientRect();
-        const outside =
-          bounds.top < HIGHLIGHT_PADDING ||
-          bounds.bottom > window.innerHeight - HIGHLIGHT_PADDING;
-        if (outside && typeof element.scrollIntoView === "function") {
-          element.scrollIntoView({ block: "center", inline: "nearest" });
-        }
+      if (
+        element instanceof HTMLElement &&
+        typeof element.scrollIntoView === "function"
+      ) {
+        const reduceMotion =
+          typeof window.matchMedia === "function" &&
+          window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        element.scrollIntoView({
+          behavior: reduceMotion ? "auto" : "smooth",
+          block: "center",
+          inline: "nearest",
+        });
       }
     }
 

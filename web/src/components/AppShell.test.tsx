@@ -12,11 +12,12 @@ afterEach(cleanup);
 function renderShell(
   navigationPosition: NavigationPosition,
   onNavigate: (route: AppRoute) => void = () => undefined,
+  active: AppRoute = "today",
 ) {
   return render(
     <I18nProvider initialLocale="en">
       <AppShell
-        active="today"
+        active={active}
         onNavigate={onNavigate}
         learnerLabel="Learner"
         locale="en"
@@ -36,7 +37,7 @@ function renderShell(
 }
 
 describe("adaptive studio shell", () => {
-  it("exposes exactly Today, Practice, Progress, and Profile in both navigations", () => {
+  it("keeps three learning destinations in the rail and Profile on the dock", () => {
     const routes: AppRoute[] = [];
     const { container } = renderShell("left", (route) => routes.push(route));
 
@@ -53,7 +54,6 @@ describe("adaptive studio shell", () => {
       "Today",
       "Practice",
       "Progress",
-      "Profile",
     ]);
     expect(mobileItems.map((item) => item.textContent)).toEqual([
       "Today",
@@ -64,7 +64,9 @@ describe("adaptive studio shell", () => {
     expect(screen.queryByText("Settings")).toBeNull();
     expect(container.querySelector(".learner-settings-button")).toBeNull();
 
-    fireEvent.click(within(sideNav as HTMLElement).getByRole("button", { name: "Profile" }));
+    fireEvent.click(
+      within(mobileNav as HTMLElement).getByRole("button", { name: "Profile" }),
+    );
     expect(routes).toEqual(["profile"]);
   });
 
@@ -103,6 +105,13 @@ describe("adaptive studio shell", () => {
     expect(
       within(skinDialog).queryByRole("button", { name: /Deep Umber/ }),
     ).toBeNull();
+  });
+
+  it("marks the bottom learner card active on the Profile route", () => {
+    const { container } = renderShell("left", () => undefined, "profile");
+    expect(
+      container.querySelector(".learner-profile-button")?.classList.contains("active"),
+    ).toBe(true);
   });
 
   it("keeps the identity card as a Profile shortcut without a settings gear", () => {

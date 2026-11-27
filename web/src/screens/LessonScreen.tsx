@@ -2,14 +2,14 @@ import { useEffect, useRef, useState } from "react";
 
 import { RichText } from "../components/RichText";
 import { StudioIcon } from "../components/StudioIcons";
-import { Button, Card, ProgressBar } from "../components/ui";
+import { Button, Card, ProgressBar, PulseConfirm } from "../components/ui";
 import { useTranslation } from "../i18n";
 import {
   type LessonRunner,
   type LessonSummary,
   type LessonView,
 } from "../prototype/lesson";
-import type { ItemView } from "../prototype/item";
+import type { ItemView, PresentedChoice } from "../prototype/item";
 import type { JsonValue } from "../types/json";
 
 export interface LessonScreenProps {
@@ -27,25 +27,146 @@ interface ChoiceInputProps {
   onSelect: (canonicalIndex: number) => void;
 }
 
+const CHOICE_DRAG_BOUND = 24;
+const CHOICE_DRAG_DAMPING = 0.28;
+
+interface DraggableChoiceProps {
+  choice: PresentedChoice;
+  letter: string;
+  disabled: boolean;
+  selected: boolean;
+  onSelect: () => void;
+}
+
+function DraggableChoice({
+  choice,
+  letter,
+  disabled,
+  selected,
+  onSelect,
+}: DraggableChoiceProps) {
+  const [offset, setOffset] = useState(0);
+  const [snapping, setSnapping] = useState(false);
+  const dragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    moved: boolean;
+  } | null>(null);
+  const suppressClickRef = useRef(false);
+  const snapTimerRef = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (snapTimerRef.current !== null) {
+        window.clearTimeout(snapTimerRef.current);
+      }
+    },
+    [],
+  );
+
+  const settle = () => {
+    setOffset(0);
+    setSnapping(true);
+    if (snapTimerRef.current !== null) {
+      window.clearTimeout(snapTimerRef.current);
+    }
+    snapTimerRef.current = window.setTimeout(() => {
+      snapTimerRef.current = null;
+      setSnapping(false);
+    }, 340);
+  };
+
+  return (
+    <button
+      type="button"
+      className={`choice-option${selected ? " selected" : ""}${
+        snapping ? " snapping" : ""
+      }`}
+      disabled={disabled}
+      aria-pressed={selected}
+      style={{ transform: `translateX(${offset}px)` }}
+      onPointerDown={(event) => {
+        if (disabled) {
+          return;
+        }
+        dragRef.current = {
+          pointerId: event.pointerId,
+          startX: event.clientX,
+          moved: false,
+        };
+        setSnapping(false);
+        event.currentTarget.setPointerCapture?.(event.pointerId);
+      }}
+      onPointerMove={(event) => {
+        const current = dragRef.current;
+        if (!current || current.pointerId !== event.pointerId) {
+          return;
+        }
+        const delta = event.clientX - current.startX;
+        if (Math.abs(delta) > 4) {
+          current.moved = true;
+        }
+        const magnitude = Math.abs(delta);
+        const resisted =
+          magnitude <= CHOICE_DRAG_BOUND
+            ? delta
+            : Math.sign(delta) *
+              (CHOICE_DRAG_BOUND +
+                (magnitude - CHOICE_DRAG_BOUND) * CHOICE_DRAG_DAMPING);
+        setOffset(
+          Math.max(
+            -CHOICE_DRAG_BOUND * 1.6,
+            Math.min(CHOICE_DRAG_BOUND * 1.6, resisted),
+          ),
+        );
+      }}
+      onPointerUp={() => {
+        const current = dragRef.current;
+        if (!current) {
+          return;
+        }
+        dragRef.current = null;
+        if (current.moved) {
+          suppressClickRef.current = true;
+          window.setTimeout(() => {
+            suppressClickRef.current = false;
+          }, 0);
+        }
+        settle();
+      }}
+      onPointerCancel={() => {
+        dragRef.current = null;
+        settle();
+      }}
+      onClick={(event) => {
+        if (suppressClickRef.current) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+        onSelect();
+      }}
+    >
+      <span className="choice-letter" aria-hidden="true">
+        {letter}
+      </span>
+      <span>{choice.text}</span>
+    </button>
+  );
+}
+
 function ChoiceInput({ view, disabled, selected, onSelect }: ChoiceInputProps) {
   return (
     <div className="choice-list">
-      {view.choices.map((choice) => (
-        <button
+      {view.choices.map((choice, index) => (
+        <DraggableChoice
           key={`${choice.canonicalIndex}:${choice.text}`}
-          type="button"
-          className={`choice-option${
-            selected === choice.canonicalIndex ? " selected" : ""
-          }`}
+          choice={choice}
+          letter={String.fromCharCode(65 + index)}
           disabled={disabled}
-          aria-pressed={selected === choice.canonicalIndex}
-          onClick={() => onSelect(choice.canonicalIndex)}
-        >
-          <span className="choice-letter" aria-hidden="true">
-            {String.fromCharCode(65 + view.choices.indexOf(choice))}
-          </span>
-          <span>{choice.text}</span>
-        </button>
+          selected={selected === choice.canonicalIndex}
+          onSelect={() => onSelect(choice.canonicalIndex)}
+        />
       ))}
     </div>
   );
@@ -279,6 +400,10 @@ export function LessonScreen({
 
       {view.phase === "explanation" && view.explanation ? (
         <Card tone="tinted" className="explanation-card">
+          <PulseConfirm
+            active={view.feedback?.correct === true}
+            className="feedback-pulse"
+          />
           <p className="eyebrow">{t("lesson-explanation-eyebrow")}</p>
           <h2>{view.explanation.title}</h2>
           <p className="explanation-body">
@@ -369,6 +494,10 @@ export function LessonScreen({
             view.feedback.correct ? "feedback-correct" : "feedback-wrong"
           }`}
         >
+          <PulseConfirm
+            active={view.feedback.correct}
+            className="feedback-pulse"
+          />
           <p className="feedback-verdict">
             {view.feedback.correct
               ? t("lesson-answer-correct")

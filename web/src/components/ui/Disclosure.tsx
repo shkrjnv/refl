@@ -1,5 +1,7 @@
 import { useId, useState, type ReactNode } from "react";
 
+import { CrossfadeIcon } from "../StudioIcons";
+
 export interface DisclosureProps {
   summary: string;
   children: ReactNode;
@@ -19,14 +21,21 @@ export function Disclosure({ summary, children }: DisclosureProps) {
       >
         <span>{summary}</span>
         <span className="ui-disclosure-mark" aria-hidden="true">
-          {open ? "−" : "+"}
+          <CrossfadeIcon
+            name="plus"
+            activeName="minus"
+            active={open}
+            size={15}
+          />
         </span>
       </button>
-      {open ? (
-        <div className="ui-disclosure-body" id={id}>
-          {children}
-        </div>
-      ) : null}
+      <div
+        className={`ui-disclosure-body${open ? " open" : ""}`}
+        id={id}
+        aria-hidden={!open}
+      >
+        <div className="ui-disclosure-inner">{children}</div>
+      </div>
     </div>
   );
 }

@@ -10046,3 +10046,479 @@ input:focus-visible {
   color: var(--text);
   padding: 10px 12px;
 }
+
+/* ========================================================================== */
+/* W15 — APCA contrast text roles, bottom profile card, and studio motion.    */
+/* ========================================================================== */
+
+/* APCA-calibrated action text and neutral status metadata. */
+.ui-button-primary {
+  background: var(--action-primary-bg);
+  color: var(--action-primary-text);
+}
+
+.ui-button-danger {
+  background: var(--action-danger-bg);
+  color: var(--action-danger-text);
+}
+
+.ui-button-ghost {
+  color: var(--action-ghost-text);
+}
+
+.hint-toggle,
+.ui-disclosure-toggle {
+  color: var(--action-ghost-text);
+}
+
+.choice-option.selected {
+  color: var(--text);
+}
+
+.choice-option.selected .choice-letter {
+  background: var(--action-primary-bg);
+  color: var(--action-primary-text);
+}
+
+.sentence-token:hover:not(:disabled),
+.sentence-token.selected {
+  color: var(--text);
+}
+
+.item-hint,
+.feedback-correct .feedback-verdict,
+.feedback-wrong .feedback-verdict,
+.inline-alert,
+.inline-alert.danger,
+.storage-granted,
+.storage-denied,
+.storage-unsupported,
+.invite-result code,
+.error-notebook-mark,
+.profile-error-mark {
+  color: var(--text);
+}
+
+.rejected-row span,
+.error-notebook-count,
+.profile-error-count {
+  color: var(--text-muted);
+}
+
+.status-meta {
+  color: var(--text-muted);
+}
+
+.status-meta-neutral {
+  --status-dot: var(--text-muted);
+}
+
+.status-meta-accent {
+  --status-dot: var(--blue);
+}
+
+.status-meta-success {
+  --status-dot: var(--green);
+}
+
+.status-meta-warning {
+  --status-dot: var(--sun);
+}
+
+.status-meta-danger {
+  --status-dot: var(--coral);
+}
+
+.status-meta-dot::before {
+  background: var(--status-dot, currentColor);
+}
+
+.today-hero-level {
+  --status-dot: currentColor;
+}
+
+/* Crossfade icon: the two states share one grid cell. */
+.crossfade-icon {
+  position: relative;
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+}
+
+.crossfade-icon-state {
+  display: grid;
+  grid-area: 1 / 1;
+  place-items: center;
+  transition:
+    opacity 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform, filter;
+}
+
+.crossfade-icon-state-from {
+  opacity: 1;
+  transform: scale(1);
+  filter: blur(0);
+}
+
+.crossfade-icon-state-to {
+  opacity: 0;
+  transform: scale(0.78);
+  filter: blur(4px);
+}
+
+.crossfade-icon[data-active="true"] .crossfade-icon-state-from {
+  opacity: 0;
+  transform: scale(1.14);
+  filter: blur(4px);
+}
+
+.crossfade-icon[data-active="true"] .crossfade-icon-state-to {
+  opacity: 1;
+  transform: scale(1);
+  filter: blur(0);
+}
+
+/* Pulse confirmation ring. */
+.pulse-confirm {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.pulse-confirm.active::before,
+.pulse-confirm.active::after {
+  position: absolute;
+  inset: -3px;
+  border: 2px solid var(--green);
+  border-radius: inherit;
+  content: "";
+  opacity: 0;
+  animation: pulse-confirm 720ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.pulse-confirm.active::after {
+  animation-delay: 120ms;
+}
+
+.copy-action,
+.sync-action {
+  position: relative;
+  display: inline-flex;
+}
+
+.sync-action {
+  margin-top: 10px;
+}
+
+.sync-status-icon {
+  color: var(--text-muted);
+}
+
+.feedback-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.auth-success-pulse {
+  inset: 50% auto auto 50%;
+  width: 148px;
+  height: 148px;
+  margin: -74px 0 0 -74px;
+  border-radius: 50%;
+}
+
+.auth-success {
+  position: relative;
+}
+
+/* Disclosure and rule-row grid expansion. */
+.ui-disclosure-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  padding: 0;
+  opacity: 0;
+  transition:
+    grid-template-rows 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 180ms ease;
+}
+
+.ui-disclosure-body.open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.ui-disclosure-inner {
+  min-height: 0;
+  overflow: hidden;
+  padding: 8px 0 2px;
+}
+
+.mastery-row-heading {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mastery-row-heading:focus-visible {
+  border-radius: 6px;
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.mastery-row-state {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+}
+
+.mastery-detail {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 160ms ease;
+}
+
+.mastery-detail.open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.mastery-detail-inner {
+  min-height: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+/* The same auth card expands between email and code rather than swapping abruptly. */
+.auth-form-region {
+  overflow: hidden;
+  transition: height 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.auth-form-inner {
+  display: flow-root;
+}
+
+.auth-form-region:not(.auth-form-region-sized) {
+  transition: none;
+}
+
+/* Rubber-band overscroll and spring return. */
+.choice-option,
+.curve-range {
+  touch-action: pan-y;
+  transition: none;
+}
+
+.choice-option.snapping {
+  transition: transform 340ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.curve-range.snapping {
+  transition: transform 340ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Wipe reveals. */
+.chart-area,
+.chart-curve {
+  clip-path: inset(0 100% 0 0);
+  animation: reveal-wipe 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.chart-curve {
+  animation-delay: 70ms;
+}
+
+.iso-body {
+  clip-path: inset(100% 0 0 0);
+  animation: reveal-wipe-vertical 720ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.mastery-row-bar .ui-progress-fill {
+  clip-path: inset(0 100% 0 0);
+  animation: reveal-wipe 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.mastery-row:nth-child(2) .ui-progress-fill {
+  animation-delay: 50ms;
+}
+
+.mastery-row:nth-child(3) .ui-progress-fill {
+  animation-delay: 100ms;
+}
+
+.mastery-row:nth-child(4) .ui-progress-fill {
+  animation-delay: 150ms;
+}
+
+.mastery-row:nth-child(5) .ui-progress-fill {
+  animation-delay: 200ms;
+}
+
+@keyframes pulse-confirm {
+  0% {
+    opacity: 0.72;
+    transform: scale(0.96);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.18);
+  }
+}
+
+@keyframes reveal-wipe {
+  from {
+    clip-path: inset(0 100% 0 0);
+    opacity: 0.35;
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+  }
+}
+
+@keyframes reveal-wipe-vertical {
+  from {
+    clip-path: inset(100% 0 0 0);
+    opacity: 0.2;
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+  }
+}
+
+/* Fitts: primary targets stay generous, destructive settings actions compact. */
+.duration-pill {
+  min-height: 44px;
+}
+
+.settings-split-card .ui-button,
+.settings-card .ui-button-danger {
+  min-height: 38px;
+  padding-inline: 12px;
+}
+
+.ui-button,
+.duration-pill,
+.choice-option,
+.sentence-token,
+.nav-item,
+.mobile-nav-item,
+.palette-choice,
+.language-option {
+  transition:
+    transform 70ms ease,
+    background-color 70ms ease,
+    border-color 70ms ease,
+    color 70ms ease,
+    box-shadow 70ms ease;
+}
+
+.ui-button:active:not(:disabled),
+.duration-pill:active,
+.choice-option:active:not(:disabled),
+.sentence-token:active:not(:disabled),
+.nav-item:active:not(:disabled),
+.mobile-nav-item:active:not(:disabled),
+.palette-choice:active,
+.language-option:active {
+  transform: scale(0.97);
+}
+
+/* Iella tour focus staging. */
+.iella-tour-shade,
+.iella-tour-blocker {
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crossfade-icon-state,
+  .ui-disclosure-body,
+  .mastery-detail,
+  .auth-form-region,
+  .choice-option.snapping,
+  .curve-range.snapping,
+  .ui-button,
+  .duration-pill,
+  .choice-option,
+  .sentence-token,
+  .nav-item,
+  .mobile-nav-item,
+  .palette-choice,
+  .language-option {
+    transition: none;
+  }
+
+  .pulse-confirm.active::before,
+  .pulse-confirm.active::after,
+  .chart-area,
+  .chart-curve,
+  .iso-body,
+  .mastery-row-bar .ui-progress-fill {
+    animation: none;
+    clip-path: none;
+    opacity: 1;
+  }
+
+  .ui-button:active:not(:disabled),
+  .duration-pill:active,
+  .choice-option:active:not(:disabled),
+  .sentence-token:active:not(:disabled),
+  .nav-item:active:not(:disabled),
+  .mobile-nav-item:active:not(:disabled),
+  .palette-choice:active,
+  .language-option:active {
+    transform: none;
+  }
+}
+
+.learner-profile-button.active {
+  border-color: var(--blue);
+  background: var(--info-surface);
+  box-shadow: inset 3px 0 0 var(--action-primary-bg);
+}
+
+.learner-profile-button.active .learner-avatar {
+  box-shadow: 0 0 0 2px var(--action-primary-bg);
+}
+
+.explanation-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.copy-action,
+.sync-action {
+  border-radius: var(--radius-md);
+}
+
+.auth-form-region .ui-button:active:not(:disabled) {
+  transform: scale(0.97);
+  transition-duration: 70ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-form-region .ui-button,
+  .auth-form-region .ui-button:hover:not(:disabled),
+  .auth-form-region .ui-button:active:not(:disabled),
+  .auth-submit-label {
+    animation: none;
+    transition: none;
+    transform: none;
+  }
+}

@@ -61,8 +61,12 @@ export function AppShell({
       disabled: !lessonAvailable,
     },
     { route: "stats", label: t("nav-stats"), glyph: "progress" },
-    { route: "profile", label: t("nav-profile"), glyph: "profile" },
   ];
+  const profileItem: NavItem = {
+    route: "profile",
+    label: t("nav-profile"),
+    glyph: "profile",
+  };
 
   const navigate = (item: NavItem) => {
     if (!item.disabled) {
@@ -120,7 +124,9 @@ export function AppShell({
             <span className="learner-avatar">{learnerLabel.slice(0, 1)}</span>
             <span className="learner-copy">
               <strong>{learnerLabel}</strong>
-              <span>{t("profile-local-learner")}</span>
+              <span>
+                {t("nav-profile")} · {t("profile-local-learner")}
+              </span>
             </span>
           </button>
         </div>
@@ -149,7 +155,7 @@ export function AppShell({
       </div>
 
       <nav className="mobile-nav" aria-label={t("nav-label")}>
-        {primaryItems.map((item) => (
+        {[...primaryItems, profileItem].map((item) => (
           <button
             key={item.route}
             type="button"
