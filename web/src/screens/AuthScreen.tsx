@@ -504,7 +504,7 @@ export function AuthScreen({
               />
               <Button type="submit" variant="primary" block busy={busy}>
                 <StudioIcon name="arrow-right" size={16} />
-                {t("auth-send-code")}
+                <span className="auth-submit-label">{t("auth-send-code")}</span>
               </Button>
             </form>
           ) : (
@@ -566,7 +566,7 @@ export function AuthScreen({
                 disabled={code.length !== CODE_LENGTH}
               >
                 <StudioIcon name="check" size={16} />
-                {t("auth-verify-code")}
+                <span className="auth-submit-label">{t("auth-verify-code")}</span>
               </Button>
               <Button type="button" variant="ghost" block onClick={backToEmail}>
                 <StudioIcon name="arrow-left" size={16} />
@@ -586,7 +586,7 @@ export function AuthScreen({
             onClick={startTelegram}
           >
             <StudioIcon name="arrow-right" size={16} />
-            {t("auth-telegram")}
+            <span className="auth-submit-label">{t("auth-telegram")}</span>
           </Button>
           {telegram ? (
             <p className="auth-note">{t("auth-telegram-detected")}</p>

@@ -88,7 +88,7 @@ export function AppShell({
     <div className="studio-shell" data-nav-position={navigationPosition}>
       <aside className="studio-sidebar" aria-label={t("nav-label")}>
         <div className="brand-lockup">
-          <BrandLogo size={44} />
+          <BrandLogo size={52} />
           <span className="brand-name">{t("app-name")}</span>
         </div>
         <nav className="side-nav" aria-label={t("nav-label")}>
@@ -152,7 +152,7 @@ export function AppShell({
       <div className="studio-main">
         <header className="studio-topbar">
           <div className="mobile-brand">
-            <BrandLogo size={36} />
+            <BrandLogo size={32} />
             <span className="brand-name">{t("app-name")}</span>
           </div>
           <div className="topbar-actions">

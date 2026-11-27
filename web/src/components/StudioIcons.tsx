@@ -200,141 +200,152 @@ export interface BrandLogoProps {
   className?: string;
 }
 
-// Dimensional ribbon mark adapted from design/reference/refl-logo-ref.jpg.
+// Crane-fused ribbon mark adapted from design/reference/refl-logo-ref.jpg.
 export function BrandLogo({ size = 28, className = "" }: BrandLogoProps) {
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
-  const dark = `brand-dark-${uid}`;
+  const umber = `brand-umber-${uid}`;
+  const burgundy = `brand-burgundy-${uid}`;
   const cream = `brand-cream-${uid}`;
-  const creamShadow = `brand-cream-shadow-${uid}`;
   const blue = `brand-blue-${uid}`;
   const blueDark = `brand-blue-dark-${uid}`;
   const teal = `brand-teal-${uid}`;
   return (
     <svg
       className={`brand-logo ${className}`.trim()}
-      width={Math.round(size * (52 / 62))}
+      width={size}
       height={size}
-      viewBox="0 0 52 62"
+      viewBox="0 0 64 64"
       aria-hidden="true"
       focusable="false"
     >
       <defs>
-        <linearGradient id={dark} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#725742" />
-          <stop offset=".38" stopColor="#3A2C22" />
+        <linearGradient id={umber} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#5C121A" />
+          <stop offset=".45" stopColor="#2A1712" />
           <stop offset="1" stopColor="#1A1512" />
         </linearGradient>
-        <linearGradient id={cream} x1=".1" y1="0" x2=".9" y2="1">
-          <stop offset="0" stopColor="#FFFDF8" />
-          <stop offset=".42" stopColor="#EAE2D3" />
-          <stop offset="1" stopColor="#C9B79E" />
+        <linearGradient id={burgundy} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#7A1824" />
+          <stop offset="1" stopColor="#3A0E12" />
         </linearGradient>
-        <linearGradient id={creamShadow} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#DCCFBA" />
-          <stop offset="1" stopColor="#A08C73" />
+        <linearGradient id={cream} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#FFF9EC" />
+          <stop offset=".55" stopColor="#EAE2D3" />
+          <stop offset="1" stopColor="#CDBBA0" />
         </linearGradient>
         <linearGradient id={blue} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#5FC0FF" />
-          <stop offset=".4" stopColor="#2B9AF3" />
-          <stop offset="1" stopColor="#1363B6" />
+          <stop offset="0" stopColor="#62C1FF" />
+          <stop offset=".45" stopColor="#2B9AF3" />
+          <stop offset=".72" stopColor="#1E88E5" />
+          <stop offset="1" stopColor="#0D5FAE" />
         </linearGradient>
         <linearGradient id={blueDark} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#1E88E5" />
-          <stop offset="1" stopColor="#083E80" />
+          <stop offset="0" stopColor="#1569B8" />
+          <stop offset="1" stopColor="#083E75" />
         </linearGradient>
         <linearGradient id={teal} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#1FAEA6" />
-          <stop offset=".5" stopColor="#0D7A78" />
-          <stop offset="1" stopColor="#053B39" />
+          <stop offset="0" stopColor="#23B3AB" />
+          <stop offset=".6" stopColor="#0D7A78" />
+          <stop offset="1" stopColor="#044A48" />
         </linearGradient>
       </defs>
       <path
-        className="brand-ribbon-cream"
-        d="M9.0 10.0C12.0 4.6 17.0 1.7 23.0 1.2C31.0 0.9 39.0 3.9 43.5 10.0L44.8 17.7L34.0 22.9L15.6 10.0Z"
+        className="brand-crane-feather brand-crane-feather-umber"
+        d="M37 40C28 32 18 20 5 12C10 24 18 35 28 42C32 45 36 46 39 45Z"
+        fill={`url(#${umber})`}
+      />
+      <path
+        className="brand-crane-feather brand-crane-feather-burgundy"
+        d="M38 42C32 32 25 20 16 7C18 21 25 33 33 43C35 46 38 47 40 46Z"
+        fill={`url(#${burgundy})`}
+      />
+      <path
+        className="brand-crane-feather brand-crane-feather-cream"
+        d="M39 43C35 31 31 18 26 4C26 18 30 32 35 44C37 47 39 48 41 47Z"
         fill={`url(#${cream})`}
       />
       <path
-        className="brand-ribbon-cream-shadow"
-        d="M44.8 17.7L43.4 21.8L35.3 24.6L34.0 22.9Z"
-        fill={`url(#${creamShadow})`}
+        className="brand-crane-feather brand-crane-feather-cream"
+        d="M41 43C40 31 40 17 42 3C43 17 45 30 46 42C46 45 44 47 42 47Z"
+        fill={`url(#${cream})`}
       />
       <path
-        className="brand-ribbon-cream-crease"
-        d="M26.8 1.6C29.4 6.2 30.0 12.0 28.4 18.0L31.1 19.2C32.9 12.9 32.2 6.4 29.3 1.8Z"
-        fill="#D7C7AE"
-        opacity=".46"
+        className="brand-crane-feather-shade"
+        d="M39 43C34 39 28 35 22 33C28 38 34 42 40 46Z"
+        fill="#5C121A"
+        opacity=".55"
       />
       <path
-        className="brand-ribbon-cream-highlight"
-        d="M10.8 9.0C14.2 4.9 18.6 2.8 23.3 2.4C30.0 2.2 36.8 4.4 40.7 9.2L38.8 9.7C34.8 5.7 29.4 3.9 23.5 4.1C19.3 4.4 15.4 6.0 12.4 8.8Z"
-        fill="#FFFDF8"
-        opacity=".82"
-      />
-      <path
-        className="brand-ribbon-dark"
-        d="M2.2 10.7C2.2 8.3 3.8 6.2 6.1 5.7L16.3 3.4L17.5 57.4L7.3 60.2C4.4 61.0 2.2 58.8 2.2 55.8Z"
-        fill={`url(#${dark})`}
-      />
-      <path
-        className="brand-ribbon-dark-highlight"
-        d="M5.0 10.2C5.0 8.8 5.9 7.6 7.2 7.3L10.1 6.6L11.8 58.2L8.5 59.3C6.3 59.9 5.0 58.4 5.0 56.1Z"
-        fill="#B08E6E"
-        opacity=".38"
-      />
-      <path
-        className="brand-ribbon-dark-shade"
-        d="M16.3 3.4L17.5 57.4L12.0 59.0L10.1 6.6C13.1 5.9 15.0 4.8 16.3 3.4Z"
-        fill="#0A0604"
-        opacity=".3"
-      />
-      <path
-        className="brand-ribbon-teal"
-        d="M18.0 38.8L47.0 48.5C49.4 49.5 49.7 52.7 47.5 54.1L45.8 55.2C44.6 55.9 43.2 55.8 42.1 55.0L15.5 43.6C14.2 42.9 14.8 40.9 16.2 40.1Z"
-        fill={`url(#${teal})`}
-      />
-      <path
-        className="brand-ribbon-teal-highlight"
-        d="M18.4 40.0L47.0 49.5C48.1 49.8 48.6 50.8 48.4 51.8C47.5 50.6 46.3 50.0 45.0 49.6L17.2 41.5Z"
-        fill="#6FE7DD"
-        opacity=".34"
-      />
-      <path
-        className="brand-ribbon-teal-shade"
-        d="M42.1 55.0C43.2 55.8 44.6 55.9 45.8 55.2L47.5 54.1C48.8 53.4 49.2 51.9 48.7 50.6C48.1 52.1 46.9 53.1 45.4 53.4L42.8 53.8Z"
-        fill="#032B29"
-        opacity=".7"
-      />
-      <path
-        className="brand-ribbon-blue"
-        d="M44.8 17.7L44.6 24.5L34.0 38.7L18.9 31.0Z"
+        className="brand-crane-body"
+        d="M38 45C33 39 34 31 40 28C46 26 52 31 52 38C52 46 46 51 39 49C37 48 36 46 35 44Z"
         fill={`url(#${blue})`}
       />
       <path
-        className="brand-ribbon-blue-dark"
-        d="M18.9 31.0L34.0 38.7L43.0 28.2L41.0 24.4L29.0 31.7L21.2 28.4Z"
+        className="brand-crane-shoulder"
+        d="M38 44C31 42 25 38 20 33C26 37 32 39 39 40Z"
+        fill={`url(#${blue})`}
+      />
+      <path
+        className="brand-crane-wing-panel"
+        d="M40 30C45 31 49 35 50 40C47 38 43 37 39 38C37 36 37 32 40 30Z"
         fill={`url(#${blueDark})`}
-      />
-      <path
-        className="brand-ribbon-blue-highlight"
-        d="M43.8 18.8L20.4 31.4"
-        stroke="#A5DCFF"
-        strokeWidth="1.2"
-        opacity=".55"
-        fill="none"
-      />
-      <path
-        className="brand-ribbon-blue-fold"
-        d="M18.9 31.0L34.0 38.7"
-        stroke="#06346A"
-        strokeWidth="1.2"
         opacity=".6"
-        fill="none"
       />
       <path
-        className="brand-ribbon-blue-notch"
-        d="M18.9 31.0L20.6 29.7L22.4 31.3L20.8 32.6Z"
-        fill="#EAF6FF"
-        opacity=".8"
+        className="brand-crane-body-highlight"
+        d="M39 29C40 35 42 42 39 49C36 43 36 35 37 30Z"
+        fill="#8FD4FF"
+        opacity=".28"
+      />
+      <path
+        className="brand-crane-tail"
+        d="M33 48C26 52 17 56 7 61C16 54 24 49 31 42Z"
+        fill={`url(#${teal})`}
+      />
+      <path
+        className="brand-crane-tail"
+        d="M35 49C31 55 27 59 23 63C27 57 30 52 34 45Z"
+        fill={`url(#${teal})`}
+      />
+      <path
+        className="brand-crane-neck"
+        d="M41 36C40 29 42 22 47 17L49.5 18C46.5 23 45.5 29 45.5 35Z"
+        fill={`url(#${cream})`}
+      />
+      <path
+        className="brand-crane-neck-blue"
+        d="M42 36C42 30 44 24 48 19L49 20C46 25 45 30 45 35Z"
+        fill="#1E88E5"
+      />
+      <path
+        className="brand-crane-crest"
+        d="M46 17C45 13 47 10 50 9C51 12 51 15 50 18C48 19 46 18 46 17Z"
+        fill="#5C121A"
+      />
+      <path
+        className="brand-crane-head"
+        d="M47 17C48 14 50 13 52 14C53 16 52 18 50 19C48 20 47 19 47 17Z"
+        fill="#1A1512"
+      />
+      <path
+        className="brand-crane-beak"
+        d="M50 15L62 13.4L51 18.2Z"
+        fill="#1A1512"
+      />
+      <circle
+        className="brand-crane-eye"
+        cx="50.4"
+        cy="15.6"
+        r=".8"
+        fill="#FFF9EC"
+      />
+      <path
+        className="brand-crane-fold"
+        d="M38 44C32 41 27 38 23 34"
+        stroke="#0B4E8C"
+        strokeWidth=".7"
+        opacity=".45"
+        fill="none"
       />
     </svg>
   );

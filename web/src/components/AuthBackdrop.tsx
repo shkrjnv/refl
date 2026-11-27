@@ -19,88 +19,60 @@ interface Plume {
 
 const PLUMES: readonly Plume[] = [
   {
-    cx: 0.76,
+    cx: 0.74,
     cy: 0.18,
-    ax: 0.05,
-    ay: 0.035,
-    sx: 0.045,
-    sy: 0.034,
-    radius: 0.14,
+    ax: 0.055,
+    ay: 0.04,
+    sx: 0.043,
+    sy: 0.032,
+    radius: 0.19,
     phase: 0.6,
-    amplitude: 1.8,
-    stretchX: 1.5,
-    stretchY: 0.75,
-    rotation: -0.45,
+    amplitude: 1.75,
+    stretchX: 1.4,
+    stretchY: 0.78,
+    rotation: -0.42,
   },
   {
-    cx: 0.16,
-    cy: 0.38,
-    ax: 0.04,
+    cx: 0.17,
+    cy: 0.42,
+    ax: 0.045,
     ay: 0.05,
     sx: 0.029,
     sy: 0.047,
-    radius: 0.125,
+    radius: 0.155,
     phase: 2.2,
-    amplitude: 1.38,
+    amplitude: 1.2,
     stretchX: 0.78,
-    stretchY: 1.55,
-    rotation: 0.35,
+    stretchY: 1.5,
+    rotation: 0.38,
   },
   {
-    cx: 0.68,
-    cy: 0.56,
-    ax: 0.07,
+    cx: 0.64,
+    cy: 0.58,
+    ax: 0.075,
     ay: 0.03,
     sx: 0.052,
     sy: 0.031,
-    radius: 0.15,
+    radius: 0.17,
     phase: 3.7,
-    amplitude: 1.52,
-    stretchX: 1.2,
+    amplitude: 1.3,
+    stretchX: 1.22,
     stretchY: 0.85,
     rotation: 0.2,
   },
   {
-    cx: 0.28,
-    cy: 0.78,
+    cx: 0.46,
+    cy: 0.79,
     ax: 0.045,
     ay: 0.05,
     sx: 0.035,
     sy: 0.045,
-    radius: 0.1,
+    radius: 0.12,
     phase: 5.1,
-    amplitude: 0.65,
-    stretchX: 0.9,
-    stretchY: 1.3,
-    rotation: -0.28,
-  },
-  {
-    cx: 0.9,
-    cy: 0.82,
-    ax: 0.025,
-    ay: 0.025,
-    sx: 0.061,
-    sy: 0.041,
-    radius: 0.1,
-    phase: 1.4,
-    amplitude: 0.7,
+    amplitude: 0.92,
     stretchX: 1.1,
-    stretchY: 0.9,
-    rotation: 0.5,
-  },
-  {
-    cx: 0.5,
-    cy: 0.28,
-    ax: 0.035,
-    ay: 0.025,
-    sx: 0.016,
-    sy: 0.019,
-    radius: 0.34,
-    phase: 4.4,
-    amplitude: 0.18,
-    stretchX: 1.35,
-    stretchY: 0.78,
-    rotation: -0.12,
+    stretchY: 0.95,
+    rotation: 0.3,
   },
 ];
 
@@ -245,7 +217,7 @@ function fieldAt(
     Math.sin(x * 8.7 + y * 12.3 + time * 0.07) *
     Math.cos(y * 6.9 - x * 9.8 - time * 0.055);
   total *= 0.84 + 0.2 * flow;
-  return Math.min(1, Math.max(0, total * 0.42));
+  return Math.min(1, Math.max(0, total * 0.44));
 }
 
 function sensorGrain(x: number, y: number, time: number): number {
@@ -339,13 +311,13 @@ export function AuthBackdrop({
     if (!context) {
       return;
     }
-    const base = parseHex(cssColor("--thermal-base"), [21, 6, 48]);
+    const base = parseHex(cssColor("--thermal-base"), [24, 4, 36]);
     const violet = parseHex(cssColor("--thermal-violet"), [59, 13, 107]);
     const magenta = parseHex(cssColor("--thermal-magenta"), [157, 23, 77]);
-    const crimson = parseHex(cssColor("--thermal-crimson"), [225, 29, 72]);
+    const crimson = parseHex(cssColor("--thermal-crimson"), [217, 30, 54]);
     const orange = parseHex(cssColor("--thermal-orange"), [234, 88, 12]);
-    const gold = parseHex(cssColor("--thermal-gold"), [250, 204, 21]);
-    const hot = parseHex(cssColor("--thermal-hot"), [255, 243, 196]);
+    const gold = parseHex(cssColor("--thermal-gold"), [251, 192, 45]);
+    const hot = parseHex(cssColor("--thermal-hot"), [255, 242, 199]);
     const ramp: readonly Rgb[] = [base, violet, magenta, crimson, orange, gold];
     const reduced =
       typeof window.matchMedia === "function" &&

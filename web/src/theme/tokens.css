@@ -929,18 +929,17 @@
    ========================================================================== */
 
 :root {
-  --thermal-base: #150630;
+  --thermal-base: #180424;
   --thermal-violet: #3B0D6B;
   --thermal-magenta: #9D174D;
-  --thermal-crimson: #E11D48;
+  --thermal-crimson: #D91E36;
   --thermal-orange: #EA580C;
-  --thermal-gold: #FACC15;
-  --thermal-amber: #FACC15;
-  --thermal-hot: #FFF3C4;
-  --thermal-deep: #0C0322;
-  --thermal-shadow: #07020F;
+  --thermal-gold: #FBC02D;
+  --thermal-amber: #FBC02D;
+  --thermal-hot: #FFF2C7;
+  --thermal-deep: #0D0218;
+  --thermal-shadow: #08010E;
   --felt-texture: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22240%22%20height%3D%22240%22%20viewBox%3D%220%200%20240%20240%22%3E%3Cfilter%20id%3D%22felt%22%20x%3D%22-10%25%22%20y%3D%22-10%25%22%20width%3D%22120%25%22%20height%3D%22120%25%22%3E%3CfeTurbulence%20type%3D%22fractalNoise%22%20baseFrequency%3D%220.012%22%20numOctaves%3D%224%22%20seed%3D%2223%22%20result%3D%22clump%22%2F%3E%3CfeTurbulence%20type%3D%22fractalNoise%22%20baseFrequency%3D%220.55%22%20numOctaves%3D%223%22%20seed%3D%227%22%20result%3D%22fiber%22%2F%3E%3CfeBlend%20in%3D%22clump%22%20in2%3D%22fiber%22%20mode%3D%22soft-light%22%20result%3D%22nap%22%2F%3E%3CfeDiffuseLighting%20in%3D%22nap%22%20lighting-color%3D%22%23ffffff%22%20surfaceScale%3D%221.7%22%20diffuseConstant%3D%221.08%22%20result%3D%22lit%22%3E%3CfeDistantLight%20azimuth%3D%2245%22%20elevation%3D%2242%22%2F%3E%3C%2FfeDiffuseLighting%3E%3CfeComposite%20in%3D%22lit%22%20in2%3D%22SourceGraphic%22%20operator%3D%22arithmetic%22%20k1%3D%221%22%20k2%3D%220%22%20k3%3D%220%22%20k4%3D%220%22%2F%3E%3C%2Ffilter%3E%3Crect%20width%3D%22240%22%20height%3D%22240%22%20fill%3D%22%23808080%22%20filter%3D%22url(%23felt)%22%20opacity%3D%220.94%22%2F%3E%3C%2Fsvg%3E");
-  --auth-top-sheen: linear-gradient(180deg, rgba(255, 244, 228, 0.07) 0%, transparent 26%);
   --felt-weave-opacity: 0.55;
   --felt-weave-contrast: 1.12;
   --felt-weave-brightness: 1.06;
@@ -1004,59 +1003,60 @@
 }
 
 :root[data-palette="burgundy"][data-theme] {
-  --bg: #1B0B10;
-  --surface: #271118;
-  --surface-raised: #331720;
-  --surface-muted: #3A1A24;
-  --border: #4A2532;
-  --border-strong: #6B3849;
-  --text: #F5ECE3;
-  --text-muted: #C4ABB2;
-  --blue: #E03A5D;
-  --sun: #E2A652;
-  --green: #63C7A2;
-  --coral: #FF7C96;
-  --purp: #B98CFF;
-  --blue-deep: #B22845;
-  --sun-deep: #A9782E;
-  --green-deep: #3D9474;
-  --coral-deep: #B82E4B;
-  --purp-deep: #7A57C7;
-  --focus-ring: #FF8DA3;
-  --micro-accent: #E2A652;
-  --shadow-button: 0 4px 0 #0C0407;
-  --shadow-primary: 0 4px 0 #B22845;
-  --shadow-card: 0 6px 0 #0C0407;
-  --shadow-hero: 0 8px 0 #0C0407;
-  --shadow-soft: 0 18px 45px rgba(0, 0, 0, 0.46);
-  --overlay: rgba(10, 2, 6, 0.68);
-  --info-surface: #331822;
-  --info-border: #5E2E3E;
-  --warning-surface: #332417;
-  --warning-border: #635026;
-  --success-surface: #173129;
-  --success-border: #2E5C4C;
-  --danger-surface: #35141D;
-  --danger-border: #6A2838;
+  --bg: #5A1219;
+  --surface: #410C11;
+  --surface-raised: #68161E;
+  --surface-muted: #4A1016;
+  --surface-card: #38090E;
+  --border: #5E1A22;
+  --border-strong: #8E2430;
+  --text: #FAF2E8;
+  --text-muted: #C29297;
+  --blue: #E5A55A;
+  --sun: #E5A55A;
+  --green: #8FAE8B;
+  --coral: #D91E36;
+  --purp: #B0738A;
+  --blue-deep: #B7803A;
+  --sun-deep: #B7803A;
+  --green-deep: #4F7A5E;
+  --coral-deep: #A6122A;
+  --purp-deep: #7A4A5E;
+  --focus-ring: #F0C27A;
+  --micro-accent: #E5A55A;
+  --shadow-button: 0 4px 0 #260509;
+  --shadow-primary: 0 4px 0 #B7803A;
+  --shadow-card: 0 6px 0 #260509;
+  --shadow-hero: 0 8px 0 #260509;
+  --shadow-soft: 0 18px 45px rgba(30, 3, 8, 0.5);
+  --overlay: rgba(20, 3, 6, 0.68);
+  --info-surface: #4E1319;
+  --info-border: #7A2A34;
+  --warning-surface: #4F2A10;
+  --warning-border: #8E5A22;
+  --success-surface: #2C3A2C;
+  --success-border: #5E7A5E;
+  --danger-surface: #4A1118;
+  --danger-border: #8E2430;
   --iella-ink: #24346A;
   --iella-beak: #E0773C;
   --iella-cream: #F3E3C3;
   --iella-brown: #8B5A2B;
   --iella-eye: #0E1020;
-  --hero-text: #FAF2EB;
-  --hero-muted: rgba(245, 236, 227, 0.84);
-  --auth-panel: #241016;
-  --auth-panel-text: #F5ECE3;
-  --auth-panel-muted: #C4ABB2;
-  --auth-scrim: rgba(10, 2, 6, 0.66);
+  --hero-text: #FAF2E8;
+  --hero-muted: rgba(250, 242, 232, 0.84);
+  --auth-panel: #5A1219;
+  --auth-panel-text: #FAF2E8;
+  --auth-panel-muted: #C29297;
+  --auth-scrim: rgba(50, 6, 12, 0.55);
   --auth-illustration-opacity: 0.82;
-  --felt-weave-opacity: 0.66;
-  --felt-weave-contrast: 1.22;
-  --felt-weave-brightness: 1.0;
-  --palette-swatch-bg: #1B0B10;
-  --palette-swatch-surface: #271118;
-  --palette-swatch-accent: #E03A5D;
-  --palette-swatch-alt: #E2A652;
+  --felt-weave-opacity: 0.72;
+  --felt-weave-contrast: 1.28;
+  --felt-weave-brightness: 0.98;
+  --palette-swatch-bg: #5A1219;
+  --palette-swatch-surface: #410C11;
+  --palette-swatch-accent: #E5A55A;
+  --palette-swatch-alt: #C29297;
 }
 
 :root[data-palette="cream-paper"][data-theme] {
@@ -1110,7 +1110,6 @@
   --palette-swatch-surface: #FFFDF8;
   --palette-swatch-accent: #0D7A78;
   --palette-swatch-alt: #FF2E7E;
-  --auth-top-sheen: linear-gradient(180deg, rgba(255, 250, 240, 0.55) 0%, rgba(255, 247, 232, 0.14) 18%, transparent 36%);
   --felt-weave-opacity: 0.78;
   --felt-weave-contrast: 1.3;
   --felt-weave-brightness: 0.92;
@@ -1167,7 +1166,6 @@
   --palette-swatch-surface: #FFF9ED;
   --palette-swatch-accent: #1F5C48;
   --palette-swatch-alt: #E7A438;
-  --auth-top-sheen: linear-gradient(180deg, rgba(255, 249, 235, 0.52) 0%, rgba(255, 243, 219, 0.16) 18%, transparent 36%);
   --felt-weave-opacity: 0.78;
   --felt-weave-contrast: 1.3;
   --felt-weave-brightness: 0.92;
@@ -1238,10 +1236,10 @@
 
 .palette-swatch-burgundy,
 .palette-preview-burgundy {
-  --swatch-bg: #1B0B10;
-  --swatch-surface: #271118;
-  --swatch-accent: #E03A5D;
-  --swatch-alt: #E2A652;
+  --swatch-bg: #5A1219;
+  --swatch-surface: #410C11;
+  --swatch-accent: #E5A55A;
+  --swatch-alt: #C29297;
 }
 
 .palette-swatch-cream-paper,

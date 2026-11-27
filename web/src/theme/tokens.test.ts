@@ -68,13 +68,15 @@ describe("Living Studio tokens", () => {
     expect(themes["sand-forest"].sun).toBe("#E7A438");
     expect(themes["midnight-cobalt"].blue).toBe("#3D6BFF");
     expect(themes["midnight-cobalt"].sun).toBe("#E9B45E");
-    expect(themes.burgundy.bg).toBe("#1B0B10");
-    expect(themes.burgundy.surface).toBe("#271118");
-    expect(themes.burgundy.surfaceRaised).toBe("#331720");
-    expect(themes.burgundy.text).toBe("#F5ECE3");
-    expect(themes.burgundy.textMuted).toBe("#C4ABB2");
-    expect(themes.burgundy.blue).toBe("#E03A5D");
-    expect(themes.burgundy.sun).toBe("#E2A652");
+    expect(themes.burgundy.bg).toBe("#5A1219");
+    expect(themes.burgundy.surface).toBe("#410C11");
+    expect(themes.burgundy.surfaceRaised).toBe("#68161E");
+    expect(themes.burgundy.surfaceCard).toBe("#38090E");
+    expect(themes.burgundy.borderStrong).toBe("#8E2430");
+    expect(themes.burgundy.text).toBe("#FAF2E8");
+    expect(themes.burgundy.textMuted).toBe("#C29297");
+    expect(themes.burgundy.blue).toBe("#E5A55A");
+    expect(themes.burgundy.sun).toBe("#E5A55A");
   });
 
   it("keeps the canonical Iella colors on every palette", () => {
