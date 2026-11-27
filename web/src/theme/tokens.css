@@ -21,11 +21,6 @@
   --purp-deep: #4E478F;
   --focus-ring: #0D7A78;
   --micro-accent: #FF2E7E;
-  --shadow-button: 0 4px 0 #DCCFB8;
-  --shadow-primary: 0 4px 0 #085E5C;
-  --shadow-card: 0 6px 0 #E6DAC4;
-  --shadow-hero: 0 8px 0 #C4B298;
-  --shadow-soft: 0 18px 45px rgba(29, 36, 36, 0.12);
   --overlay: rgba(29, 36, 36, 0.42);
   --info-surface: #E5F0EE;
   --info-border: #B8DAD5;
@@ -89,11 +84,6 @@
   --purp-deep: #6252B5;
   --focus-ring: #4DB2FF;
   --micro-accent: #D99B52;
-  --shadow-button: 0 4px 0 #0B0908;
-  --shadow-primary: 0 4px 0 #1E79C4;
-  --shadow-card: 0 6px 0 #0B0908;
-  --shadow-hero: 0 8px 0 #0B0908;
-  --shadow-soft: 0 18px 45px rgba(0, 0, 0, 0.4);
   --overlay: rgba(0, 0, 0, 0.66);
   --info-surface: #1B2C3B;
   --info-border: #2E526D;
@@ -143,11 +133,6 @@
     --purp-deep: #6252B5;
     --focus-ring: #4DB2FF;
     --micro-accent: #D99B52;
-    --shadow-button: 0 4px 0 #0B0908;
-    --shadow-primary: 0 4px 0 #1E79C4;
-    --shadow-card: 0 6px 0 #0B0908;
-    --shadow-hero: 0 8px 0 #0B0908;
-    --shadow-soft: 0 18px 45px rgba(0, 0, 0, 0.4);
     --overlay: rgba(0, 0, 0, 0.66);
     --info-surface: #1B2C3B;
     --info-border: #2E526D;
@@ -209,11 +194,6 @@
   --purp: #6f528c;
   --purp-deep: #4e3666;
   --focus-ring: #1f5c48;
-  --shadow-button: 0 4px 0 #183a2e;
-  --shadow-primary: 0 4px 0 #113c2e;
-  --shadow-card: 0 6px 0 #183a2e;
-  --shadow-hero: 0 8px 0 #183a2e;
-  --shadow-soft: 8px 8px 0 rgba(24, 58, 46, 0.18);
   --overlay: rgba(18, 42, 32, 0.52);
   --info-surface: #e4f0e7;
   --info-border: #abc9b8;
@@ -262,11 +242,6 @@
   --purp: #b69bd8;
   --purp-deep: #8467ab;
   --focus-ring: #f0b95b;
-  --shadow-button: 0 4px 0 #070f0b;
-  --shadow-primary: 0 4px 0 #070f0b;
-  --shadow-card: 0 6px 0 #070f0b;
-  --shadow-hero: 0 8px 0 #070f0b;
-  --shadow-soft: 8px 8px 0 rgba(0, 0, 0, 0.35);
   --overlay: rgba(2, 10, 7, 0.66);
   --info-surface: #1d3528;
   --info-border: #356b52;
@@ -310,11 +285,6 @@
   --purp: #7a61d6;
   --purp-deep: #5941b5;
   --focus-ring: #4f63d2;
-  --shadow-button: 0 10px 20px rgba(29, 38, 53, 0.1);
-  --shadow-primary: 0 12px 24px rgba(56, 75, 179, 0.28);
-  --shadow-card: 0 18px 40px rgba(29, 38, 53, 0.08);
-  --shadow-hero: 0 24px 50px rgba(29, 38, 53, 0.12);
-  --shadow-soft: 0 28px 60px rgba(29, 38, 53, 0.14);
   --overlay: rgba(18, 25, 41, 0.45);
   --info-surface: #eef2ff;
   --info-border: #d9e1ff;
@@ -367,11 +337,6 @@
   --purp: #b19aff;
   --purp-deep: #8369df;
   --focus-ring: #8fa4ff;
-  --shadow-button: 0 10px 22px rgba(0, 0, 0, 0.26);
-  --shadow-primary: 0 12px 26px rgba(0, 0, 0, 0.36);
-  --shadow-card: 0 18px 42px rgba(0, 0, 0, 0.28);
-  --shadow-hero: 0 24px 52px rgba(0, 0, 0, 0.36);
-  --shadow-soft: 0 28px 64px rgba(0, 0, 0, 0.4);
   --overlay: rgba(2, 6, 14, 0.64);
   --info-surface: #1d2740;
   --info-border: #32456e;
@@ -420,11 +385,6 @@
   --purp: #5868bd;
   --purp-deep: #3f4d96;
   --focus-ring: #0b7d82;
-  --shadow-button: 0 8px 24px rgba(7, 48, 52, 0.1);
-  --shadow-primary: 0 4px 12px rgba(6, 94, 99, 0.25);
-  --shadow-card: 0 8px 24px rgba(7, 48, 52, 0.09);
-  --shadow-hero: 0 12px 32px rgba(7, 48, 52, 0.14);
-  --shadow-soft: 0 20px 48px rgba(7, 48, 52, 0.16);
   --overlay: rgba(5, 32, 35, 0.5);
   --info-surface: rgba(227, 243, 242, 0.82);
   --info-border: rgba(116, 172, 172, 0.5);
@@ -446,13 +406,13 @@
   --auth-illustration-opacity: 0.7;
   --bg-image: linear-gradient(
       to right,
-      rgba(16, 78, 84, 0.1) 1px,
+      rgba(16, 78, 84, 0.045) 1px,
       transparent 1px
     ),
-    linear-gradient(to bottom, rgba(16, 78, 84, 0.1) 1px, transparent 1px),
-    linear-gradient(to right, rgba(16, 78, 84, 0.16) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(16, 78, 84, 0.16) 1px, transparent 1px);
-  --bg-size: 10px 10px, 10px 10px, 100px 100px, 100px 100px;
+    linear-gradient(to bottom, rgba(16, 78, 84, 0.045) 1px, transparent 1px),
+    linear-gradient(to right, rgba(16, 78, 84, 0.085) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(16, 78, 84, 0.085) 1px, transparent 1px);
+  --bg-size: 28px 28px, 28px 28px, 140px 140px, 140px 140px;
   --radius-sm: 12px;
   --radius-md: 16px;
   --radius-lg: 20px;
@@ -480,11 +440,6 @@
   --purp: #9aa4ff;
   --purp-deep: #6d78d2;
   --focus-ring: #53c7c9;
-  --shadow-button: 0 8px 24px rgba(0, 0, 0, 0.3);
-  --shadow-primary: 0 4px 14px rgba(0, 0, 0, 0.36);
-  --shadow-card: 0 10px 28px rgba(0, 0, 0, 0.28);
-  --shadow-hero: 0 14px 36px rgba(0, 0, 0, 0.34);
-  --shadow-soft: 0 22px 52px rgba(0, 0, 0, 0.4);
   --overlay: rgba(0, 9, 11, 0.66);
   --info-surface: rgba(23, 56, 59, 0.78);
   --info-border: rgba(93, 171, 173, 0.45);
@@ -505,13 +460,13 @@
   --auth-scrim: rgba(0, 16, 18, 0.55);
   --bg-image: linear-gradient(
       to right,
-      rgba(138, 205, 206, 0.08) 1px,
+      rgba(138, 205, 206, 0.045) 1px,
       transparent 1px
     ),
-    linear-gradient(to bottom, rgba(138, 205, 206, 0.08) 1px, transparent 1px),
-    linear-gradient(to right, rgba(138, 205, 206, 0.14) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(138, 205, 206, 0.14) 1px, transparent 1px);
-  --bg-size: 10px 10px, 10px 10px, 100px 100px, 100px 100px;
+    linear-gradient(to bottom, rgba(138, 205, 206, 0.045) 1px, transparent 1px),
+    linear-gradient(to right, rgba(138, 205, 206, 0.09) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(138, 205, 206, 0.09) 1px, transparent 1px);
+  --bg-size: 28px 28px, 28px 28px, 140px 140px, 140px 140px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -535,11 +490,6 @@
     --purp: #b69bd8;
     --purp-deep: #8467ab;
     --focus-ring: #f0b95b;
-    --shadow-button: 0 4px 0 #070f0b;
-    --shadow-primary: 0 4px 0 #070f0b;
-    --shadow-card: 0 6px 0 #070f0b;
-    --shadow-hero: 0 8px 0 #070f0b;
-    --shadow-soft: 8px 8px 0 rgba(0, 0, 0, 0.35);
     --overlay: rgba(2, 10, 7, 0.66);
     --info-surface: #1d3528;
     --info-border: #356b52;
@@ -586,11 +536,6 @@
     --purp: #b19aff;
     --purp-deep: #8369df;
     --focus-ring: #8fa4ff;
-    --shadow-button: 0 10px 22px rgba(0, 0, 0, 0.26);
-    --shadow-primary: 0 12px 26px rgba(0, 0, 0, 0.36);
-    --shadow-card: 0 18px 42px rgba(0, 0, 0, 0.28);
-    --shadow-hero: 0 24px 52px rgba(0, 0, 0, 0.36);
-    --shadow-soft: 0 28px 64px rgba(0, 0, 0, 0.4);
     --overlay: rgba(2, 6, 14, 0.64);
     --info-surface: #1d2740;
     --info-border: #32456e;
@@ -642,11 +587,6 @@
     --purp: #9aa4ff;
     --purp-deep: #6d78d2;
     --focus-ring: #53c7c9;
-    --shadow-button: 0 8px 24px rgba(0, 0, 0, 0.3);
-    --shadow-primary: 0 4px 14px rgba(0, 0, 0, 0.36);
-    --shadow-card: 0 10px 28px rgba(0, 0, 0, 0.28);
-    --shadow-hero: 0 14px 36px rgba(0, 0, 0, 0.34);
-    --shadow-soft: 0 22px 52px rgba(0, 0, 0, 0.4);
     --overlay: rgba(0, 9, 11, 0.66);
     --info-surface: rgba(23, 56, 59, 0.78);
     --info-border: rgba(93, 171, 173, 0.45);
@@ -667,25 +607,25 @@
     --auth-scrim: rgba(0, 16, 18, 0.55);
     --bg-image: linear-gradient(
         to right,
-        rgba(138, 205, 206, 0.08) 1px,
+        rgba(138, 205, 206, 0.045) 1px,
         transparent 1px
       ),
       linear-gradient(
         to bottom,
-        rgba(138, 205, 206, 0.08) 1px,
+        rgba(138, 205, 206, 0.045) 1px,
         transparent 1px
       ),
       linear-gradient(
         to right,
-        rgba(138, 205, 206, 0.14) 1px,
+        rgba(138, 205, 206, 0.09) 1px,
         transparent 1px
       ),
       linear-gradient(
         to bottom,
-        rgba(138, 205, 206, 0.14) 1px,
+        rgba(138, 205, 206, 0.09) 1px,
         transparent 1px
       );
-    --bg-size: 10px 10px, 10px 10px, 100px 100px, 100px 100px;
+    --bg-size: 28px 28px, 28px 28px, 140px 140px, 140px 140px;
   }
 }
 
@@ -818,11 +758,6 @@
   --purp-deep: #6252B5;
   --focus-ring: #4DB2FF;
   --micro-accent: #D99B52;
-  --shadow-button: 0 4px 0 #0B0908;
-  --shadow-primary: 0 4px 0 #1E79C4;
-  --shadow-card: 0 6px 0 #0B0908;
-  --shadow-hero: 0 8px 0 #0B0908;
-  --shadow-soft: 0 18px 45px rgba(0, 0, 0, 0.4);
   --overlay: rgba(0, 0, 0, 0.66);
   --info-surface: #1B2C3B;
   --info-border: #2E526D;
@@ -877,11 +812,6 @@
   --purp-deep: #7A4A5E;
   --focus-ring: #F0C27A;
   --micro-accent: #E5A55A;
-  --shadow-button: 0 4px 0 #260509;
-  --shadow-primary: 0 4px 0 #B7803A;
-  --shadow-card: 0 6px 0 #260509;
-  --shadow-hero: 0 8px 0 #260509;
-  --shadow-soft: 0 18px 45px rgba(30, 3, 8, 0.5);
   --overlay: rgba(20, 3, 6, 0.68);
   --info-surface: #4E1319;
   --info-border: #7A2A34;
@@ -938,11 +868,6 @@
   --purp-deep: #4E478F;
   --focus-ring: #0D7A78;
   --micro-accent: #FF2E7E;
-  --shadow-button: 0 4px 0 #DCCFB8;
-  --shadow-primary: 0 4px 0 #085E5C;
-  --shadow-card: 0 6px 0 #E6DAC4;
-  --shadow-hero: 0 8px 0 #C4B298;
-  --shadow-soft: 0 18px 45px rgba(29, 36, 36, 0.12);
   --overlay: rgba(29, 36, 36, 0.42);
   --info-surface: #E5F0EE;
   --info-border: #B8DAD5;
@@ -999,11 +924,6 @@
   --purp-deep: #4E3666;
   --focus-ring: #1F5C48;
   --micro-accent: #E7A438;
-  --shadow-button: 0 4px 0 #183A2E;
-  --shadow-primary: 0 4px 0 #113C2E;
-  --shadow-card: 0 6px 0 #183A2E;
-  --shadow-hero: 0 8px 0 #183A2E;
-  --shadow-soft: 8px 8px 0 rgba(24, 58, 46, 0.18);
   --overlay: rgba(18, 42, 32, 0.52);
   --info-surface: #E4F0E7;
   --info-border: #ABC9B8;
@@ -1060,11 +980,6 @@
   --purp-deep: #6D59C9;
   --focus-ring: #6E92FF;
   --micro-accent: #E9B45E;
-  --shadow-button: 0 4px 0 #070C15;
-  --shadow-primary: 0 4px 0 #2A4FD1;
-  --shadow-card: 0 6px 0 #070C15;
-  --shadow-hero: 0 8px 0 #070C15;
-  --shadow-soft: 0 20px 48px rgba(0, 0, 0, 0.44);
   --overlay: rgba(0, 4, 12, 0.68);
   --info-surface: #162B47;
   --info-border: #2C4F7A;
@@ -1176,4 +1091,30 @@
     var(--swatch-accent) 0 50%,
     var(--swatch-bg) 50%
   );
+}
+
+/* W18 — elevation follows skin geometry. Borders and surface shifts carry
+   separation in the quiet skins; only Neo-brutalism keeps a crisp offset. */
+:root {
+  --shadow-button: none;
+  --shadow-primary: none;
+  --shadow-card: none;
+  --shadow-hero: none;
+  --shadow-soft: none;
+}
+
+:root[data-skin]:not([data-skin="neo-brutalism"])[data-palette][data-theme] {
+  --shadow-button: none;
+  --shadow-primary: none;
+  --shadow-card: none;
+  --shadow-hero: none;
+  --shadow-soft: none;
+}
+
+:root[data-skin="neo-brutalism"][data-palette][data-theme] {
+  --shadow-button: 4px 4px 0 var(--text);
+  --shadow-primary: 4px 4px 0 var(--text);
+  --shadow-card: 6px 6px 0 var(--text);
+  --shadow-hero: 8px 8px 0 var(--text);
+  --shadow-soft: 8px 8px 0 var(--text);
 }

@@ -10817,3 +10817,143 @@ input:focus-visible {
     animation: none;
   }
 }
+
+/* ========================================================================== */
+/* W18 — geometry-led elevation, a clear session exit, and a calmer lab grid. */
+/* ========================================================================== */
+
+/* Quiet skins use borders and surface shifts. These overrides neutralise the
+   few hard-coded shadows that did not read from the skin tokens. */
+.ui-button-secondary {
+  border: 1px solid var(--border);
+}
+
+.ui-button-danger {
+  box-shadow: var(--shadow-button);
+}
+
+.route-copy .ui-button-primary {
+  box-shadow: var(--shadow-primary);
+}
+
+.auth-panel-topbar .palette-toggle {
+  box-shadow: none;
+}
+
+.auth-form input:not(.auth-code-slot) {
+  box-shadow: none;
+}
+
+.auth-card {
+  box-shadow: var(--shadow-card);
+}
+
+.auth-form-region .ui-button-primary:focus-visible {
+  box-shadow: var(--shadow-primary);
+}
+
+.auth-form-region .ui-button-secondary:focus-visible {
+  box-shadow: none;
+}
+
+.studio-shell[data-nav-position] .mobile-nav {
+  box-shadow: none;
+}
+
+[data-skin="laboratory"] .nav-item.active {
+  box-shadow: none;
+}
+
+[data-skin="soft-bento"] .ui-card,
+[data-skin="soft-bento"] .kc-card,
+[data-skin="soft-bento"] .skin-option {
+  border-color: var(--border);
+}
+
+.iella-tour-highlight {
+  box-shadow: none;
+}
+
+.dashboard-widget[data-dragging="true"] {
+  box-shadow: none;
+}
+
+/* Laboratory: calm graph paper and room to breathe. */
+[data-skin="laboratory"] .studio-content {
+  padding: 28px 48px 64px;
+}
+
+[data-skin="laboratory"] .today-bento {
+  gap: 18px;
+}
+
+[data-skin="laboratory"] .ui-card,
+[data-skin="laboratory"] .kc-card {
+  padding: 24px;
+}
+
+[data-skin="laboratory"] .bento-card {
+  gap: 14px;
+}
+
+[data-skin="laboratory"] .item-card,
+[data-skin="laboratory"] .explanation-card,
+[data-skin="laboratory"] .feedback-card {
+  padding: 30px;
+}
+
+[data-skin="laboratory"] .choice-option {
+  min-height: 60px;
+  gap: 14px;
+  padding: 12px 18px;
+}
+
+[data-skin="laboratory"] .sentence-token {
+  min-height: 48px;
+  padding: 0 10px;
+}
+
+[data-skin="laboratory"] .ui-button {
+  min-height: 46px;
+  padding-inline: 20px;
+}
+
+[data-skin="laboratory"] .duration-pill {
+  min-height: 46px;
+  padding-inline: 16px;
+}
+
+[data-skin="laboratory"] .settings-tabs {
+  gap: 6px;
+  padding: 6px;
+}
+
+[data-skin="laboratory"] .settings-tab {
+  min-height: 46px;
+  padding: 0 16px;
+}
+
+[data-skin="laboratory"] .nav-item {
+  min-height: 48px;
+}
+
+@media (max-width: 700px) {
+  [data-skin="laboratory"] .studio-content {
+    padding: 22px 20px 100px;
+  }
+
+  [data-skin="laboratory"] .ui-card,
+  [data-skin="laboratory"] .kc-card {
+    padding: 20px;
+  }
+
+  [data-skin="laboratory"] .item-card,
+  [data-skin="laboratory"] .explanation-card,
+  [data-skin="laboratory"] .feedback-card {
+    padding: 22px;
+  }
+
+  [data-skin="laboratory"] .today-bento {
+    gap: 14px;
+  }
+}

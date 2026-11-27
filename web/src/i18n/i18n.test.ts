@@ -24,6 +24,15 @@ describe("Fluent locales", () => {
     expect(uzSource).not.toMatch(/[og]'/);
   });
 
+  it("uses one explicit exit-session label in every locale", () => {
+    const en = createBundle("en", enSource);
+    const ru = createBundle("ru", ruSource);
+    const uz = createBundle("uz", uzSource);
+    expect(formatMessage(en, en, "lesson-exit")).toBe("Exit session");
+    expect(formatMessage(ru, en, "lesson-exit")).toBe("Выйти из занятия");
+    expect(formatMessage(uz, en, "lesson-exit")).toBe("Mashqdan chiqish");
+  });
+
   it("formats localized messages and falls back to English", () => {
     const en = createBundle("en", enSource);
     const ru = createBundle("ru", ruSource);
