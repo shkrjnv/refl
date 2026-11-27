@@ -33,14 +33,15 @@ use refl_core::bundle::{Bundle, KcStatus};
 use refl_core::event::{AnswerEvent, Decoded, EventPayload};
 use refl_core::ids::{KcId, SessionId};
 use refl_core::item::KcRole;
+use refl_core::model::math::effective_slope;
 use refl_core::model::{
     AnswerOutcome, Applied, Families, Fluency, FoldCtx, KnowledgeModel, LearnerModel, State,
 };
 use refl_core::plan::{Budget, Params, Planner, ReadingSpeed};
 use refl_core::rng::SplitMix64;
 use refl_core::value::Timestamp;
-use refl_sim::cohort::{Learner, Track, session_ours};
-use refl_sim::{DAY_MS, T0, live_fixture};
+use refl_sim::cohort::{Learner, SLOPE, Track, difficulty_shift, session_ours};
+use refl_sim::{DAY_MS, LEARNER_BOOTSTRAP_REPLICATES, T0, learner_cluster_bootstrap, live_fixture};
 
 /// Evidence of one KC up to now.
 #[derive(Default, Clone)]
@@ -66,6 +67,12 @@ struct Pair {
     acc: Acc,
     mu: f64,
     bound: f64,
+    /// μ and bound mapped to the simulator's logistic scale at the mastering
+    /// item's difficulty.
+    mu_sim: f64,
+    bound_sim: f64,
+    /// θ* mapped to the simulator's logistic scale at that item.
+    mastery_sim: f64,
     skill: f64,
     /// The learner's true skill 7 days later without practice.
     skill_later: f64,
@@ -328,6 +335,16 @@ fn run(
                     let later = Timestamp(e.client_ts.0 + 7 * DAY_MS);
                     let sd = libm::sqrt(k.var);
                     let rate = true_rate(bundle, &logged.learner, kc, later);
+                    let a_eff = effective_slope(model.params.slope, k.var);
+                    let (b_model, b_sim) = match (&answer, &slot) {
+                        (Some((answer_event, _)), Some((projection, _))) => {
+                            let item_b = f64::from(projection.difficulty.get()) - 3.0;
+                            (item_b, item_b + difficulty_shift(&answer_event.item))
+                        }
+                        _ => (0.0, 0.0),
+                    };
+                    let to_sim = |x: f64| b_sim + (a_eff / SLOPE) * (x - b_model);
+                    let bound = k.mu - 0.84 * sd;
                     pairs.push(Pair {
                         kc: kc.clone(),
                         false_mastery: rate < 0.7,
@@ -338,7 +355,10 @@ fn run(
                             .fold(f64::NAN, f64::min),
                         acc: a.clone(),
                         mu: k.mu,
-                        bound: k.mu - 0.84 * sd,
+                        bound,
+                        mu_sim: to_sim(k.mu),
+                        bound_sim: to_sim(bound),
+                        mastery_sim: to_sim(model.params.mastery_theta),
                         skill: logged.learner.skill(kc, t),
                         skill_later: logged.learner.skill(kc, later),
                         days: a.first.map_or(0.0, |f| (t.0 - f.0) as f64 / DAY_MS as f64),
@@ -405,9 +425,19 @@ fn print(bundle: &Bundle, pairs: &[Pair]) {
 
     println!("## False mastery per KC\n");
     println!(
-        "False pairs split by the learner's own skill on the KC 7 days later: below 1.5 (the KC itself forgotten) or not (the items fail on something else, a secondary KC or a wrong idea). 1.5 is θ* on the model's scale, used here only to sort.\n"
+        "False pairs split by the learner's own skill on the KC 7 days later: below the simulator-scale equivalent of the model threshold θ*=1.5, or not (the items fail on something else, a secondary KC or a wrong idea). The threshold is converted per mastering item with a_eff and item difficulty.\n"
     );
-    println!("| KC | mastered pairs | false | share | own skill +7 d < 1.5 | ≥ 1.5 |");
+    let false_count = pairs.iter().filter(|p| p.false_mastery).count();
+    let rows: Vec<(usize, bool)> = pairs.iter().map(|p| (p.learner, p.false_mastery)).collect();
+    let (ci_low, ci_high) = learner_cluster_bootstrap(&rows);
+    println!(
+        "- false mastery: {false_count} of {} ({:.1}%); learner-cluster bootstrap 95% CI {:.1}%–{:.1}% (B={LEARNER_BOOTSTRAP_REPLICATES})\n",
+        pairs.len(),
+        100.0 * false_count as f64 / pairs.len().max(1) as f64,
+        100.0 * ci_low,
+        100.0 * ci_high
+    );
+    println!("| KC | mastered pairs | false | share | own skill +7 d < θ*_sim | ≥ θ*_sim |");
     println!("| --- | --: | --: | --: | --: | --: |");
     for kc in kcs.iter().copied().map(Some).chain([None]) {
         let of: Vec<&Pair> = pairs
@@ -417,7 +447,7 @@ fn print(bundle: &Bundle, pairs: &[Pair]) {
         let f = of.iter().filter(|p| p.false_mastery).count();
         let forgot = of
             .iter()
-            .filter(|p| p.false_mastery && p.skill_later < 1.5)
+            .filter(|p| p.false_mastery && p.skill_later < p.mastery_sim)
             .count();
         println!(
             "| {} | {} | {f} | {:.1}% | {forgot} | {} |",
@@ -430,16 +460,18 @@ fn print(bundle: &Bundle, pairs: &[Pair]) {
 
     println!("\n## Evidence of μ at mastery: false and true pairs\n");
     println!(
-        "Means over pairs: μ = μ₀ + primary + secondary + propagation + other (the sum of μ increments by source). Misconceptions have no path to μ in model v1. Bound = μ − 0.84σ.\n"
+        "Means over pairs: μ = μ₀ + primary + secondary + propagation + other (the sum of μ increments by source). Misconceptions have no path to μ in model v1. Bound = μ − 0.84σ. Raw μ/bound are model logits; μ(sim)/bound(sim) map them to the simulator's logistic scale with a_eff and the mastering item's difficulty.\n"
     );
     println!(
-        "| KC | pairs | n | μ₀ | primary | secondary | propagation | other | μ | bound | own answers | own correct inputs |"
+        "| KC | pairs | n | μ₀ | primary | secondary | propagation | other | μ | bound | μ(sim) | bound(sim) | own answers | own correct inputs |"
     );
-    println!("| --- | --- | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: |");
+    println!(
+        "| --- | --- | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: |"
+    );
     groups(pairs, &kcs, |kc, label, of| {
         let m = |f: fn(&Pair) -> f64| mean(of.iter().map(|p| f(p)));
         println!(
-            "| {kc} | {label} | {} | {:.2} | {:+.2} | {:+.2} | {:+.2} | {:+.2} | {:.2} | {:.2} | {:.1} | {:.1} |",
+            "| {kc} | {label} | {} | {:.2} | {:+.2} | {:+.2} | {:+.2} | {:+.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.1} | {:.1} |",
             of.len(),
             m(|p| p.acc.mu0),
             m(|p| p.acc.primary),
@@ -448,6 +480,8 @@ fn print(bundle: &Bundle, pairs: &[Pair]) {
             m(|p| p.acc.other),
             m(|p| p.mu),
             m(|p| p.bound),
+            m(|p| p.mu_sim),
+            m(|p| p.bound_sim),
             m(|p| f64::from(p.acc.answers)),
             m(|p| f64::from(p.acc.inputs)),
         );
@@ -455,10 +489,10 @@ fn print(bundle: &Bundle, pairs: &[Pair]) {
 
     println!("\n## Skill, memory and spacing at mastery\n");
     println!(
-        "Skill = the learner's true skill on the KC (logits, the simulator's scale) at mastery and 7 days later without practice; S = the model's FSRS stability, days; R +7 d = the model's recall 7 days later; days = UTC days with an own answer before mastery; span = days from the first own answer; bug = the learner has a wrong idea on the KC that the content does not diagnose.\n"
+        "Skill = the learner's true skill on the KC (logits, the simulator's scale) at mastery and 7 days later without practice; bound(sim) is the model's lower confidence bound mapped to that scale; S = the model's FSRS stability, days; R +7 d = the model's recall 7 days later; days = UTC days with an own answer before mastery; span = days from the first own answer; bug = the learner has a wrong idea on the KC that the content does not diagnose.\n"
     );
     println!(
-        "| KC | pairs | n | bound | skill | skill − bound | skill +7 d | weakest secondary +7 d | true rate +7 d | S | R +7 d | days | span | bug |"
+        "| KC | pairs | n | bound(sim) | skill | skill − bound(sim) | skill +7 d | weakest secondary +7 d | true rate +7 d | S | R +7 d | days | span | bug |"
     );
     println!(
         "| --- | --- | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: |"
@@ -473,9 +507,9 @@ fn print(bundle: &Bundle, pairs: &[Pair]) {
         println!(
             "| {kc} | {label} | {} | {:.2} | {:.2} | {:+.2} | {:.2} | {weakest} | {:.2} | {:.1} | {:.2} | {:.1} | {:.1} | {:.0}% |",
             of.len(),
-            m(|p| p.bound),
+            m(|p| p.bound_sim),
             m(|p| p.skill),
-            m(|p| p.skill - p.bound),
+            m(|p| p.skill - p.bound_sim),
             m(|p| p.skill_later),
             m(|p| p.rate_later),
             m(|p| p.stability),
@@ -572,6 +606,20 @@ fn groups(pairs: &[Pair], kcs: &[&KcId], mut row: impl FnMut(&str, &str, &[&Pair
     }
 }
 
+/// Current commit, or the package version when the binary runs outside a
+/// checkout.
+fn commit_sha() -> String {
+    std::process::Command::new("git")
+        .args(["rev-parse", "--short", "HEAD"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string())
+}
+
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let path = args
@@ -599,7 +647,11 @@ fn main() -> ExitCode {
     let params = Params::default();
     let speed = ReadingSpeed::default();
     let planner = Planner::new(&model, &bundle, &params, &speed);
-    println!("# P1c measurement: {path}, {learners} learners, {days} days, seed {seed}\n");
+    let commit = commit_sha();
+    println!(
+        "# P1c measurement: {path}, {learners} learners, {days} days, seed {seed}; commit {commit}, p1c {}\n",
+        env!("CARGO_PKG_VERSION")
+    );
     println!(
         "model {}, planner {}, budget 25 minutes; false mastery per answer (m1)\n",
         model.version(),

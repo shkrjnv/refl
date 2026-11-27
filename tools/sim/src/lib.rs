@@ -746,6 +746,68 @@ pub fn synthetic_log(bundle: &Bundle, spec: LogSpec) -> Vec<Decoded> {
     log
 }
 
+/// Number of learner-cluster bootstrap replicates used by the diagnostics.
+pub const LEARNER_BOOTSTRAP_REPLICATES: usize = 2000;
+
+/// Fixed seed of the learner-cluster bootstrap.
+pub const LEARNER_BOOTSTRAP_SEED: u64 = 0x5EED_1E7E_2026;
+
+/// A 95% percentile interval for `sum(false_mastered) / sum(mastered)` by
+/// resampling learners with replacement. Each row is `(learner, false)`.
+/// Learners, not pairs, are the resampling unit.
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)] // bootstrap indices and small counts
+pub fn learner_cluster_bootstrap(rows: &[(usize, bool)]) -> (f64, f64) {
+    let mut by_learner: BTreeMap<usize, (u32, u32)> = BTreeMap::new();
+    for &(learner, false_mastery) in rows {
+        let cell = by_learner.entry(learner).or_insert((0, 0));
+        cell.1 += 1;
+        if false_mastery {
+            cell.0 += 1;
+        }
+    }
+    let learners: Vec<usize> = by_learner.keys().copied().collect();
+    if learners.is_empty() {
+        return (f64::NAN, f64::NAN);
+    }
+    let mut rng = SplitMix64::new(LEARNER_BOOTSTRAP_SEED);
+    let mut ratios = Vec::with_capacity(LEARNER_BOOTSTRAP_REPLICATES);
+    for _ in 0..LEARNER_BOOTSTRAP_REPLICATES {
+        let (mut false_count, mut total) = (0u32, 0u32);
+        for _ in 0..learners.len() {
+            let learner = learners[pick(&mut rng, learners.len())];
+            let (false_mastery, mastered) = by_learner[&learner];
+            false_count += false_mastery;
+            total += mastered;
+        }
+        if total > 0 {
+            ratios.push(f64::from(false_count) / f64::from(total));
+        }
+    }
+    if ratios.is_empty() {
+        return (f64::NAN, f64::NAN);
+    }
+    ratios.sort_by(f64::total_cmp);
+    (percentile(&ratios, 0.025), percentile(&ratios, 0.975))
+}
+
+/// Linear-interpolated percentile of a sorted, non-empty slice.
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)]
+fn percentile(sorted: &[f64], p: f64) -> f64 {
+    let rank = p * (sorted.len() - 1) as f64;
+    let low = rank.floor() as usize;
+    let high = rank.ceil() as usize;
+    let weight = rank - rank.floor();
+    sorted[low] + weight * (sorted[high] - sorted[low])
+}
+
 fn slot_misconception(slot: &Slot, x: usize) -> Option<MisconceptionId> {
     slot.options
         .get(x)
@@ -782,4 +844,27 @@ fn one_in(rng: &mut SplitMix64, n: u64) -> bool {
 fn pick(rng: &mut SplitMix64, n: usize) -> usize {
     let n = u64::try_from(n).expect("usize fits u64");
     usize::try_from(rng.next_u64() % n).expect("below n")
+}
+
+#[cfg(test)]
+mod bootstrap_tests {
+    use super::*;
+
+    #[test]
+    fn learner_cluster_bootstrap_is_deterministic_and_bounded() {
+        let rows = [
+            (0, false),
+            (0, true),
+            (1, false),
+            (1, false),
+            (2, true),
+            (2, true),
+            (2, false),
+        ];
+        let first = learner_cluster_bootstrap(&rows);
+        let second = learner_cluster_bootstrap(&rows);
+        assert_eq!(first, second);
+        assert!(first.0.is_finite() && first.1.is_finite());
+        assert!(0.0 <= first.0 && first.0 <= first.1 && first.1 <= 1.0);
+    }
 }
