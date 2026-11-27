@@ -175,9 +175,12 @@ impl Phase {
         matches!(self, Self::Lesson | Self::Block | Self::Interleaved)
     }
 
-    /// Counted by the «no more than three in a row» rule.
+    /// Counted by the «no more than three in a row» rule. The final has its
+    /// own 10% budget and is explicitly outside the run limit, even when it
+    /// reviews a KC that was just practised (`docs/04`, «Сборка сессии в
+    /// прототипе»).
     fn counts_in_runs(self) -> bool {
-        !matches!(self, Self::Lesson | Self::Block)
+        !matches!(self, Self::Lesson | Self::Block | Self::Final)
     }
 }
 
@@ -315,6 +318,9 @@ pub enum End {
     KcMastered,
     /// The learning KC was deferred, or its Ready fell below the threshold.
     KcDeferred,
+    /// An otherwise eligible step was rejected by the run rule, and no
+    /// other valid step remained.
+    RunLimit,
     /// The steps left have no unseen item.
     ItemsExhausted,
 }
@@ -328,6 +334,7 @@ impl End {
             Self::KcCap => "kc_cap",
             Self::KcMastered => "kc_mastered",
             Self::KcDeferred => "kc_deferred",
+            Self::RunLimit => "run_limit",
             Self::ItemsExhausted => "items_exhausted",
         }
     }

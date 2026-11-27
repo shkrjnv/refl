@@ -11,6 +11,8 @@
 #![allow(clippy::missing_panics_doc)]
 
 pub mod cohort;
+pub mod prereq;
+pub mod termination;
 
 use std::collections::BTreeMap;
 

@@ -56,6 +56,25 @@ pub(super) struct Opened {
     pub seed: Seed,
 }
 
+/// Why a step was or was not added to the steps ahead.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PushResult {
+    Added,
+    /// The step would make a run longer than the run rule allows.
+    RunLimit,
+    /// The step has no unseen eligible item, or its family has none.
+    Unavailable,
+}
+
+/// The steps ahead and what prevented any more of them.
+struct Remaining {
+    steps: Vec<Step>,
+    /// A step of the main part was left out for lack of time.
+    short_of_time: bool,
+    /// An otherwise eligible step was rejected by the run rule.
+    run_limited: bool,
+}
+
 /// Steps ahead as they are planned: the run rule and the unseen items of
 /// each KC are checked on every push.
 struct Builder<'p, 'a> {
@@ -71,6 +90,8 @@ struct Builder<'p, 'a> {
     shown: BTreeSet<&'p ItemId>,
     /// A step of the main part was left out for lack of time.
     short_of_time: bool,
+    /// An otherwise eligible step was rejected by the run rule.
+    run_limited: bool,
 }
 
 impl<'p, 'a> Builder<'p, 'a> {
@@ -84,6 +105,7 @@ impl<'p, 'a> Builder<'p, 'a> {
             capacity: BTreeMap::new(),
             shown: plan.shown().map(|(_, s)| &s.item.id).collect(),
             short_of_time: false,
+            run_limited: false,
         };
         for d in &plan.done {
             b.extend_run(&d.step);
@@ -130,24 +152,35 @@ impl<'p, 'a> Builder<'p, 'a> {
             .any(|s| &s.projection.family == family && !self.shown.contains(&s.item.id))
     }
 
-    /// Adds the step if it keeps the run rule and has an unseen item.
-    fn push(&mut self, step: Step) -> bool {
-        if self.breaks_run(&step) {
-            return false;
-        }
+    /// The step could be added if the run rule allowed it. This does not
+    /// consume capacity, so a `RunLimit` result only records a genuinely
+    /// otherwise-eligible rejection.
+    fn available(&mut self, step: &Step) -> bool {
         match (&step.phase, &step.family) {
-            (Phase::Lesson, _) => {}
-            (Phase::Final, Some(family)) => {
-                if !self.family_open(&step.kc, family) {
-                    return false;
-                }
-            }
+            (Phase::Lesson, _) => true,
+            (Phase::Final, Some(family)) => self.family_open(&step.kc, family),
             _ => {
                 let production = step.production;
                 let cap = self.capacity(&step.kc);
-                if cap.0 == 0 || (production && cap.1 == 0) {
-                    return false;
-                }
+                cap.0 > 0 && (!production || cap.1 > 0)
+            }
+        }
+    }
+
+    /// Adds the step if it keeps the run rule and has an unseen item.
+    fn push(&mut self, step: Step) -> PushResult {
+        if !self.available(&step) {
+            return PushResult::Unavailable;
+        }
+        if self.breaks_run(&step) {
+            self.run_limited = true;
+            return PushResult::RunLimit;
+        }
+        match (&step.phase, &step.family) {
+            (Phase::Lesson, _) | (Phase::Final, Some(_)) => {}
+            _ => {
+                let production = step.production;
+                let cap = self.capacity(&step.kc);
                 cap.0 -= 1;
                 if production {
                     cap.1 -= 1;
@@ -156,7 +189,7 @@ impl<'p, 'a> Builder<'p, 'a> {
         }
         self.extend_run(&step);
         self.steps.push(step);
-        true
+        PushResult::Added
     }
 
     /// A production item was answered on `kc` in this session, or a
@@ -168,7 +201,7 @@ impl<'p, 'a> Builder<'p, 'a> {
     /// Drops the learning steps of a KC left without production, then the
     /// steps that would break the run rule, until neither changes anything:
     /// a dropped step can expose either again.
-    fn finish(mut self) -> Vec<Step> {
+    fn finish(mut self) -> (Vec<Step>, bool) {
         loop {
             let starved: BTreeSet<KcId> = self
                 .steps
@@ -187,13 +220,15 @@ impl<'p, 'a> Builder<'p, 'a> {
                 self.extend_run(&d.step);
             }
             for s in steps {
-                if !self.breaks_run(&s) {
+                if self.breaks_run(&s) {
+                    self.run_limited = true;
+                } else {
                     self.extend_run(&s);
                     self.steps.push(s);
                 }
             }
             if self.steps.len() == before {
-                return self.steps;
+                return (self.steps, self.run_limited);
             }
         }
     }
@@ -374,6 +409,12 @@ impl<'a> Planner<'a> {
         // answer.
         let opened = self.replan(s, &mut plan, now);
         debug_assert!(opened.is_none(), "rule 6 before any answer");
+        // A due review whose estimate does not fit even its share is still a
+        // main-part step that cannot be given. The session ends for lack of
+        // budget, not because nothing was due.
+        if plan.end == Some(End::NothingDue) && !start.due.is_empty() && plan.reviews.is_empty() {
+            plan.end = Some(End::Budget);
+        }
         let issued = self.issue_start(s, &plan, &start, now);
         Session { plan, issued }
     }
@@ -403,10 +444,20 @@ impl<'a> Planner<'a> {
         if let Some(o) = &opened {
             plan.learn.push(o.learn.clone());
         }
-        let (steps, short_of_time) = self.remaining(s, plan, now);
+        let Remaining {
+            steps,
+            short_of_time,
+            run_limited,
+        } = self.remaining(s, plan, now);
         plan.end = steps.is_empty().then(|| {
+            // A real time failure is the established Budget cause. RunLimit
+            // rejects only otherwise eligible steps; it is never a time
+            // failure itself, but it does not hide a genuine budget failure.
             if short_of_time {
                 return End::Budget;
+            }
+            if run_limited {
+                return End::RunLimit;
             }
             if plan.learn.is_empty() {
                 return if plan.reviews.is_empty() {
@@ -463,7 +514,7 @@ impl<'a> Planner<'a> {
 
     /// An eligible item of `kc` not shown in this session; a production
     /// one if `production`.
-    fn has_unseen(&self, plan: &Plan, kc: &KcId, production: bool) -> bool {
+    pub(super) fn has_unseen(&self, plan: &Plan, kc: &KcId, production: bool) -> bool {
         let shown: BTreeSet<&ItemId> = plan.shown().map(|(_, sh)| &sh.item.id).collect();
         self.slots(kc)
             .iter()
@@ -488,10 +539,12 @@ impl<'a> Planner<'a> {
         out
     }
 
-    /// Nothing besides the learning KCs can get a step: no review left and
-    /// no partner with an unseen item.
+    /// Nothing besides the learning KCs can get a step: no pending review
+    /// with an unseen item and no partner with an unseen item.
     fn nothing_else(&self, s: &State, plan: &Plan, now: Timestamp) -> bool {
-        plan.pending_reviews().is_empty()
+        plan.pending_reviews()
+            .iter()
+            .all(|r| !self.has_unseen(plan, &r.kc, false))
             && !self
                 .partners(s, plan, now)
                 .iter()
@@ -576,10 +629,9 @@ impl<'a> Planner<'a> {
     /// The steps ahead: a pending prerequisite check, the lesson and block of
     /// the learning KC, reviews interleaved with it and its contrasts, the
     /// final. A pure function of the plan's fixed part, its answers, the
-    /// state and `now`; also whether a step of the main part was left out
-    /// for lack of time.
+    /// state and `now`; also what prevented any further step.
     #[allow(clippy::too_many_lines)] // one ordered recipe
-    pub(super) fn remaining(&self, s: &State, plan: &Plan, now: Timestamp) -> (Vec<Step>, bool) {
+    fn remaining(&self, s: &State, plan: &Plan, now: Timestamp) -> Remaining {
         let p = self.params;
         let budget = f64::from(plan.budget.seconds());
         let (mut used_main, mut used_final) = (0.0, 0.0);
@@ -596,6 +648,7 @@ impl<'a> Planner<'a> {
         let learns = self.active_learns(s, plan, now);
         let alone = self.alone(s, plan, now);
         let mut out = Builder::new(self, plan, alone.is_none());
+        let mut main_short = false;
 
         if let Some(Done {
             rule: Some(Rule::PrerequisiteCheck { kc }),
@@ -603,79 +656,121 @@ impl<'a> Planner<'a> {
         }) = plan.done.last()
         {
             let seconds = self.mean_seconds(kc);
-            if out.push(Step::new(kc, Phase::Prerequisite, false, seconds)) {
-                main_left -= f64::from(seconds);
+            let step = Step::new(kc, Phase::Prerequisite, false, seconds);
+            if !out.available(&step) {
+                // Availability is not a time failure; normal scheduling continues.
+            } else if f64::from(seconds) > main_left {
+                out.short_of_time = true;
+                main_short = true;
+            } else {
+                match out.push(step) {
+                    PushResult::Added => main_left -= f64::from(seconds),
+                    // The run rule is not a time failure. Normal scheduling
+                    // may continue with another step.
+                    PushResult::RunLimit | PushResult::Unavailable => {}
+                }
             }
         }
 
-        // Blocked first: the lesson and block of a learning KC whose block
-        // is open (one at a time: rule 6 opens the second after the first
-        // closed).
-        for learn in &learns {
-            let kc = &learn.kc;
-            if plan.block_closed(kc) {
-                continue;
-            }
-            let explanation = self.lesson_explanation(kc, plan.lang);
-            if let Some(e) = explanation
-                && learn.lesson
-                && plan
-                    .done
-                    .iter()
-                    .all(|d| !(d.step.phase == Phase::Lesson && &d.step.kc == kc))
-            {
-                let seconds = self.explanation_seconds(e);
-                out.push(Step::new(kc, Phase::Lesson, false, seconds));
-                main_left -= f64::from(seconds);
-            }
-            let block_done = u32::try_from(
-                plan.done
-                    .iter()
-                    .filter(|d| d.step.phase == Phase::Block && &d.step.kc == kc)
-                    .count(),
-            )
-            .unwrap_or(u32::MAX);
-            let on_kc = u32::try_from(plan.shown().filter(|(st, _)| &st.kc == kc).count())
-                .unwrap_or(u32::MAX);
-            let block_left = p
-                .block_items
-                .saturating_sub(block_done)
-                .max(1)
-                .min(p.kc_cap.saturating_sub(on_kc));
-            let needs = !plan
-                .shown()
-                .any(|(st, sh)| &st.kc == kc && sh.correct && !sh.rapid && sh.kind.is_production());
-            let seconds = self.mean_seconds(kc);
-            for i in block_done + 1..=block_done + block_left {
-                let production = needs && i >= p.block_items && i % 2 == 0;
-                if !out.push(Step::new(kc, Phase::Block, production, seconds)) {
+        if !main_short {
+            // Blocked first: the lesson and block of a learning KC whose
+            // block is open (one at a time: rule 6 opens the second after
+            // the first closed).
+            for learn in &learns {
+                let kc = &learn.kc;
+                if plan.block_closed(kc) {
+                    continue;
+                }
+                let explanation = self.lesson_explanation(kc, plan.lang);
+                if let Some(e) = explanation
+                    && learn.lesson
+                    && plan
+                        .done
+                        .iter()
+                        .all(|d| !(d.step.phase == Phase::Lesson && &d.step.kc == kc))
+                {
+                    let seconds = self.explanation_seconds(e);
+                    let step = Step::new(kc, Phase::Lesson, false, seconds);
+                    debug_assert!(out.available(&step), "a lesson is always available");
+                    if f64::from(seconds) > main_left {
+                        out.short_of_time = true;
+                        main_short = true;
+                    } else if out.push(step) == PushResult::Added {
+                        main_left -= f64::from(seconds);
+                    }
+                }
+                if main_short {
                     break;
                 }
-                main_left -= f64::from(seconds);
+                let block_done = u32::try_from(
+                    plan.done
+                        .iter()
+                        .filter(|d| d.step.phase == Phase::Block && &d.step.kc == kc)
+                        .count(),
+                )
+                .unwrap_or(u32::MAX);
+                let on_kc = u32::try_from(plan.shown().filter(|(st, _)| &st.kc == kc).count())
+                    .unwrap_or(u32::MAX);
+                let block_left = p
+                    .block_items
+                    .saturating_sub(block_done)
+                    .max(1)
+                    .min(p.kc_cap.saturating_sub(on_kc));
+                let needs = !plan.shown().any(|(st, sh)| {
+                    &st.kc == kc && sh.correct && !sh.rapid && sh.kind.is_production()
+                });
+                let seconds = self.mean_seconds(kc);
+                for i in block_done + 1..=block_done + block_left {
+                    let production = needs && i >= p.block_items && i % 2 == 0;
+                    let step = Step::new(kc, Phase::Block, production, seconds);
+                    if !out.available(&step) {
+                        break;
+                    }
+                    if f64::from(seconds) > main_left {
+                        out.short_of_time = true;
+                        main_short = true;
+                        break;
+                    }
+                    if out.push(step) != PushResult::Added {
+                        break;
+                    }
+                    main_left -= f64::from(seconds);
+                }
+                if main_short {
+                    break;
+                }
             }
-        }
 
-        // The block comes before reviews: those that no longer fit go,
-        // lowest V^rev first.
-        let mut reviews = plan.pending_reviews();
-        while f64::from(reviews.iter().map(|r| r.seconds).sum::<u32>()) > main_left {
-            reviews.pop();
-            out.short_of_time = true;
-        }
-        let mut left = main_left - f64::from(reviews.iter().map(|r| r.seconds).sum::<u32>());
-
-        // Interleaved after: the learning KCs, in turn, with reviews,
-        // contrasts and other started KCs; a KC alone, up to its cap.
-        if learns.is_empty() {
-            for r in reviews {
-                out.push(Step::new(&r.kc, Phase::Review, false, r.seconds));
+            // The block comes before reviews: those that no longer fit go,
+            // lowest V^rev first. A pending review whose items are all shown
+            // cannot be given and is not an alternative.
+            let mut reviews: Vec<&PlannedReview> = plan
+                .pending_reviews()
+                .into_iter()
+                .filter(|r| self.has_unseen(plan, &r.kc, false))
+                .filter(|r| out.available(&Step::new(&r.kc, Phase::Review, false, r.seconds)))
+                .collect();
+            while !reviews.is_empty()
+                && f64::from(reviews.iter().map(|r| r.seconds).sum::<u32>()) > main_left
+            {
+                reviews.pop();
+                out.short_of_time = true;
             }
-        } else {
-            let learning: Vec<&KcId> = learns.iter().map(|l| &l.kc).collect();
-            let partners = self.partners(s, plan, now);
-            let partners: Vec<&KcId> = partners.iter().collect();
-            let cap = alone.map(|l| p.alone_cap.saturating_sub(plan.interleaved_done(&l.kc)));
-            self.interleave(&mut out, &learning, &partners, &reviews, cap, &mut left);
+            let mut left = main_left - f64::from(reviews.iter().map(|r| r.seconds).sum::<u32>());
+
+            // Interleaved after: the learning KCs, in turn, with reviews,
+            // contrasts and other started KCs; a KC alone, up to its cap.
+            if learns.is_empty() {
+                for r in reviews {
+                    let _ = out.push(Step::new(&r.kc, Phase::Review, false, r.seconds));
+                }
+            } else {
+                let learning: Vec<&KcId> = learns.iter().map(|l| &l.kc).collect();
+                let partners = self.partners(s, plan, now);
+                let partners: Vec<&KcId> = partners.iter().collect();
+                let cap = alone.map(|l| p.alone_cap.saturating_sub(plan.interleaved_done(&l.kc)));
+                self.interleave(&mut out, &learning, &partners, &reviews, cap, &mut left);
+            }
         }
 
         let mut final_left = budget * p.final_share - used_final;
@@ -692,12 +787,17 @@ impl<'a> Planner<'a> {
             }
             let mut step = Step::new(kc, Phase::Final, false, seconds);
             step.family = Some(family.clone());
-            if out.push(step) {
+            if out.push(step) == PushResult::Added {
                 final_left -= f64::from(seconds);
             }
         }
         let short_of_time = out.short_of_time;
-        (out.finish(), short_of_time)
+        let (steps, run_limited) = out.finish();
+        Remaining {
+            steps,
+            short_of_time,
+            run_limited,
+        }
     }
 
     /// Other, learning KC, other, …; the learning KCs take their turns in
@@ -724,7 +824,9 @@ impl<'a> Planner<'a> {
                 let mut try_review = |b: &mut Builder<'_, 'a>| {
                     while let Some(r) = reviews.get(next_review) {
                         next_review += 1;
-                        if b.push(Step::new(&r.kc, Phase::Review, false, r.seconds)) {
+                        if b.push(Step::new(&r.kc, Phase::Review, false, r.seconds))
+                            == PushResult::Added
+                        {
                             return true;
                         }
                     }
@@ -734,12 +836,16 @@ impl<'a> Planner<'a> {
                     for k in 0..contrasts.len() {
                         let c = contrasts[(next_contrast + k) % contrasts.len()];
                         let seconds = self.mean_seconds(c);
+                        let production = !b.has_production(c);
+                        let step = Step::new(c, Phase::Interleaved, production, seconds);
+                        if !b.available(&step) {
+                            continue;
+                        }
                         if f64::from(seconds) > *left {
                             b.short_of_time = true;
                             continue;
                         }
-                        let production = !b.has_production(c);
-                        if b.push(Step::new(c, Phase::Interleaved, production, seconds)) {
+                        if b.push(step) == PushResult::Added {
                             *left -= f64::from(seconds);
                             next_contrast += k + 1;
                             return true;
@@ -767,11 +873,15 @@ impl<'a> Planner<'a> {
                 for k in 0..learning.len() {
                     let kc = learning[(next_learn + k) % learning.len()];
                     let seconds = self.mean_seconds(kc);
+                    let step = Step::new(kc, Phase::Interleaved, false, seconds);
+                    if !b.available(&step) {
+                        continue;
+                    }
                     if f64::from(seconds) > *left {
                         b.short_of_time = true;
                         continue;
                     }
-                    if b.push(Step::new(kc, Phase::Interleaved, false, seconds)) {
+                    if b.push(step) == PushResult::Added {
                         *left -= f64::from(seconds);
                         next_learn += k + 1;
                         learn_left -= 1;

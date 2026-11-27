@@ -229,10 +229,13 @@ impl Planner<'_> {
             return None;
         };
         let shown: BTreeSet<&ItemId> = plan.shown().map(|(_, sh)| &sh.item.id).collect();
-        let review_left = plan
-            .reviews
-            .iter()
-            .any(|r| plan.shown().all(|(st, _)| st.kc != r.kc));
+        let review_left = plan.reviews.iter().any(|r| {
+            plan.shown().all(|(st, _)| st.kc != r.kc)
+                && self
+                    .slots(&r.kc)
+                    .iter()
+                    .any(|c| !shown.contains(&c.item.id))
+        });
         let contrasts = plan.learn.iter().flat_map(|l| &l.contrasts);
         let started = plan
             .candidates
