@@ -438,16 +438,18 @@ export function AuthScreen({
 
       <section className="auth-panel" aria-label={t("auth-title")}>
         <div className="auth-panel-topbar">
-          <div className="auth-brand">
-            <BrandLogo size={32} />
-            <span className="brand-name">{t("app-name")}</span>
-          </div>
-          <div className="auth-header-controls">
+          <div className="auth-brand-group">
+            <div className="auth-brand">
+              <BrandLogo size={40} />
+              <span className="brand-name">{t("app-name")}</span>
+            </div>
             <LanguageMenu
               locale={locale}
               locales={locales}
               onLocaleChange={onLocaleChange}
             />
+          </div>
+          <div className="auth-header-controls">
             <PaletteToggle theme={theme} onThemeChange={onThemeChange} />
           </div>
         </div>

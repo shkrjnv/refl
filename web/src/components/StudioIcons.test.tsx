@@ -8,17 +8,21 @@ import { BrandLogo, StudioIcon } from "./StudioIcons";
 afterEach(cleanup);
 
 describe("studio identity", () => {
-  it("renders the folded-ribbon brand emblem", () => {
-    const { container } = render(<BrandLogo size={28} />);
+  it("renders the dimensional 3D-ribbon brand emblem without a raster import", () => {
+    const { container } = render(<BrandLogo size={36} />);
     const svg = container.querySelector("svg.brand-logo");
-    expect(svg?.getAttribute("viewBox")).toBe("0 0 28 28");
+    expect(svg?.getAttribute("viewBox")).toBe("0 0 52 62");
+    expect(svg?.getAttribute("height")).toBe("36");
     expect(svg?.getAttribute("aria-hidden")).toBe("true");
-    expect(container.querySelector(".brand-logo-field")?.getAttribute("rx")).toBe(
-      "8.2",
-    );
-    expect(container.querySelectorAll(".brand-logo-fold")).toHaveLength(1);
-    expect(container.querySelectorAll(".brand-logo-reflect")).toHaveLength(1);
-    expect(container.querySelectorAll(".brand-logo-spine")).toHaveLength(1);
+    expect(container.querySelector("image")).toBeNull();
+    expect(container.querySelectorAll("defs linearGradient")).toHaveLength(6);
+    expect(container.querySelectorAll(".brand-ribbon-cream")).toHaveLength(1);
+    expect(container.querySelectorAll(".brand-ribbon-dark")).toHaveLength(1);
+    expect(container.querySelectorAll(".brand-ribbon-blue")).toHaveLength(1);
+    expect(container.querySelectorAll(".brand-ribbon-teal")).toHaveLength(1);
+    expect(container.querySelectorAll(".brand-ribbon-cream-highlight")).toHaveLength(1);
+    expect(container.querySelectorAll(".brand-ribbon-blue-dark")).toHaveLength(1);
+    expect(container.querySelectorAll(".brand-ribbon-teal-highlight")).toHaveLength(1);
   });
 
   it("keeps the navigation icon set on the same stroke geometry", () => {

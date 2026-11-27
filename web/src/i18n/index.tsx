@@ -4,7 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
+  useLayoutEffect,
   useMemo,
   useState,
   type PropsWithChildren,
@@ -150,7 +150,7 @@ export function I18nProvider({
     storeLocale(next);
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.documentElement.lang = locale;
     document.documentElement.dir = "ltr";
   }, [locale]);

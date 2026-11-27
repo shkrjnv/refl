@@ -19,64 +19,124 @@ interface Plume {
 
 const PLUMES: readonly Plume[] = [
   {
-    cx: 0.72,
-    cy: 0.2,
-    ax: 0.065,
-    ay: 0.045,
-    sx: 0.05,
-    sy: 0.043,
-    radius: 0.19,
-    phase: 0.7,
-    amplitude: 1.55,
-    stretchX: 1.32,
-    stretchY: 0.78,
-    rotation: -0.38,
+    cx: 0.76,
+    cy: 0.18,
+    ax: 0.05,
+    ay: 0.035,
+    sx: 0.045,
+    sy: 0.034,
+    radius: 0.14,
+    phase: 0.6,
+    amplitude: 1.8,
+    stretchX: 1.5,
+    stretchY: 0.75,
+    rotation: -0.45,
   },
   {
-    cx: 0.22,
-    cy: 0.42,
-    ax: 0.075,
-    ay: 0.045,
-    sx: 0.04,
-    sy: 0.061,
-    radius: 0.17,
-    phase: 2.4,
-    amplitude: 1.16,
-    stretchX: 0.8,
-    stretchY: 1.5,
-    rotation: 0.4,
+    cx: 0.16,
+    cy: 0.38,
+    ax: 0.04,
+    ay: 0.05,
+    sx: 0.029,
+    sy: 0.047,
+    radius: 0.125,
+    phase: 2.2,
+    amplitude: 1.38,
+    stretchX: 0.78,
+    stretchY: 1.55,
+    rotation: 0.35,
   },
   {
-    cx: 0.8,
-    cy: 0.62,
-    ax: 0.1,
-    ay: 0.045,
-    sx: 0.06,
-    sy: 0.037,
-    radius: 0.145,
-    phase: 4.1,
-    amplitude: 1.02,
-    stretchX: 1.28,
-    stretchY: 0.82,
-    rotation: -0.18,
-  },
-  {
-    cx: 0.27,
-    cy: 0.82,
-    ax: 0.055,
-    ay: 0.07,
-    sx: 0.035,
-    sy: 0.052,
+    cx: 0.68,
+    cy: 0.56,
+    ax: 0.07,
+    ay: 0.03,
+    sx: 0.052,
+    sy: 0.031,
     radius: 0.15,
-    phase: 5.4,
-    amplitude: 0.9,
-    stretchX: 0.96,
-    stretchY: 1.25,
-    rotation: 0.3,
+    phase: 3.7,
+    amplitude: 1.52,
+    stretchX: 1.2,
+    stretchY: 0.85,
+    rotation: 0.2,
+  },
+  {
+    cx: 0.28,
+    cy: 0.78,
+    ax: 0.045,
+    ay: 0.05,
+    sx: 0.035,
+    sy: 0.045,
+    radius: 0.1,
+    phase: 5.1,
+    amplitude: 0.65,
+    stretchX: 0.9,
+    stretchY: 1.3,
+    rotation: -0.28,
+  },
+  {
+    cx: 0.9,
+    cy: 0.82,
+    ax: 0.025,
+    ay: 0.025,
+    sx: 0.061,
+    sy: 0.041,
+    radius: 0.1,
+    phase: 1.4,
+    amplitude: 0.7,
+    stretchX: 1.1,
+    stretchY: 0.9,
+    rotation: 0.5,
+  },
+  {
+    cx: 0.5,
+    cy: 0.28,
+    ax: 0.035,
+    ay: 0.025,
+    sx: 0.016,
+    sy: 0.019,
+    radius: 0.34,
+    phase: 4.4,
+    amplitude: 0.18,
+    stretchX: 1.35,
+    stretchY: 0.78,
+    rotation: -0.12,
   },
 ];
 
-const CONTOURS = [0.18, 0.32, 0.46, 0.6, 0.74] as const;
+interface PreparedPlume {
+  cx: number;
+  cy: number;
+  cosine: number;
+  sine: number;
+  stretchX: number;
+  stretchY: number;
+  spread: number;
+  amplitude: number;
+}
+
+function preparePlumes(time: number): PreparedPlume[] {
+  return PLUMES.map((plume) => {
+    const radius =
+      plume.radius * (0.92 + Math.sin(time * 0.05 + plume.phase) * 0.08);
+    return {
+      cx:
+        plume.cx +
+        Math.sin(time * plume.sx + plume.phase) * plume.ax +
+        Math.sin(time * plume.sx * 0.43 + plume.phase * 2.3) * plume.ax * 0.35,
+      cy:
+        plume.cy +
+        Math.cos(time * plume.sy + plume.phase) * plume.ay +
+        Math.cos(time * plume.sy * 0.37 + plume.phase * 1.7) * plume.ay * 0.3,
+      cosine: Math.cos(plume.rotation),
+      sine: Math.sin(plume.rotation),
+      stretchX: plume.stretchX,
+      stretchY: plume.stretchY,
+      spread: 2 * radius * radius,
+      amplitude: plume.amplitude,
+    };
+  });
+}
 
 function cssColor(name: string): string {
   if (typeof window === "undefined") {
@@ -118,60 +178,63 @@ function mix(left: Rgb, right: Rgb, amount: number): Rgb {
 }
 
 function colorAt(value: number, ramp: readonly Rgb[], hot: Rgb): Rgb {
-  if (value <= 0.16) {
-    return mix(ramp[0] ?? hot, ramp[1] ?? hot, value / 0.16);
+  if (value <= 0.14) {
+    return mix(ramp[0] ?? hot, ramp[1] ?? hot, value / 0.14);
   }
-  if (value <= 0.34) {
-    return mix(ramp[1] ?? hot, ramp[2] ?? hot, (value - 0.16) / 0.18);
+  if (value <= 0.3) {
+    return mix(ramp[1] ?? hot, ramp[2] ?? hot, (value - 0.14) / 0.16);
   }
-  if (value <= 0.52) {
-    return mix(ramp[2] ?? hot, ramp[3] ?? hot, (value - 0.34) / 0.18);
+  if (value <= 0.46) {
+    return mix(ramp[2] ?? hot, ramp[3] ?? hot, (value - 0.3) / 0.16);
   }
-  if (value <= 0.7) {
-    return mix(ramp[3] ?? hot, ramp[4] ?? hot, (value - 0.52) / 0.18);
+  if (value <= 0.62) {
+    return mix(ramp[3] ?? hot, ramp[4] ?? hot, (value - 0.46) / 0.16);
   }
-  return mix(ramp[4] ?? hot, hot, (value - 0.7) / 0.3);
+  if (value <= 0.78) {
+    return mix(ramp[4] ?? hot, ramp[5] ?? hot, (value - 0.62) / 0.16);
+  }
+  return mix(ramp[5] ?? hot, hot, (value - 0.78) / 0.22);
 }
 
-function fieldAt(x: number, y: number, time: number): number {
-  // Two low-frequency waves bend the domain, so isolines never become perfect
-  // concentric ovals. Each source also has its own elongation and orientation.
+function fieldAt(
+  x: number,
+  y: number,
+  time: number,
+  plumes: readonly PreparedPlume[],
+): number {
+  // Three low-frequency waves bend the domain so the heat sources blend into
+  // irregular plasma instead of concentric ovals. Source drift, elongation, and
+  // rotation are prepared once per frame.
   const warpX =
-    Math.sin(y * 7.4 + time * 0.11) * 0.009 +
-    Math.sin(x * 5.2 - time * 0.073) * 0.006;
+    Math.sin(y * 5.8 + time * 0.083) * 0.018 +
+    Math.sin(x * 3.4 - time * 0.052) * 0.012 +
+    Math.sin((x + y) * 2.2 + time * 0.031) * 0.01;
   const warpY =
-    Math.cos(x * 6.1 - time * 0.09) * 0.009 +
-    Math.cos(y * 4.4 + time * 0.082) * 0.006;
-  let total = 0;
-  for (const plume of PLUMES) {
-    const cx =
-      plume.cx +
-      Math.sin(time * plume.sx + plume.phase) * plume.ax +
-      Math.sin(time * plume.sx * 0.43 + plume.phase * 2.3) * plume.ax * 0.35;
-    const cy =
-      plume.cy +
-      Math.cos(time * plume.sy + plume.phase) * plume.ay +
-      Math.cos(time * plume.sy * 0.37 + plume.phase * 1.7) * plume.ay * 0.3;
-    const radius =
-      plume.radius * (0.92 + Math.sin(time * 0.05 + plume.phase) * 0.08);
-    const dx = x + warpX - cx;
-    const dy = y + warpY - cy;
-    const cosine = Math.cos(plume.rotation);
-    const sine = Math.sin(plume.rotation);
-    const localX = (dx * cosine + dy * sine) / plume.stretchX;
-    const localY = (-dx * sine + dy * cosine) / plume.stretchY;
+    Math.cos(x * 5.1 - time * 0.071) * 0.017 +
+    Math.cos(y * 3.2 + time * 0.058) * 0.011 +
+    Math.cos((x - y) * 1.9 - time * 0.037) * 0.009;
+  let total = 0.08 + 0.03 * Math.sin(x * 3.1 + y * 2.4 + time * 0.045);
+  for (const plume of plumes) {
+    const dx = x + warpX - plume.cx;
+    const dy = y + warpY - plume.cy;
+    const localX = (dx * plume.cosine + dy * plume.sine) / plume.stretchX;
+    const localY = (-dx * plume.sine + dy * plume.cosine) / plume.stretchY;
     total +=
       plume.amplitude *
-      Math.exp(-(localX * localX + localY * localY) / (2 * radius * radius));
+      Math.exp(-(localX * localX + localY * localY) / plume.spread);
   }
-  return Math.min(1, total * 0.56);
+  const flow =
+    Math.sin(x * 8.7 + y * 12.3 + time * 0.07) *
+    Math.cos(y * 6.9 - x * 9.8 - time * 0.055);
+  total *= 0.84 + 0.2 * flow;
+  return Math.min(1, Math.max(0, total * 0.42));
 }
 
 function sensorGrain(x: number, y: number, time: number): number {
   let value =
     (x * 374761393 + y * 668265263 + Math.floor(time * 12) * 1442695041) | 0;
   value = (value ^ (value >>> 13)) * 1274126177 | 0;
-  return (((value ^ (value >>> 16)) & 255) / 255 - 0.5) * 7;
+  return (((value ^ (value >>> 16)) & 255) / 255 - 0.5) * 10;
 }
 
 function clampChannel(value: number): number {
@@ -188,19 +251,13 @@ function drawFrame(
 ): void {
   const image = context.createImageData(width, height);
   const data = image.data;
+  const plumes = preparePlumes(time);
   for (let y = 0; y < height; y += 1) {
     const ny = y / height;
     for (let x = 0; x < width; x += 1) {
       const nx = x / width;
-      const value = fieldAt(nx, ny, time);
-      let color = colorAt(value, ramp, hot);
-      for (const contour of CONTOURS) {
-        const wobble = Math.sin(nx * 13 + ny * 8 + time * 0.35) * 0.006;
-        const distance = Math.abs(value - (contour + wobble));
-        if (distance < 0.015) {
-          color = mix(color, hot, 0.38 * (1 - distance / 0.015));
-        }
-      }
+      const value = fieldAt(nx, ny, time, plumes);
+      const color = colorAt(value, ramp, hot);
       const grain = sensorGrain(x, y, time);
       const offset = (y * width + x) * 4;
       data[offset] = clampChannel(color[0] + grain);
@@ -229,13 +286,14 @@ export function AuthBackdrop({ paused = false }: { paused?: boolean }) {
     if (!context) {
       return;
     }
-    const base = parseHex(cssColor("--thermal-base"), [18, 7, 41]);
+    const base = parseHex(cssColor("--thermal-base"), [21, 6, 48]);
     const violet = parseHex(cssColor("--thermal-violet"), [59, 13, 107]);
-    const crimson = parseHex(cssColor("--thermal-crimson"), [157, 23, 77]);
+    const magenta = parseHex(cssColor("--thermal-magenta"), [157, 23, 77]);
+    const crimson = parseHex(cssColor("--thermal-crimson"), [225, 29, 72]);
     const orange = parseHex(cssColor("--thermal-orange"), [234, 88, 12]);
     const gold = parseHex(cssColor("--thermal-gold"), [250, 204, 21]);
-    const hot = parseHex(cssColor("--thermal-hot"), [254, 249, 195]);
-    const ramp: readonly Rgb[] = [base, violet, crimson, orange, gold];
+    const hot = parseHex(cssColor("--thermal-hot"), [255, 243, 196]);
+    const ramp: readonly Rgb[] = [base, violet, magenta, crimson, orange, gold];
     const reduced =
       typeof window.matchMedia === "function" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;

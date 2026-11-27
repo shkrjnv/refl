@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 
 export type StudioIconName =
   | "today"
@@ -53,13 +53,11 @@ function paths(name: StudioIconName): ReactNode {
     case "progress":
       return (
         <>
-          <path d="M3.5 19.5h17" />
-          <path d="M5.2 19.5V5M5.2 19.5h15.3" />
-          <rect x="7.4" y="13" width="2.7" height="4.3" rx=".7" />
-          <rect x="11.4" y="10" width="2.7" height="7.3" rx=".7" />
-          <rect x="15.4" y="6.8" width="2.7" height="10.5" rx=".7" />
-          <path d="m6.2 10.4 3.5-2.7 2.7 1.6 5-5" />
-          <path d="M15.7 4.2h1.8V6" />
+          <rect x="3.6" y="14" width="3.4" height="5.6" rx="1" />
+          <rect x="10.3" y="10.2" width="3.4" height="9.4" rx="1" />
+          <rect x="17" y="6.4" width="3.4" height="13.2" rx="1" />
+          <path d="m4.4 9.8 4.5-3.1 3.2 1.6 7.1-5.2" />
+          <path d="M16.5 3.1h2.9v2.9" />
         </>
       );
     case "settings":
@@ -202,20 +200,142 @@ export interface BrandLogoProps {
   className?: string;
 }
 
+// Dimensional ribbon mark adapted from design/reference/refl-logo-ref.jpg.
 export function BrandLogo({ size = 28, className = "" }: BrandLogoProps) {
+  const uid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
+  const dark = `brand-dark-${uid}`;
+  const cream = `brand-cream-${uid}`;
+  const creamShadow = `brand-cream-shadow-${uid}`;
+  const blue = `brand-blue-${uid}`;
+  const blueDark = `brand-blue-dark-${uid}`;
+  const teal = `brand-teal-${uid}`;
   return (
     <svg
       className={`brand-logo ${className}`.trim()}
-      width={size}
+      width={Math.round(size * (52 / 62))}
       height={size}
-      viewBox="0 0 28 28"
+      viewBox="0 0 52 62"
       aria-hidden="true"
       focusable="false"
     >
-      <rect className="brand-logo-field" x="0.8" y="0.8" width="26.4" height="26.4" rx="8.2" />
-      <path className="brand-logo-fold" d="M7.1 10.1 14 6.1l6.9 4v3.2L14 17.4l-6.9-4.1z" />
-      <path className="brand-logo-reflect" d="m7.1 15.2 6.9 4.1 6.9-4.1v3.1L14 22.5l-6.9-4.2z" />
-      <path className="brand-logo-spine" d="M14 6.1v16.4" />
+      <defs>
+        <linearGradient id={dark} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#725742" />
+          <stop offset=".38" stopColor="#3A2C22" />
+          <stop offset="1" stopColor="#1A1512" />
+        </linearGradient>
+        <linearGradient id={cream} x1=".1" y1="0" x2=".9" y2="1">
+          <stop offset="0" stopColor="#FFFDF8" />
+          <stop offset=".42" stopColor="#EAE2D3" />
+          <stop offset="1" stopColor="#C9B79E" />
+        </linearGradient>
+        <linearGradient id={creamShadow} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#DCCFBA" />
+          <stop offset="1" stopColor="#A08C73" />
+        </linearGradient>
+        <linearGradient id={blue} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#5FC0FF" />
+          <stop offset=".4" stopColor="#2B9AF3" />
+          <stop offset="1" stopColor="#1363B6" />
+        </linearGradient>
+        <linearGradient id={blueDark} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#1E88E5" />
+          <stop offset="1" stopColor="#083E80" />
+        </linearGradient>
+        <linearGradient id={teal} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#1FAEA6" />
+          <stop offset=".5" stopColor="#0D7A78" />
+          <stop offset="1" stopColor="#053B39" />
+        </linearGradient>
+      </defs>
+      <path
+        className="brand-ribbon-cream"
+        d="M9.0 10.0C12.0 4.6 17.0 1.7 23.0 1.2C31.0 0.9 39.0 3.9 43.5 10.0L44.8 17.7L34.0 22.9L15.6 10.0Z"
+        fill={`url(#${cream})`}
+      />
+      <path
+        className="brand-ribbon-cream-shadow"
+        d="M44.8 17.7L43.4 21.8L35.3 24.6L34.0 22.9Z"
+        fill={`url(#${creamShadow})`}
+      />
+      <path
+        className="brand-ribbon-cream-crease"
+        d="M26.8 1.6C29.4 6.2 30.0 12.0 28.4 18.0L31.1 19.2C32.9 12.9 32.2 6.4 29.3 1.8Z"
+        fill="#D7C7AE"
+        opacity=".46"
+      />
+      <path
+        className="brand-ribbon-cream-highlight"
+        d="M10.8 9.0C14.2 4.9 18.6 2.8 23.3 2.4C30.0 2.2 36.8 4.4 40.7 9.2L38.8 9.7C34.8 5.7 29.4 3.9 23.5 4.1C19.3 4.4 15.4 6.0 12.4 8.8Z"
+        fill="#FFFDF8"
+        opacity=".82"
+      />
+      <path
+        className="brand-ribbon-dark"
+        d="M2.2 10.7C2.2 8.3 3.8 6.2 6.1 5.7L16.3 3.4L17.5 57.4L7.3 60.2C4.4 61.0 2.2 58.8 2.2 55.8Z"
+        fill={`url(#${dark})`}
+      />
+      <path
+        className="brand-ribbon-dark-highlight"
+        d="M5.0 10.2C5.0 8.8 5.9 7.6 7.2 7.3L10.1 6.6L11.8 58.2L8.5 59.3C6.3 59.9 5.0 58.4 5.0 56.1Z"
+        fill="#B08E6E"
+        opacity=".38"
+      />
+      <path
+        className="brand-ribbon-dark-shade"
+        d="M16.3 3.4L17.5 57.4L12.0 59.0L10.1 6.6C13.1 5.9 15.0 4.8 16.3 3.4Z"
+        fill="#0A0604"
+        opacity=".3"
+      />
+      <path
+        className="brand-ribbon-teal"
+        d="M18.0 38.8L47.0 48.5C49.4 49.5 49.7 52.7 47.5 54.1L45.8 55.2C44.6 55.9 43.2 55.8 42.1 55.0L15.5 43.6C14.2 42.9 14.8 40.9 16.2 40.1Z"
+        fill={`url(#${teal})`}
+      />
+      <path
+        className="brand-ribbon-teal-highlight"
+        d="M18.4 40.0L47.0 49.5C48.1 49.8 48.6 50.8 48.4 51.8C47.5 50.6 46.3 50.0 45.0 49.6L17.2 41.5Z"
+        fill="#6FE7DD"
+        opacity=".34"
+      />
+      <path
+        className="brand-ribbon-teal-shade"
+        d="M42.1 55.0C43.2 55.8 44.6 55.9 45.8 55.2L47.5 54.1C48.8 53.4 49.2 51.9 48.7 50.6C48.1 52.1 46.9 53.1 45.4 53.4L42.8 53.8Z"
+        fill="#032B29"
+        opacity=".7"
+      />
+      <path
+        className="brand-ribbon-blue"
+        d="M44.8 17.7L44.6 24.5L34.0 38.7L18.9 31.0Z"
+        fill={`url(#${blue})`}
+      />
+      <path
+        className="brand-ribbon-blue-dark"
+        d="M18.9 31.0L34.0 38.7L43.0 28.2L41.0 24.4L29.0 31.7L21.2 28.4Z"
+        fill={`url(#${blueDark})`}
+      />
+      <path
+        className="brand-ribbon-blue-highlight"
+        d="M43.8 18.8L20.4 31.4"
+        stroke="#A5DCFF"
+        strokeWidth="1.2"
+        opacity=".55"
+        fill="none"
+      />
+      <path
+        className="brand-ribbon-blue-fold"
+        d="M18.9 31.0L34.0 38.7"
+        stroke="#06346A"
+        strokeWidth="1.2"
+        opacity=".6"
+        fill="none"
+      />
+      <path
+        className="brand-ribbon-blue-notch"
+        d="M18.9 31.0L20.6 29.7L22.4 31.3L20.8 32.6Z"
+        fill="#EAF6FF"
+        opacity=".8"
+      />
     </svg>
   );
 }

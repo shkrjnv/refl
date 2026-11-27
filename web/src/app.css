@@ -937,7 +937,7 @@ input:focus-visible {
   }
 }
 
-/* Iella tour */
+/* Iella tour — a compact card placed next to an exact target rect. */
 
 .iella-tour {
   position: fixed;
@@ -946,32 +946,47 @@ input:focus-visible {
 }
 
 .iella-tour-blocker {
-  position: absolute;
+  position: fixed;
+  z-index: 80;
   inset: 0;
-}
-
-.iella-tour-centered .iella-tour-blocker {
   background: var(--overlay);
 }
 
-.iella-spotlight {
+.iella-tour-shade {
+  position: fixed;
+  z-index: 80;
+  background: var(--overlay);
+  pointer-events: auto;
+  transition:
+    top 0.2s ease-out,
+    left 0.2s ease-out,
+    width 0.2s ease-out,
+    height 0.2s ease-out;
+}
+
+.iella-tour-highlight {
   position: fixed;
   z-index: 81;
-  border: 3px solid var(--sun);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 0 0 9999px var(--overlay);
+  border: 2px solid var(--sun);
+  border-radius: 12px;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--sun) 35%, transparent),
+    0 10px 28px color-mix(in srgb, var(--thermal-shadow) 38%, transparent);
   pointer-events: none;
+  transition: all 0.2s ease-out;
 }
 
 .iella-tour-card {
   position: fixed;
   z-index: 82;
-  width: min(356px, calc(100vw - 32px));
+  width: min(320px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
   background: var(--surface);
   box-shadow: var(--shadow-hero);
-  padding: 20px;
+  padding: 16px;
 }
 
 .iella-tour-card-centered {
@@ -981,14 +996,14 @@ input:focus-visible {
 }
 
 .iella-tour-sprite {
-  width: 64px;
-  margin-bottom: 10px;
+  width: 48px;
+  margin-bottom: 6px;
 }
 
 .iella-tour-kicker {
   margin: 0 0 4px;
   color: var(--sun-deep);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -996,15 +1011,15 @@ input:focus-visible {
 
 .iella-tour-card h2 {
   margin: 0;
-  font-size: 20px;
-  line-height: 1.25;
+  font-size: 17px;
+  line-height: 1.3;
 }
 
 .iella-tour-actions {
   display: flex;
   justify-content: space-between;
   gap: 10px;
-  margin-top: 20px;
+  margin-top: 14px;
 }
 
 /* Auth and access */
@@ -2151,11 +2166,11 @@ input:focus-visible {
 }
 
 .iella-sprite-button .iella-sprite {
-  transition: transform 180ms ease;
+  transition: none;
 }
 
 .iella-sprite-button:hover .iella-sprite {
-  transform: translateY(-2px) rotate(-2deg);
+  transform: none;
 }
 
 .iella-bob {
@@ -4454,6 +4469,13 @@ input:focus-visible {
   gap: 16px;
 }
 
+.auth-brand-group {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
 .auth-brand {
   display: flex;
   align-items: center;
@@ -6657,25 +6679,19 @@ input:focus-visible {
   display: block;
   inset: 0;
   background-image:
-    repeating-linear-gradient(
-      106deg,
-      color-mix(in srgb, var(--auth-panel-text) 7%, transparent) 0 1px,
-      transparent 1px 4px,
-      color-mix(in srgb, var(--auth-panel-text) 3%, transparent) 4px 5px,
-      transparent 5px 9px
+    radial-gradient(
+      circle at 1px 1px,
+      color-mix(in srgb, var(--auth-panel-text) 9%, transparent) 0 0.6px,
+      transparent 0.9px
     ),
-    repeating-linear-gradient(
-      14deg,
-      color-mix(in srgb, var(--auth-panel-text) 5%, transparent) 0 1px,
-      transparent 1px 5px,
-      color-mix(in srgb, var(--auth-panel-text) 2%, transparent) 5px 6px,
-      transparent 6px 11px
-    ),
+    var(--felt-texture),
     var(--felt-texture);
-  background-size: 100% 100%, 100% 100%, 240px 240px;
+  background-position: 0 0, 0 0, 43px 67px;
+  background-size: 3px 3px, 173px 173px, 97px 97px;
   content: "";
-  mix-blend-mode: soft-light;
-  opacity: 0.5;
+  filter: contrast(1.12) brightness(1.06);
+  mix-blend-mode: overlay;
+  opacity: 0.55;
   pointer-events: none;
 }
 
@@ -6751,11 +6767,17 @@ input:focus-visible {
   display: block;
   inset: 0;
   background:
+    radial-gradient(
+      ellipse 86% 66% at 6% 98%,
+      color-mix(in srgb, var(--thermal-deep) 88%, transparent) 0%,
+      color-mix(in srgb, var(--thermal-deep) 54%, transparent) 36%,
+      transparent 72%
+    ),
     linear-gradient(
       180deg,
-      color-mix(in srgb, var(--thermal-base) 10%, transparent) 0%,
-      transparent 32%,
-      color-mix(in srgb, var(--thermal-deep) 72%, transparent) 100%
+      color-mix(in srgb, var(--thermal-base) 8%, transparent) 0%,
+      transparent 30%,
+      color-mix(in srgb, var(--thermal-deep) 80%, transparent) 100%
     );
   content: "";
   pointer-events: none;
@@ -7806,7 +7828,7 @@ input:focus-visible {
   background: color-mix(in srgb, var(--blue) 12%, transparent);
   box-shadow: 0 0 0 5px color-mix(in srgb, var(--blue) 7%, transparent);
   pointer-events: none;
-  transition: all 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: all 150ms cubic-bezier(0.2, 0.9, 0.3, 1);
 }
 
 .dashboard-widget[data-resizing="true"] .widget-resize-badge {
@@ -7852,34 +7874,17 @@ input:focus-visible {
   }
 }
 
-/* W9 — folded-ribbon brand emblem. */
+/* W9/W10 — dimensional ribbon brand emblem. */
 .brand-logo {
   display: block;
   flex: none;
-  filter: drop-shadow(0 3px 0 var(--blue-deep));
+  overflow: visible;
+  filter: drop-shadow(0 2px 1.5px color-mix(in srgb, var(--thermal-shadow) 46%, transparent));
 }
 
-.brand-logo-field {
-  fill: var(--blue);
-  stroke: color-mix(in srgb, var(--blue-deep) 70%, transparent);
-  stroke-width: 0.8;
-}
-
-.brand-logo-fold {
-  fill: var(--bg);
-  opacity: 0.96;
-}
-
-.brand-logo-reflect {
-  fill: color-mix(in srgb, var(--bg) 58%, var(--blue));
-  opacity: 0.9;
-}
-
-.brand-logo-spine {
-  fill: none;
-  stroke: var(--blue-deep);
-  stroke-width: 0.9;
-  opacity: 0.65;
+.brand-name {
+  font-weight: 800;
+  letter-spacing: -0.045em;
 }
 
 /* W9 — ambient ring/curve motion and isometric mastery towers. */
@@ -8308,8 +8313,8 @@ input:focus-visible {
   text-wrap: balance;
 }
 
-/* W10 — Uzbek needs a wider measure: at 14ch the sentence stacks into four
-   short lines, while a wider column keeps it two balanced lines. */
+/* W10 — Uzbek needs a touch more display tracking so the approved sentence
+   settles into two balanced lines inside the same 14ch measure. */
 :lang(uz) .auth-visual-copy h1 {
-  max-width: 19ch;
+  letter-spacing: -0.08em;
 }
