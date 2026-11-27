@@ -59,3 +59,11 @@
 - `fold_state` uses core replay or snapshot+apply and returns state, hash, incomplete, and last event id; unknown events mark the state incomplete.
 - `plan_session` maps budget milliseconds to the core `Budget` and returns the plan plus its issued decision; tests cover the v3 bundle.
 - Added the Nix `core-wasm-bridge` check, `wasm-bindgen-cli` to the dev shell, and the bridge build to `just wasm`.
+
+## P1c — Telegram auth, invites, and access approval
+
+- Added Telegram Login HMAC verification, closed/open registration, and invite redemption with SHA-256 digests only.
+- Added `access_status`, the `roles` catalogue, and `invites` via migration `0017`; existing users remain active.
+- Added admin REST endpoints and `AdminUser`; pending users receive plain Approve/Reject inline buttons.
+- Added the optional Telegram Bot long-polling worker for approval callbacks and `/invite`.
+- Tests cover HMAC/freshness, pending approval and rejection, single-use invites, open registration, and non-admin denial.

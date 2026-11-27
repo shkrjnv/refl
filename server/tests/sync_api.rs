@@ -3,6 +3,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::Router;
@@ -11,6 +12,7 @@ use axum::http::{Request, StatusCode, header};
 use refl_core::CURRENT_SCHEMA_VERSION;
 use refl_core::value::Timestamp;
 use refl_server::MIGRATOR;
+use refl_server::access::{MockTelegramGateway, RegistrationMode};
 use refl_server::content::{activate, import_bundle, import_lexicon};
 use refl_server::events::insert_event;
 use refl_server::routes::{AppState, Config, router};
@@ -142,8 +144,12 @@ fn test_app(pool: PgPool) -> Router {
         config: Config {
             allow_header_learner_id: false,
             dev_auth: true,
+            registration_mode: RegistrationMode::Open,
+            telegram_bot_token: None,
+            admin_telegram_chat_id: None,
             min_core_version: "0.0.0".into(),
         },
+        telegram: Arc::new(MockTelegramGateway::default()),
     })
 }
 
@@ -262,8 +268,12 @@ async fn old_core_is_rejected(c: &Cluster) {
         config: Config {
             allow_header_learner_id: false,
             dev_auth: true,
+            registration_mode: RegistrationMode::Open,
+            telegram_bot_token: None,
+            admin_telegram_chat_id: None,
             min_core_version: "1.0.0".into(),
         },
+        telegram: Arc::new(MockTelegramGateway::default()),
     });
     let (status, response) = post(app, "/v1/sync", sync_body(learner, &[], 0), Some(&access)).await;
     assert_eq!(status, StatusCode::UPGRADE_REQUIRED);

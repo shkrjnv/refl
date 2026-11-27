@@ -1,16 +1,21 @@
 //! Email-code authentication and opaque bearer sessions (`docs/13`,
 //! «Вход и токены»).
 
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use axum::Json;
 use axum::extract::{FromRequestParts, State};
+use axum::http::StatusCode;
 use axum::http::header::AUTHORIZATION;
 use axum::http::request::Parts;
+use axum::response::{IntoResponse, Response};
 use refl_core::ids::LearnerId;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
+use crate::access::{self, AccessDecision, AccessStatus, RegistrationMode, notify_pending};
 use crate::error::AppError;
 use crate::routes::AppState;
 
@@ -115,6 +120,30 @@ pub struct RequestCodeResponse {
 pub struct VerifyCode {
     pub email: String,
     pub code: String,
+    #[serde(default)]
+    pub invite_code: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TelegramLogin {
+    pub id: i64,
+    pub first_name: String,
+    #[serde(default)]
+    pub last_name: Option<String>,
+    #[serde(default)]
+    pub username: Option<String>,
+    #[serde(default)]
+    pub photo_url: Option<String>,
+    pub auth_date: i64,
+    pub hash: String,
+    #[serde(default)]
+    pub invite_code: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PendingApprovalResponse {
+    pub status: &'static str,
+    pub learner_id: Uuid,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -209,79 +238,157 @@ fn display_name(email: &str) -> &str {
         .map_or("Learner", |(local, _domain)| local)
 }
 
-enum UserLookup {
-    Existing(Uuid),
-    Erased,
+#[derive(Debug)]
+struct ExistingLogin {
+    learner_id: Uuid,
+    status: AccessStatus,
+    erased: bool,
 }
 
-async fn find_or_create_user(
+async fn find_login(
     tx: &mut Transaction<'_, Postgres>,
-    email: &str,
-) -> Result<UserLookup, AppError> {
-    let existing: Option<(Uuid, bool)> = sqlx::query_as(
-        "SELECT u.id, EXISTS(SELECT 1 FROM erasures e WHERE e.learner_id = u.id) \
+    kind: &str,
+    identifier: &str,
+) -> Result<Option<ExistingLogin>, AppError> {
+    let row: Option<(Uuid, String, bool)> = sqlx::query_as(
+        "SELECT u.id, u.access_status, \
+         EXISTS(SELECT 1 FROM erasures e WHERE e.learner_id = u.id) \
          FROM login_methods lm JOIN users u ON u.id = lm.user_id \
-         WHERE lm.kind = 'email' AND lm.identifier = $1",
+         WHERE lm.kind = $1 AND lm.identifier = $2",
     )
-    .bind(email)
+    .bind(kind)
+    .bind(identifier)
     .fetch_optional(&mut **tx)
     .await?;
+    let Some((learner_id, status, erased)) = row else {
+        return Ok(None);
+    };
+    let Some(status) = AccessStatus::parse(&status) else {
+        return Err(AppError::internal("unknown access_status"));
+    };
+    Ok(Some(ExistingLogin {
+        learner_id,
+        status,
+        erased,
+    }))
+}
 
-    match existing {
-        Some((_, true)) => Ok(UserLookup::Erased),
-        Some((learner_id, false)) => {
-            sqlx::query(
-                "INSERT INTO user_roles (user_id, role) VALUES ($1, 'learner') \
-                 ON CONFLICT DO NOTHING",
-            )
-            .bind(learner_id)
-            .execute(&mut **tx)
-            .await?;
-            sqlx::query(
-                "UPDATE login_methods SET verified_at = now() \
-                 WHERE kind = 'email' AND identifier = $1 AND verified_at IS NULL",
-            )
-            .bind(email)
-            .execute(&mut **tx)
-            .await?;
-            Ok(UserLookup::Existing(learner_id))
+async fn ensure_login_role(
+    tx: &mut Transaction<'_, Postgres>,
+    learner_id: Uuid,
+    kind: &str,
+    identifier: &str,
+) -> Result<(), AppError> {
+    sqlx::query(
+        "INSERT INTO user_roles (user_id, role) VALUES ($1, 'learner') \
+         ON CONFLICT DO NOTHING",
+    )
+    .bind(learner_id)
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query(
+        "UPDATE login_methods SET verified_at = now() \
+         WHERE kind = $1 AND identifier = $2 AND verified_at IS NULL",
+    )
+    .bind(kind)
+    .bind(identifier)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+async fn create_login_user(
+    tx: &mut Transaction<'_, Postgres>,
+    kind: &str,
+    identifier: &str,
+    display_name: &str,
+    access_status: AccessStatus,
+) -> Result<Uuid, AppError> {
+    let learner_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO users \
+         (id, public_code, display_name, interface_lang, access_status) \
+         VALUES ($1, $2, $3, 'en', $4)",
+    )
+    .bind(learner_id)
+    .bind(new_public_code())
+    .bind(display_name)
+    .bind(access_status.as_str())
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query(
+        "INSERT INTO login_methods (id, user_id, kind, identifier, verified_at) \
+         VALUES ($1, $2, $3, $4, now())",
+    )
+    .bind(Uuid::new_v4())
+    .bind(learner_id)
+    .bind(kind)
+    .bind(identifier)
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query("INSERT INTO user_roles (user_id, role) VALUES ($1, 'learner')")
+        .bind(learner_id)
+        .execute(&mut **tx)
+        .await?;
+    Ok(learner_id)
+}
+
+#[derive(Debug, Clone, Copy)]
+enum PreparedUser {
+    Active(Uuid),
+    Pending(Uuid),
+}
+
+async fn prepare_user(
+    tx: &mut Transaction<'_, Postgres>,
+    mode: RegistrationMode,
+    existing: Option<ExistingLogin>,
+    invite_code: Option<&str>,
+    kind: &str,
+    identifier: &str,
+    display_name: &str,
+) -> Result<PreparedUser, AppError> {
+    if let Some(existing) = existing {
+        if existing.erased {
+            return Err(AppError::Erased);
         }
-        None => {
-            let learner_id = Uuid::new_v4();
-            sqlx::query(
-                "INSERT INTO users (id, public_code, display_name, interface_lang) \
-                 VALUES ($1, $2, $3, 'en')",
-            )
-            .bind(learner_id)
-            .bind(new_public_code())
-            .bind(display_name(email))
-            .execute(&mut **tx)
-            .await?;
-            sqlx::query(
-                "INSERT INTO login_methods (id, user_id, kind, identifier, verified_at) \
-                 VALUES ($1, $2, 'email', $3, now())",
-            )
-            .bind(Uuid::new_v4())
-            .bind(learner_id)
-            .bind(email)
-            .execute(&mut **tx)
-            .await?;
-            sqlx::query("INSERT INTO user_roles (user_id, role) VALUES ($1, 'learner')")
-                .bind(learner_id)
-                .execute(&mut **tx)
-                .await?;
-            Ok(UserLookup::Existing(learner_id))
-        }
+        let decision = access::decide_access(
+            tx,
+            mode,
+            Some((existing.learner_id, existing.status)),
+            invite_code,
+        )
+        .await?;
+        return match decision {
+            AccessDecision::Active => {
+                ensure_login_role(tx, existing.learner_id, kind, identifier).await?;
+                Ok(PreparedUser::Active(existing.learner_id))
+            }
+            AccessDecision::Pending => Err(AppError::PendingApproval),
+        };
     }
+
+    let decision = access::decide_access(tx, mode, None, invite_code).await?;
+    let status = match decision {
+        AccessDecision::Active => AccessStatus::Active,
+        AccessDecision::Pending => AccessStatus::Pending,
+    };
+    let learner_id = create_login_user(tx, kind, identifier, display_name, status).await?;
+    Ok(match decision {
+        AccessDecision::Active => PreparedUser::Active(learner_id),
+        AccessDecision::Pending => PreparedUser::Pending(learner_id),
+    })
 }
 
 /// # Errors
 /// `400` for an invalid email; `401` for a missing, expired, or reused code;
-/// `403` for an erased account; `500` on database errors.
+/// `403` for an erased, pending, rejected, or invite-gated account; `500` on
+/// database errors. A new user under closed registration receives `202` with
+/// no session tokens.
 pub async fn verify_code(
     State(state): State<AppState>,
     Json(payload): Json<VerifyCode>,
-) -> Result<Json<AuthTokens>, AppError> {
+) -> Result<Response, AppError> {
     let email = normalize_email(&payload.email)?;
     if !valid_code(&payload.code) {
         return Err(AppError::Unauthorized);
@@ -325,22 +432,204 @@ pub async fn verify_code(
         .execute(&mut *tx)
         .await?;
 
-    let learner_id = match find_or_create_user(&mut tx, &email).await? {
-        UserLookup::Existing(learner_id) => learner_id,
-        UserLookup::Erased => {
+    let existing = find_login(&mut tx, "email", &email).await?;
+    let prepared = prepare_user(
+        &mut tx,
+        state.config.registration_mode,
+        existing,
+        payload.invite_code.as_deref(),
+        "email",
+        &email,
+        display_name(&email),
+    )
+    .await?;
+    match prepared {
+        PreparedUser::Active(learner_id) => {
+            let tokens = issue_session(&mut tx, learner_id).await?;
             tx.commit().await?;
-            return Err(AppError::Erased);
+            Ok(Json(tokens).into_response())
         }
-    };
+        PreparedUser::Pending(learner_id) => {
+            tx.commit().await?;
+            notify_pending(
+                &*state.telegram,
+                state.config.admin_telegram_chat_id,
+                learner_id,
+                &email,
+            )
+            .await;
+            Ok((
+                StatusCode::ACCEPTED,
+                Json(PendingApprovalResponse {
+                    status: "pending_approval",
+                    learner_id,
+                }),
+            )
+                .into_response())
+        }
+    }
+}
 
-    let tokens = issue_session(&mut tx, learner_id).await?;
-    tx.commit().await?;
-    Ok(Json(tokens))
+fn hmac_sha256(key: &[u8], message: &[u8]) -> [u8; 32] {
+    let mut key_block = [0u8; 64];
+    if key.len() > 64 {
+        let digest = Sha256::digest(key);
+        key_block[..32].copy_from_slice(&digest);
+    } else {
+        key_block[..key.len()].copy_from_slice(key);
+    }
+    let mut inner_pad = [0u8; 64];
+    let mut outer_pad = [0u8; 64];
+    for ((inner, outer), byte) in inner_pad
+        .iter_mut()
+        .zip(outer_pad.iter_mut())
+        .zip(key_block.iter())
+    {
+        *inner = byte ^ 0x36;
+        *outer = byte ^ 0x5c;
+    }
+    let mut inner = Sha256::new();
+    inner.update(inner_pad);
+    inner.update(message);
+    let inner_hash = inner.finalize();
+    let mut outer = Sha256::new();
+    outer.update(outer_pad);
+    outer.update(inner_hash);
+    outer.finalize().into()
+}
+
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().fold(String::new(), |mut output, byte| {
+        use std::fmt::Write as _;
+        let _ = write!(output, "{byte:02x}");
+        output
+    })
+}
+
+fn telegram_data_check(login: &TelegramLogin) -> String {
+    let mut fields: Vec<(&str, String)> = vec![
+        ("auth_date", login.auth_date.to_string()),
+        ("first_name", login.first_name.clone()),
+        ("id", login.id.to_string()),
+    ];
+    if let Some(last_name) = &login.last_name {
+        fields.push(("last_name", last_name.clone()));
+    }
+    if let Some(photo_url) = &login.photo_url {
+        fields.push(("photo_url", photo_url.clone()));
+    }
+    if let Some(username) = &login.username {
+        fields.push(("username", username.clone()));
+    }
+    fields.sort_by(|left, right| left.0.cmp(right.0));
+    fields
+        .into_iter()
+        .map(|(key, value)| format!("{key}={value}"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn unix_seconds() -> Result<i64, AppError> {
+    let elapsed = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(AppError::internal)?;
+    i64::try_from(elapsed.as_secs()).map_err(AppError::internal)
+}
+
+fn telegram_display_name(login: &TelegramLogin) -> String {
+    let mut name = login.first_name.trim().to_owned();
+    if let Some(last_name) = login.last_name.as_deref().map(str::trim)
+        && !last_name.is_empty()
+    {
+        if !name.is_empty() {
+            name.push(' ');
+        }
+        name.push_str(last_name);
+    }
+    if !name.is_empty() {
+        return name;
+    }
+    login
+        .username
+        .as_deref()
+        .filter(|username| !username.trim().is_empty())
+        .map_or_else(|| "Telegram".into(), str::to_owned)
+}
+
+/// # Errors
+/// `400` for an invalid Telegram identity; `401` for a bad signature or stale
+/// `auth_date`; `403` for an erased, pending, rejected, or invite-gated
+/// account; `503` when Telegram login is not configured.
+pub async fn telegram(
+    State(state): State<AppState>,
+    Json(payload): Json<TelegramLogin>,
+) -> Result<Response, AppError> {
+    let token = state
+        .config
+        .telegram_bot_token
+        .as_deref()
+        .filter(|token| !token.is_empty())
+        .ok_or(AppError::ServiceUnavailable)?;
+    if payload.id <= 0 || payload.first_name.trim().is_empty() {
+        return Err(AppError::BadRequest("invalid telegram identity".into()));
+    }
+    let now = unix_seconds()?;
+    if now.saturating_sub(payload.auth_date) > 300 {
+        return Err(AppError::Unauthorized);
+    }
+    let secret = Sha256::digest(token.as_bytes());
+    let expected = hex(&hmac_sha256(
+        &secret,
+        telegram_data_check(&payload).as_bytes(),
+    ));
+    if !expected.eq_ignore_ascii_case(&payload.hash) {
+        return Err(AppError::Unauthorized);
+    }
+
+    let identifier = payload.id.to_string();
+    let display_name = telegram_display_name(&payload);
+    let mut tx = state.pool.begin().await?;
+    let existing = find_login(&mut tx, "telegram", &identifier).await?;
+    let prepared = prepare_user(
+        &mut tx,
+        state.config.registration_mode,
+        existing,
+        payload.invite_code.as_deref(),
+        "telegram",
+        &identifier,
+        &display_name,
+    )
+    .await?;
+    match prepared {
+        PreparedUser::Active(learner_id) => {
+            let tokens = issue_session(&mut tx, learner_id).await?;
+            tx.commit().await?;
+            Ok(Json(tokens).into_response())
+        }
+        PreparedUser::Pending(learner_id) => {
+            tx.commit().await?;
+            notify_pending(
+                &*state.telegram,
+                state.config.admin_telegram_chat_id,
+                learner_id,
+                &display_name,
+            )
+            .await;
+            Ok((
+                StatusCode::ACCEPTED,
+                Json(PendingApprovalResponse {
+                    status: "pending_approval",
+                    learner_id,
+                }),
+            )
+                .into_response())
+        }
+    }
 }
 
 /// # Errors
 /// `401` for an invalid, revoked, or expired refresh token; `403` for an
-/// erased account; `500` on database errors.
+/// erased or non-active account; `500` on database errors.
 pub async fn refresh(
     State(state): State<AppState>,
     Json(payload): Json<Refresh>,
@@ -349,17 +638,17 @@ pub async fn refresh(
         return Err(AppError::Unauthorized);
     }
     let mut tx = state.pool.begin().await?;
-    let row: Option<(Uuid, Uuid, bool)> = sqlx::query_as(
-        "SELECT s.id, s.user_id, \
+    let row: Option<(Uuid, Uuid, String, bool)> = sqlx::query_as(
+        "SELECT s.id, s.user_id, u.access_status, \
          EXISTS(SELECT 1 FROM erasures e WHERE e.learner_id = s.user_id) \
-         FROM auth_sessions s \
+         FROM auth_sessions s JOIN users u ON u.id = s.user_id \
          WHERE s.refresh_token_hash = $1 AND s.revoked_at IS NULL \
          AND s.refresh_expires_at > now() FOR UPDATE",
     )
     .bind(token_hash(payload.refresh_token.trim()))
     .fetch_optional(&mut *tx)
     .await?;
-    let Some((session_id, learner_id, erased)) = row else {
+    let Some((session_id, learner_id, access_status, erased)) = row else {
         return Err(AppError::Unauthorized);
     };
     if erased {
@@ -369,6 +658,12 @@ pub async fn refresh(
             .await?;
         tx.commit().await?;
         return Err(AppError::Erased);
+    }
+    match AccessStatus::parse(&access_status) {
+        Some(AccessStatus::Active) => {}
+        Some(AccessStatus::Pending) => return Err(AppError::PendingApproval),
+        Some(AccessStatus::Rejected) => return Err(AppError::AccessRejected),
+        None => return Err(AppError::internal("unknown access_status")),
     }
 
     let access_token = random_token();
@@ -443,40 +738,67 @@ impl FromRequestParts<AppState> for AuthenticatedLearner {
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
         let token = bearer_token(parts)?;
-        let session: Option<(Uuid, Uuid, bool)> = sqlx::query_as(
-            "SELECT s.id, s.user_id, \
+        let session: Option<(Uuid, Uuid, String, bool)> = sqlx::query_as(
+            "SELECT s.id, s.user_id, u.access_status, \
              EXISTS(SELECT 1 FROM erasures e WHERE e.learner_id = s.user_id) \
-             FROM auth_sessions s \
+             FROM auth_sessions s JOIN users u ON u.id = s.user_id \
              WHERE s.access_token_hash = $1 AND s.revoked_at IS NULL \
              AND s.access_expires_at > now()",
         )
         .bind(token_hash(token))
         .fetch_optional(&state.pool)
         .await?;
-        if let Some((session_id, learner_id, erased)) = session {
-            return Ok(Self {
-                learner_id: LearnerId(learner_id),
-                session_id: Some(session_id),
-                erased,
-            });
+        if let Some((session_id, learner_id, access_status, erased)) = session {
+            if erased {
+                return Ok(Self {
+                    learner_id: LearnerId(learner_id),
+                    session_id: Some(session_id),
+                    erased: true,
+                });
+            }
+            match AccessStatus::parse(&access_status) {
+                Some(AccessStatus::Active) => {
+                    return Ok(Self {
+                        learner_id: LearnerId(learner_id),
+                        session_id: Some(session_id),
+                        erased: false,
+                    });
+                }
+                Some(AccessStatus::Pending) => return Err(AppError::PendingApproval),
+                Some(AccessStatus::Rejected) => return Err(AppError::AccessRejected),
+                None => return Err(AppError::internal("unknown access_status")),
+            }
         }
 
         if state.config.allow_header_learner_id
             && let Ok(learner_id) = Uuid::parse_str(token)
         {
-            let (exists, erased): (bool, bool) = sqlx::query_as(
+            let (exists, erased, access_status): (bool, bool, Option<String>) = sqlx::query_as(
                 "SELECT EXISTS(SELECT 1 FROM users WHERE id = $1), \
-                 EXISTS(SELECT 1 FROM erasures WHERE learner_id = $1)",
+                 EXISTS(SELECT 1 FROM erasures WHERE learner_id = $1), \
+                 (SELECT access_status FROM users WHERE id = $1)",
             )
             .bind(learner_id)
             .fetch_one(&state.pool)
             .await?;
             if exists {
-                return Ok(Self {
-                    learner_id: LearnerId(learner_id),
-                    session_id: None,
-                    erased,
-                });
+                if erased {
+                    return Ok(Self {
+                        learner_id: LearnerId(learner_id),
+                        session_id: None,
+                        erased: true,
+                    });
+                }
+                return match access_status.as_deref().and_then(AccessStatus::parse) {
+                    Some(AccessStatus::Active) => Ok(Self {
+                        learner_id: LearnerId(learner_id),
+                        session_id: None,
+                        erased: false,
+                    }),
+                    Some(AccessStatus::Pending) => Err(AppError::PendingApproval),
+                    Some(AccessStatus::Rejected) => Err(AppError::AccessRejected),
+                    None => Err(AppError::internal("unknown access_status")),
+                };
             }
         }
         Err(AppError::Unauthorized)

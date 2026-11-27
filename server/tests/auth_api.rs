@@ -3,11 +3,13 @@
 
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::Arc;
 
 use axum::Router;
 use axum::body::{Body, to_bytes};
 use axum::http::{Request, StatusCode, header};
 use refl_server::MIGRATOR;
+use refl_server::access::{MockTelegramGateway, RegistrationMode};
 use refl_server::routes::{AppState, Config, router};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -104,8 +106,12 @@ fn test_app(pool: PgPool, dev_auth: bool) -> Router {
         config: Config {
             allow_header_learner_id: false,
             dev_auth,
+            registration_mode: RegistrationMode::Open,
+            telegram_bot_token: None,
+            admin_telegram_chat_id: None,
             min_core_version: "0.0.0".into(),
         },
+        telegram: Arc::new(MockTelegramGateway::default()),
     })
 }
 
