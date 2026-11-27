@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 
-import type { IellaMood } from "../components/IellaSprite";
 import { RichText } from "../components/RichText";
 import { StudioIcon } from "../components/StudioIcons";
 import { Button, Card, ProgressBar } from "../components/ui";
@@ -19,7 +18,6 @@ export interface LessonScreenProps {
   onComplete: (summary: LessonSummary) => void;
   onExit: () => void;
   onViewChange?: (view: LessonView) => void;
-  onMood?: (mood: IellaMood) => void;
 }
 
 interface ChoiceInputProps {
@@ -97,7 +95,6 @@ export function LessonScreen({
   onComplete,
   onExit,
   onViewChange,
-  onMood,
 }: LessonScreenProps) {
   const { t } = useTranslation();
   const [view, setView] = useState<LessonView>(initialView);
@@ -155,7 +152,6 @@ export function LessonScreen({
       setView(next);
       setHintOpen(false);
       if (next.feedback) {
-        onMood?.(next.feedback.correct ? "proud" : "curious");
       }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : t("common-unknown-error"));
@@ -198,12 +194,6 @@ export function LessonScreen({
         <div>
           <h1>{phaseLabel}</h1>
         </div>
-        <span
-          className="iella-anchor iella-anchor-lesson"
-          data-iella-perch="lesson"
-          data-iella-route="lesson"
-          aria-hidden="true"
-        />
         <div className="lesson-head-actions">
           <Button type="button" variant="ghost" size="sm" onClick={onExit}>
             <StudioIcon name="close" size={16} />

@@ -2,13 +2,18 @@ import type { ReactNode } from "react";
 
 import type { Locale } from "../i18n";
 import { useTranslation } from "../i18n";
+import type { NavigationPosition } from "../prototype/layout";
 import type { SkinName, ThemeName } from "../theme/tokens";
 import { AppearanceMenu } from "./AppearanceMenu";
-import { IellaCompanion } from "./IellaCompanion";
-import type { IellaMood } from "./IellaSprite";
+import { IellaSprite } from "./IellaSprite";
 import { StudioIcon, type StudioIconName } from "./StudioIcons";
 
-export type AppRoute = "today" | "lesson" | "stats" | "settings";
+export type AppRoute =
+  | "today"
+  | "lesson"
+  | "stats"
+  | "profile"
+  | "settings";
 
 export interface AppShellProps {
   active: AppRoute;
@@ -22,11 +27,9 @@ export interface AppShellProps {
   onThemeChange: (theme: ThemeName) => void;
   skin: SkinName;
   onSkinChange: (skin: SkinName) => void;
+  navigationPosition: NavigationPosition;
   onIellaActivate?: () => void;
   lessonAvailable?: boolean;
-  iellaMood?: IellaMood;
-  iellaSignal?: number;
-  onIellaReactive?: () => void;
 }
 
 interface NavItem {
@@ -48,11 +51,9 @@ export function AppShell({
   onThemeChange,
   skin,
   onSkinChange,
+  navigationPosition,
   onIellaActivate,
   lessonAvailable = false,
-  iellaMood = "idle",
-  iellaSignal = 0,
-  onIellaReactive,
 }: AppShellProps) {
   const { t } = useTranslation();
   const primaryItems: NavItem[] = [
@@ -65,10 +66,10 @@ export function AppShell({
     },
     { route: "stats", label: t("nav-stats"), glyph: "progress" },
   ];
-  const settingsItem: NavItem = {
-    route: "settings",
-    label: t("nav-settings"),
-    glyph: "settings",
+  const profileItem: NavItem = {
+    route: "profile",
+    label: t("nav-profile"),
+    glyph: "profile",
   };
 
   const navigate = (item: NavItem) => {
@@ -78,7 +79,7 @@ export function AppShell({
   };
 
   return (
-    <div className="studio-shell">
+    <div className="studio-shell" data-nav-position={navigationPosition}>
       <aside className="studio-sidebar" aria-label={t("nav-label")}>
         <div className="brand-lockup">
           <span className="brand-mark" aria-hidden="true">
@@ -102,23 +103,8 @@ export function AppShell({
           ))}
         </nav>
         <div className="sidebar-spacer" />
-        <div className="side-nav-utility">
-          <div className="nav-divider" aria-hidden="true" />
-          <button
-            type="button"
-            className={`nav-item${active === settingsItem.route ? " active" : ""}`}
-            aria-current={active === settingsItem.route ? "page" : undefined}
-            onClick={() => navigate(settingsItem)}
-          >
-            <StudioIcon name={settingsItem.glyph} />
-            <span>{settingsItem.label}</span>
-          </button>
-        </div>
-        <div
-          className="iella-card"
-          data-iella-perch="sidebar"
-          data-iella-route="app"
-        >
+        <div className="iella-card">
+          <IellaSprite size={36} className="iella-card-sprite" />
           <span className="iella-card-copy">
             <span className="iella-card-kicker">{t("iella-companion")}</span>
             <strong>{t("iella-name")}</strong>
@@ -134,24 +120,34 @@ export function AppShell({
             </button>
           ) : null}
         </div>
-        <div className="learner-chip">
-          <span className="learner-avatar">{learnerLabel.slice(0, 1)}</span>
-          <span className="learner-copy">
-            <strong>{learnerLabel}</strong>
-            <span>{t("profile-local-learner")}</span>
-          </span>
+        <div className="learner-dock">
+          <button
+            type="button"
+            className={`learner-profile-button${active === "profile" ? " active" : ""}`}
+            aria-current={active === "profile" ? "page" : undefined}
+            onClick={() => onNavigate("profile")}
+          >
+            <span className="learner-avatar">{learnerLabel.slice(0, 1)}</span>
+            <span className="learner-copy">
+              <strong>{learnerLabel}</strong>
+              <span>{t("profile-local-learner")}</span>
+            </span>
+          </button>
+          <button
+            type="button"
+            className={`learner-settings-button${active === "settings" ? " active" : ""}`}
+            aria-label={t("nav-settings")}
+            aria-current={active === "settings" ? "page" : undefined}
+            onClick={() => onNavigate("settings")}
+          >
+            <StudioIcon name="gear" size={18} />
+          </button>
         </div>
       </aside>
 
       <div className="studio-main">
         <header className="studio-topbar">
           <div className="mobile-brand">
-            <span
-              className="iella-anchor iella-anchor-mobile"
-              data-iella-perch="mobile-brand"
-              data-iella-route="app"
-              aria-hidden="true"
-            />
             <span className="brand-mark" aria-hidden="true">
               r
             </span>
@@ -173,21 +169,20 @@ export function AppShell({
                 </button>
               ))}
             </div>
+            <button
+              type="button"
+              className={`topbar-settings${active === "settings" ? " active" : ""}`}
+              aria-label={t("nav-settings")}
+              aria-current={active === "settings" ? "page" : undefined}
+              onClick={() => onNavigate("settings")}
+            >
+              <StudioIcon name="gear" size={18} />
+            </button>
             <AppearanceMenu
               theme={theme}
               skin={skin}
-              onThemeChange={(next) => {
-                if (next !== theme) {
-                  onIellaReactive?.();
-                }
-                onThemeChange(next);
-              }}
-              onSkinChange={(next) => {
-                if (next !== skin) {
-                  onIellaReactive?.();
-                }
-                onSkinChange(next);
-              }}
+              onThemeChange={onThemeChange}
+              onSkinChange={onSkinChange}
             />
           </div>
         </header>
@@ -195,7 +190,7 @@ export function AppShell({
       </div>
 
       <nav className="mobile-nav" aria-label={t("nav-label")}>
-        {[...primaryItems, settingsItem].map((item) => (
+        {[...primaryItems, profileItem].map((item) => (
           <button
             key={item.route}
             type="button"
@@ -209,12 +204,6 @@ export function AppShell({
           </button>
         ))}
       </nav>
-      <IellaCompanion
-        activeRoute={active}
-        mood={iellaMood}
-        signal={iellaSignal}
-        onActivate={onIellaActivate}
-      />
     </div>
   );
 }

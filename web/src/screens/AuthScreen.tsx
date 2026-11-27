@@ -203,7 +203,7 @@ export function AuthScreen({
     async (payload: TelegramLoginPayload) => {
       setBusy(true);
       setError(null);
-      setIellaMood("flying");
+      setIellaMood("curious");
       try {
         const response = await api.telegramLogin(
           payload,
@@ -312,7 +312,7 @@ export function AuthScreen({
     }
     setBusy(true);
     setError(null);
-    setIellaMood("flying");
+    setIellaMood("curious");
     try {
       const response = await api.verifyCode(
         email.trim(),
@@ -413,7 +413,7 @@ export function AuthScreen({
   };
 
   return (
-    <div className="auth-screen">
+    <div className="auth-screen" data-skin={skin}>
       {confirmation ? (
         <div className="auth-success" role="status" aria-live="polite">
           <svg
@@ -573,7 +573,7 @@ export function AuthScreen({
       </section>
 
       <section className="auth-visual" aria-label={t("auth-welcome")}>
-        <AuthBackdrop theme={theme} skin={skin} />
+        <AuthBackdrop />
         <div className="auth-studio-grain" aria-hidden="true" />
         <div className="auth-visual-copy">
           <h1>{t("auth-welcome-title")}</h1>

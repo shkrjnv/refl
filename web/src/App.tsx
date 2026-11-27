@@ -6,7 +6,6 @@ import {
   type AuthTokens,
 } from "./api/client";
 import { AppShell, type AppRoute } from "./components/AppShell";
-import type { IellaMood } from "./components/IellaSprite";
 import { Button, Card } from "./components/ui";
 import {
   LearnerStorage,
@@ -18,10 +17,23 @@ import { LessonRunner, type LessonSummary, type LessonView } from "./prototype/l
 import { loadPrototypeContent } from "./prototype/load";
 import { isTourComplete, resetTour } from "./prototype/onboarding";
 import { PrototypeContent } from "./prototype/content";
+import {
+  activitySummary,
+  type ActivitySummary,
+} from "./prototype/activity";
+import {
+  normalizeLayout,
+  readLayout,
+  resetLayout,
+  storeLayout,
+  type DashboardLayout,
+  type NavigationPosition,
+} from "./prototype/layout";
 import { initialStatus, type AppStatus } from "./prototype/status";
 import { noteActiveDay, readStreak } from "./prototype/streak";
 import { AuthGate } from "./screens/AuthGate";
 import { LessonScreen } from "./screens/LessonScreen";
+import { ProfileScreen } from "./screens/ProfileScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
 import { StatsScreen } from "./screens/StatsScreen";
 import { SummaryScreen } from "./screens/SummaryScreen";
@@ -84,8 +96,10 @@ export function App({ initialTheme, initialSkin }: AppProps) {
   const [summary, setSummary] = useState<LessonSummary | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [streak, setStreak] = useState(() => readStreak());
-  const [iellaMood, setIellaMood] = useState<IellaMood>("perched");
-  const [iellaSignal, setIellaSignal] = useState(0);
+  const [layout, setLayout] = useState<DashboardLayout>(() => readLayout());
+  const [activity, setActivity] = useState<ActivitySummary>(() =>
+    activitySummary([], null),
+  );
   const skinRef = useRef<SkinName>(skin);
   skinRef.current = skin;
   const appearanceDirtyRef = useRef(false);
@@ -109,11 +123,6 @@ export function App({ initialTheme, initialSkin }: AppProps) {
     });
   }
   const api = apiRef.current;
-
-  const triggerIella = (mood: IellaMood) => {
-    setIellaMood(mood);
-    setIellaSignal((value) => value + 1);
-  };
 
   useEffect(() => {
     const core = new CoreWorkerClient();
@@ -148,8 +157,26 @@ export function App({ initialTheme, initialSkin }: AppProps) {
   const refreshLocalState = async (store: LearnerStorage) => {
     const snapshot = await store.getSnapshot();
     setStateJson(snapshot?.state_json ?? null);
-    const outbox = await store.listOutbox();
+    const [outbox, events] = await Promise.all([
+      store.listOutbox(),
+      store.listEvents(),
+    ]);
     setRejected(outbox.filter((event) => event.status === "rejected"));
+    setActivity(
+      activitySummary(
+        [
+          ...events.map((record) => ({
+            event_id: record.event_id,
+            event: record.event,
+          })),
+          ...outbox.map((record) => ({
+            event_id: record.event_id,
+            event: record.event,
+          })),
+        ],
+        snapshot?.state_json ?? null,
+      ),
+    );
     setStatus((current) => ({
       ...current,
       pendingOutbox: outbox.filter((event) => event.status === "pending").length,
@@ -258,7 +285,6 @@ export function App({ initialTheme, initialSkin }: AppProps) {
       return;
     }
     setActionError(null);
-    triggerIella("curious");
     try {
       const lesson = new LessonRunner({
         storage: store,
@@ -273,7 +299,6 @@ export function App({ initialTheme, initialSkin }: AppProps) {
       setLessonView(view);
       setRoute("lesson");
       setTourOpen(false);
-      triggerIella("flying");
     } catch {
       setActionError(t("lesson-start-failed"));
     }
@@ -319,7 +344,6 @@ export function App({ initialTheme, initialSkin }: AppProps) {
   };
 
   const handleLessonComplete = (result: LessonSummary) => {
-    triggerIella("proud");
     setStreak(noteActiveDay());
     setSummary(result);
     setRunner(null);
@@ -364,14 +388,26 @@ export function App({ initialTheme, initialSkin }: AppProps) {
     setIsAdmin(false);
     setRoute("today");
     setStatus(initialStatus(true));
-    setIellaMood("perched");
-    setIellaSignal((value) => value + 1);
   };
 
   const changeTheme = (next: ThemeName) => {
     setTheme(next);
     storeTheme(next);
     applyTheme(next);
+  };
+
+  const changeLayout = (next: DashboardLayout) => {
+    const normalized = normalizeLayout(next);
+    setLayout(normalized);
+    storeLayout(normalized);
+  };
+
+  const changeNavigation = (next: NavigationPosition) => {
+    changeLayout({ ...layout, nav: next });
+  };
+
+  const resetDashboardLayout = () => {
+    setLayout(resetLayout());
   };
 
   const changeAuthTheme = (next: ThemeName) => {
@@ -474,8 +510,6 @@ export function App({ initialTheme, initialSkin }: AppProps) {
     setIsAdmin(false);
     setRoute("today");
     setStatus(initialStatus(true));
-    setIellaMood("perched");
-    setIellaSignal((value) => value + 1);
   };
 
   const replayTour = () => {
@@ -535,9 +569,6 @@ export function App({ initialTheme, initialSkin }: AppProps) {
       active={activeRoute}
       onNavigate={(next) => {
         if (next !== "lesson") {
-          if (next !== route) {
-            triggerIella("flying");
-          }
           setRoute(next);
         }
       }}
@@ -549,11 +580,9 @@ export function App({ initialTheme, initialSkin }: AppProps) {
       onThemeChange={changeTheme}
       skin={skin}
       onSkinChange={changeSkin}
+      navigationPosition={layout.nav}
       onIellaActivate={replayTour}
-      onIellaReactive={() => triggerIella("curious")}
       lessonAvailable={runner !== null}
-      iellaMood={iellaMood}
-      iellaSignal={iellaSignal}
     >
       {actionError ? (
         <p className="inline-alert danger" role="alert">
@@ -567,6 +596,10 @@ export function App({ initialTheme, initialSkin }: AppProps) {
           learnerLabel={learnerLabel}
           streak={streak}
           status={status}
+          activity={activity}
+          layout={layout}
+          onLayoutChange={changeLayout}
+          onResetLayout={resetDashboardLayout}
           onStart={() => void startLesson()}
           onOpenStats={() => setRoute("stats")}
           tourOpen={tourOpen}
@@ -579,7 +612,6 @@ export function App({ initialTheme, initialSkin }: AppProps) {
           initialView={lessonView}
           onViewChange={setLessonView}
           onComplete={handleLessonComplete}
-          onMood={triggerIella}
           onExit={() => {
             setRoute("today");
             setRunner(null);
@@ -596,7 +628,6 @@ export function App({ initialTheme, initialSkin }: AppProps) {
         <SummaryScreen
           summary={summary}
           onDone={() => {
-            triggerIella("proud");
             setRoute("today");
             const store = storageRef.current;
             if (store) {
@@ -609,10 +640,21 @@ export function App({ initialTheme, initialSkin }: AppProps) {
       {route === "stats" ? (
         <StatsScreen content={content} stateJson={stateJson} />
       ) : null}
+      {route === "profile" ? (
+        <ProfileScreen
+          learnerLabel={learnerLabel}
+          learnerId={identity.learnerId}
+          authMethod={identity.method}
+          content={content}
+          stateJson={stateJson}
+          streak={streak}
+          isAdmin={isAdmin}
+          onOpenSettings={() => setRoute("settings")}
+          onLogout={() => void handleLogout()}
+        />
+      ) : null}
       {route === "settings" ? (
         <SettingsScreen
-          learnerLabel={learnerLabel}
-          authMethod={identity.method}
           locale={locale}
           locales={locales}
           onLocaleChange={setLocale}
@@ -620,10 +662,10 @@ export function App({ initialTheme, initialSkin }: AppProps) {
           onThemeChange={changeTheme}
           skin={skin}
           onSkinChange={changeSkin}
-          onReplayTour={replayTour}
+          navigationPosition={layout.nav}
+          onNavigationPositionChange={changeNavigation}
           status={status}
           rejected={rejected}
-          onLogout={() => void handleLogout()}
           onExportCache={exportLocalCache}
           onResetCache={resetLocalCache}
           isAdmin={isAdmin}

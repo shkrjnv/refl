@@ -920,3 +920,308 @@
   --preview-accent: #0b7d82;
   --preview-border: #9bbfbe;
 }
+
+/* ==========================================================================
+   Color palettes are an independent axis from layout skins.
+   Skin blocks above keep geometry, borders and elevation shapes. These blocks
+   intentionally come last and match [data-theme] so a palette always wins the
+   color tokens, whichever skin is active.
+   ========================================================================== */
+
+:root {
+  --thermal-amber: #FFB25C;
+  --thermal-coral: #FF4D8D;
+  --thermal-morpho: #4D74FF;
+  --thermal-teal: #0B7E78;
+  --thermal-plum: #8A63E8;
+  --felt-texture: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cfilter id='felt'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.72' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='.55'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23felt)' opacity='.7'/%3E%3C/svg%3E");
+  --palette-swatch-bg: #161210;
+  --palette-swatch-surface: #201A17;
+  --palette-swatch-accent: #2B9AF3;
+  --palette-swatch-alt: #D99B52;
+}
+
+:root[data-palette="deep-umber"][data-theme] {
+  --bg: #161210;
+  --surface: #201A17;
+  --surface-raised: #28211D;
+  --surface-muted: #2E2621;
+  --border: #45382E;
+  --border-strong: #6A5644;
+  --text: #EFE6D5;
+  --text-muted: #B7A892;
+  --blue: #2B9AF3;
+  --sun: #D99B52;
+  --green: #4CC9A0;
+  --coral: #FF7A9E;
+  --purp: #8E7DFF;
+  --blue-deep: #1E79C4;
+  --sun-deep: #A96F2F;
+  --green-deep: #2E9C7A;
+  --coral-deep: #C34661;
+  --purp-deep: #6252B5;
+  --focus-ring: #4DB2FF;
+  --micro-accent: #D99B52;
+  --shadow-button: 0 4px 0 #0B0908;
+  --shadow-primary: 0 4px 0 #1E79C4;
+  --shadow-card: 0 6px 0 #0B0908;
+  --shadow-hero: 0 8px 0 #0B0908;
+  --shadow-soft: 0 18px 45px rgba(0, 0, 0, 0.4);
+  --overlay: rgba(0, 0, 0, 0.66);
+  --info-surface: #1B2C3B;
+  --info-border: #2E526D;
+  --warning-surface: #332717;
+  --warning-border: #5D4622;
+  --success-surface: #17332B;
+  --success-border: #2D5D4D;
+  --danger-surface: #351F25;
+  --danger-border: #66343F;
+  --iella-ink: #24346A;
+  --iella-beak: #E0773C;
+  --iella-cream: #F3E3C3;
+  --iella-brown: #8B5A2B;
+  --iella-eye: #0E1020;
+  --hero-text: #FAF4E8;
+  --hero-muted: rgba(250, 244, 232, 0.84);
+  --auth-panel: #221A16;
+  --auth-panel-text: #EFE6D5;
+  --auth-panel-muted: #CDBCA3;
+  --auth-scrim: rgba(8, 5, 4, 0.64);
+  --auth-illustration-opacity: 0.82;
+  --palette-swatch-bg: #161210;
+  --palette-swatch-surface: #201A17;
+  --palette-swatch-accent: #2B9AF3;
+  --palette-swatch-alt: #D99B52;
+}
+
+:root[data-palette="cream-paper"][data-theme] {
+  --bg: #FAF4E8;
+  --surface: #FFFDF8;
+  --surface-raised: #FFFDF8;
+  --surface-muted: #F2E8D5;
+  --border: #DCCFB8;
+  --border-strong: #C4B298;
+  --text: #1D2424;
+  --text-muted: #5F665F;
+  --blue: #0D7A78;
+  --sun: #D99B52;
+  --green: #2F8B72;
+  --coral: #FF2E7E;
+  --purp: #6C63B5;
+  --blue-deep: #085E5C;
+  --sun-deep: #A96F2F;
+  --green-deep: #1F6B57;
+  --coral-deep: #C00058;
+  --purp-deep: #4E478F;
+  --focus-ring: #0D7A78;
+  --micro-accent: #FF2E7E;
+  --shadow-button: 0 4px 0 #DCCFB8;
+  --shadow-primary: 0 4px 0 #085E5C;
+  --shadow-card: 0 6px 0 #E6DAC4;
+  --shadow-hero: 0 8px 0 #C4B298;
+  --shadow-soft: 0 18px 45px rgba(29, 36, 36, 0.12);
+  --overlay: rgba(29, 36, 36, 0.42);
+  --info-surface: #E5F0EE;
+  --info-border: #B8DAD5;
+  --warning-surface: #F7EAD7;
+  --warning-border: #E3C79E;
+  --success-surface: #E3F1EA;
+  --success-border: #B7D8C7;
+  --danger-surface: #FFE6EF;
+  --danger-border: #F4B8CE;
+  --iella-ink: #24346A;
+  --iella-beak: #E0773C;
+  --iella-cream: #F3E3C3;
+  --iella-brown: #8B5A2B;
+  --iella-eye: #0E1020;
+  --hero-text: #FAF4E8;
+  --hero-muted: rgba(250, 244, 232, 0.84);
+  --auth-panel: #F0E4CF;
+  --auth-panel-text: #24342F;
+  --auth-panel-muted: #5E6E63;
+  --auth-scrim: rgba(23, 39, 35, 0.48);
+  --auth-illustration-opacity: 0.9;
+  --palette-swatch-bg: #FAF4E8;
+  --palette-swatch-surface: #FFFDF8;
+  --palette-swatch-accent: #0D7A78;
+  --palette-swatch-alt: #FF2E7E;
+}
+
+:root[data-palette="sand-forest"][data-theme] {
+  --bg: #F3E6CD;
+  --surface: #FFF9ED;
+  --surface-raised: #FFFDF8;
+  --surface-muted: #EADBBD;
+  --border: #C9B58C;
+  --border-strong: #183A2E;
+  --text: #183A2E;
+  --text-muted: #576958;
+  --blue: #1F5C48;
+  --sun: #E7A438;
+  --green: #2F7D5A;
+  --coral: #C5543F;
+  --purp: #6F528C;
+  --blue-deep: #113C2E;
+  --sun-deep: #8F5A0A;
+  --green-deep: #1B5B3F;
+  --coral-deep: #8A3025;
+  --purp-deep: #4E3666;
+  --focus-ring: #1F5C48;
+  --micro-accent: #E7A438;
+  --shadow-button: 0 4px 0 #183A2E;
+  --shadow-primary: 0 4px 0 #113C2E;
+  --shadow-card: 0 6px 0 #183A2E;
+  --shadow-hero: 0 8px 0 #183A2E;
+  --shadow-soft: 8px 8px 0 rgba(24, 58, 46, 0.18);
+  --overlay: rgba(18, 42, 32, 0.52);
+  --info-surface: #E4F0E7;
+  --info-border: #ABC9B8;
+  --warning-surface: #FBE8C9;
+  --warning-border: #D8AA62;
+  --success-surface: #DFEEE3;
+  --success-border: #A7C8B3;
+  --danger-surface: #F8DDD7;
+  --danger-border: #D39A8D;
+  --iella-ink: #24346A;
+  --iella-beak: #E0773C;
+  --iella-cream: #F3E3C3;
+  --iella-brown: #8B5A2B;
+  --iella-eye: #0E1020;
+  --hero-text: #FAF4E8;
+  --hero-muted: rgba(250, 244, 232, 0.84);
+  --auth-panel: #EAD9B9;
+  --auth-panel-text: #183A2E;
+  --auth-panel-muted: #5C6A50;
+  --auth-scrim: rgba(24, 58, 46, 0.52);
+  --auth-illustration-opacity: 0.86;
+  --palette-swatch-bg: #F3E6CD;
+  --palette-swatch-surface: #FFF9ED;
+  --palette-swatch-accent: #1F5C48;
+  --palette-swatch-alt: #E7A438;
+}
+
+:root[data-palette="midnight-cobalt"][data-theme] {
+  --bg: #0D1524;
+  --surface: #141F33;
+  --surface-raised: #1A2942;
+  --surface-muted: #21324E;
+  --border: #2A3E60;
+  --border-strong: #405B87;
+  --text: #E9EEF9;
+  --text-muted: #A8B6CF;
+  --blue: #3D6BFF;
+  --sun: #E9B45E;
+  --green: #50C9A4;
+  --coral: #FF7F94;
+  --purp: #9B87FF;
+  --blue-deep: #2A4FD1;
+  --sun-deep: #B07A28;
+  --green-deep: #2D9C7C;
+  --coral-deep: #C04D62;
+  --purp-deep: #6D59C9;
+  --focus-ring: #6E92FF;
+  --micro-accent: #E9B45E;
+  --shadow-button: 0 4px 0 #070C15;
+  --shadow-primary: 0 4px 0 #2A4FD1;
+  --shadow-card: 0 6px 0 #070C15;
+  --shadow-hero: 0 8px 0 #070C15;
+  --shadow-soft: 0 20px 48px rgba(0, 0, 0, 0.44);
+  --overlay: rgba(0, 4, 12, 0.68);
+  --info-surface: #162B47;
+  --info-border: #2C4F7A;
+  --warning-surface: #332714;
+  --warning-border: #635024;
+  --success-surface: #13352C;
+  --success-border: #2A6454;
+  --danger-surface: #371E29;
+  --danger-border: #6C3546;
+  --iella-ink: #24346A;
+  --iella-beak: #E0773C;
+  --iella-cream: #F3E3C3;
+  --iella-brown: #8B5A2B;
+  --iella-eye: #0E1020;
+  --hero-text: #F4F7FF;
+  --hero-muted: rgba(233, 238, 249, 0.84);
+  --auth-panel: #111E35;
+  --auth-panel-text: #E9EEF9;
+  --auth-panel-muted: #B7C6E2;
+  --auth-scrim: rgba(3, 8, 18, 0.64);
+  --auth-illustration-opacity: 0.82;
+  --palette-swatch-bg: #0D1524;
+  --palette-swatch-surface: #141F33;
+  --palette-swatch-accent: #3D6BFF;
+  --palette-swatch-alt: #E9B45E;
+}
+
+/* Static palette swatches and previews (independent of the active palette). */
+
+.palette-swatch-deep-umber,
+.palette-preview-deep-umber {
+  --swatch-bg: #161210;
+  --swatch-surface: #201A17;
+  --swatch-accent: #2B9AF3;
+  --swatch-alt: #D99B52;
+}
+
+.palette-swatch-cream-paper,
+.palette-preview-cream-paper {
+  --swatch-bg: #FAF4E8;
+  --swatch-surface: #FFFDF8;
+  --swatch-accent: #0D7A78;
+  --swatch-alt: #FF2E7E;
+}
+
+.palette-swatch-sand-forest,
+.palette-preview-sand-forest {
+  --swatch-bg: #F3E6CD;
+  --swatch-surface: #FFF9ED;
+  --swatch-accent: #1F5C48;
+  --swatch-alt: #E7A438;
+}
+
+.palette-swatch-midnight-cobalt,
+.palette-preview-midnight-cobalt {
+  --swatch-bg: #0D1524;
+  --swatch-surface: #141F33;
+  --swatch-accent: #3D6BFF;
+  --swatch-alt: #E9B45E;
+}
+
+.palette-swatch {
+  position: relative;
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background:
+    linear-gradient(135deg, var(--swatch-accent) 0 48%, transparent 48%),
+    var(--swatch-bg);
+}
+
+.palette-swatch::after {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--swatch-alt);
+  content: "";
+}
+
+.palette-dot {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  flex: none;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: linear-gradient(
+    135deg,
+    var(--swatch-accent) 0 50%,
+    var(--swatch-bg) 50%
+  );
+}

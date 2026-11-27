@@ -1,39 +1,41 @@
 import { useState } from "react";
 
 import type { ApiClient } from "../api/client";
-import { PaletteToggle } from "../components/AppearanceMenu";
-import { IellaSprite } from "../components/IellaSprite";
 import { StudioIcon, type StudioIconName } from "../components/StudioIcons";
 import { Badge, Button, Card } from "../components/ui";
 import type { OutboxRecord } from "../db/storage";
 import type { Locale } from "../i18n";
 import { useTranslation } from "../i18n";
+import type {
+  NavigationPosition,
+} from "../prototype/layout";
 import type { AppStatus } from "../prototype/status";
 import {
+  paletteLabelKeys,
+  paletteNames,
+  paletteNoteKeys,
   skinDescriptionKeys,
   skinLabelKeys,
   skinNames,
+  type PaletteName,
   type SkinName,
-  type ThemeName,
 } from "../theme/tokens";
 import { AdminAccessSection } from "./AdminAccessSection";
 
-export type SettingsTab = "appearance" | "account" | "offline" | "admin";
+export type SettingsTab = "appearance" | "language" | "offline" | "admin";
 
 export interface SettingsScreenProps {
-  learnerLabel: string;
-  authMethod: "email" | "telegram";
   locale: Locale;
   locales: readonly Locale[];
   onLocaleChange: (locale: Locale) => void;
-  theme: ThemeName;
-  onThemeChange: (theme: ThemeName) => void;
+  theme: PaletteName;
+  onThemeChange: (theme: PaletteName) => void;
   skin: SkinName;
   onSkinChange: (skin: SkinName) => void;
-  onReplayTour: () => void;
+  navigationPosition: NavigationPosition;
+  onNavigationPositionChange: (position: NavigationPosition) => void;
   status: AppStatus;
   rejected: OutboxRecord[];
-  onLogout: () => void;
   onExportCache: () => Promise<void>;
   onResetCache: () => Promise<void>;
   isAdmin: boolean;
@@ -42,6 +44,12 @@ export interface SettingsScreenProps {
 
 interface SettingsTabItem {
   id: SettingsTab;
+  labelKey: string;
+  icon: StudioIconName;
+}
+
+interface NavigationOption {
+  id: NavigationPosition;
   labelKey: string;
   icon: StudioIconName;
 }
@@ -60,8 +68,6 @@ function persistenceKey(status: AppStatus): string {
 }
 
 export function SettingsScreen({
-  learnerLabel,
-  authMethod,
   locale,
   locales,
   onLocaleChange,
@@ -69,10 +75,10 @@ export function SettingsScreen({
   onThemeChange,
   skin,
   onSkinChange,
-  onReplayTour,
+  navigationPosition,
+  onNavigationPositionChange,
   status,
   rejected,
-  onLogout,
   onExportCache,
   onResetCache,
   isAdmin,
@@ -84,16 +90,35 @@ export function SettingsScreen({
   const [dataNotice, setDataNotice] = useState<string | null>(null);
   const [dataError, setDataError] = useState<string | null>(null);
   const tabs: SettingsTabItem[] = [
-    {
-      id: "appearance",
-      labelKey: "settings-tab-appearance",
-      icon: "palette",
-    },
-    { id: "account", labelKey: "settings-tab-account", icon: "today" },
+    { id: "appearance", labelKey: "settings-tab-appearance", icon: "palette" },
+    { id: "language", labelKey: "settings-tab-language", icon: "spark" },
     { id: "offline", labelKey: "settings-tab-offline", icon: "offline" },
     ...(isAdmin
-      ? [{ id: "admin" as const, labelKey: "settings-tab-admin", icon: "settings" as const }]
+      ? [
+          {
+            id: "admin" as const,
+            labelKey: "settings-tab-admin",
+            icon: "settings" as const,
+          },
+        ]
       : []),
+  ];
+  const navigationOptions: NavigationOption[] = [
+    {
+      id: "left",
+      labelKey: "settings-navigation-left",
+      icon: "arrow-left",
+    },
+    {
+      id: "right",
+      labelKey: "settings-navigation-right",
+      icon: "arrow-right",
+    },
+    {
+      id: "bottom",
+      labelKey: "settings-navigation-bottom",
+      icon: "arrow-down",
+    },
   ];
 
   const exportCache = async () => {
@@ -124,27 +149,12 @@ export function SettingsScreen({
     setDataError(null);
   };
 
-  const methodRow = (
-    kind: "email" | "telegram",
-    labelKey: string,
-  ) => {
-    const linked = authMethod === kind;
-    return (
-      <div className="method-row" key={kind}>
-        <span>{t(labelKey)}</span>
-        <Badge tone={linked ? "green" : "neutral"}>
-          {linked ? t("settings-linked") : t("settings-not-linked")}
-        </Badge>
-      </div>
-    );
-  };
-
   return (
-    <div className="profile-screen">
+    <div className="profile-screen settings-screen">
       <header className="page-heading">
         <div>
-          <p className="eyebrow">{t("profile-eyebrow")}</p>
-          <h1>{t("profile-title")}</h1>
+          <p className="eyebrow">{t("settings-eyebrow")}</p>
+          <h1>{t("settings-title")}</h1>
         </div>
         <Badge tone="green">{t("profile-local")}</Badge>
       </header>
@@ -177,11 +187,43 @@ export function SettingsScreen({
           <div className="settings-panel-heading">
             <div>
               <h2>{t("profile-appearance")}</h2>
-              <p>{t("profile-skin-note")}</p>
+              <p>{t("profile-palette-note")}</p>
             </div>
-            <PaletteToggle theme={theme} onThemeChange={onThemeChange} />
           </div>
 
+          <div className="palette-options" role="group" aria-label={t("app-palette")}>
+            {paletteNames.map((candidate) => (
+              <button
+                key={candidate}
+                type="button"
+                className={`palette-option${theme === candidate ? " selected" : ""}`}
+                aria-pressed={theme === candidate}
+                onClick={() => onThemeChange(candidate)}
+              >
+                <span
+                  className={`palette-preview palette-preview-${candidate}`}
+                  aria-hidden="true"
+                >
+                  <span />
+                  <span />
+                </span>
+                <span className="skin-option-copy">
+                  <strong>{t(paletteLabelKeys[candidate])}</strong>
+                  <span>{t(paletteNoteKeys[candidate])}</span>
+                </span>
+                {theme === candidate ? (
+                  <StudioIcon name="check" size={16} className="appearance-check" />
+                ) : null}
+              </button>
+            ))}
+          </div>
+
+          <div className="settings-panel-heading settings-panel-heading-spaced">
+            <div>
+              <h2>{t("profile-skin")}</h2>
+              <p>{t("profile-skin-note")}</p>
+            </div>
+          </div>
           <div className="skin-options skin-options-wide">
             {skinNames.map((candidate) => (
               <button
@@ -207,7 +249,36 @@ export function SettingsScreen({
           </div>
 
           <Card tone="plain" className="settings-card">
+            <h2>{t("settings-navigation-title")}</h2>
+            <p className="settings-note">{t("settings-navigation-note")}</p>
+            <div className="navigation-options" role="group" aria-label={t("settings-navigation-title")}>
+              {navigationOptions.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  className={`navigation-option${navigationPosition === option.id ? " selected" : ""}`}
+                  aria-pressed={navigationPosition === option.id}
+                  onClick={() => onNavigationPositionChange(option.id)}
+                >
+                  <StudioIcon name={option.icon} size={17} />
+                  <span>{t(option.labelKey)}</span>
+                </button>
+              ))}
+            </div>
+          </Card>
+        </div>
+      ) : null}
+
+      {tab === "language" ? (
+        <div
+          className="settings-panel"
+          id="settings-panel-language"
+          role="tabpanel"
+          aria-labelledby="settings-tab-language"
+        >
+          <Card tone="plain" className="settings-card">
             <h2>{t("app-language")}</h2>
+            <p className="settings-note">{t("settings-language-note")}</p>
             <div className="settings-options">
               {locales.map((candidate) => (
                 <Button
@@ -221,76 +292,6 @@ export function SettingsScreen({
                 </Button>
               ))}
             </div>
-          </Card>
-        </div>
-      ) : null}
-
-      {tab === "account" ? (
-        <div
-          className="settings-panel"
-          id="settings-panel-account"
-          role="tabpanel"
-          aria-labelledby="settings-tab-account"
-        >
-          <Card tone="hero" raised className="profile-hero settings-identity">
-            <div className="profile-avatar">
-              <IellaSprite size={64} mood="perched" />
-            </div>
-            <div className="profile-copy">
-              <h2>{learnerLabel}</h2>
-              <p>{t("profile-body")}</p>
-            </div>
-            <div className="profile-auth">
-              <span>{t("profile-local")}</span>
-              <strong>{t("settings-account-title")}</strong>
-            </div>
-          </Card>
-
-          <div className="settings-two-column">
-            <Card tone="plain" className="settings-card">
-              <h2>{t("settings-account-title")}</h2>
-              <div className="method-list">
-                {methodRow("email", "settings-method-email")}
-                {methodRow("telegram", "settings-method-telegram")}
-              </div>
-              <p className="settings-note">{t("settings-method-note")}</p>
-            </Card>
-
-            <Card tone="plain" className="settings-card">
-              <div className="settings-card-heading">
-                <h2>{t("profile-sync")}</h2>
-                <Badge tone={status.online ? "green" : "sun"}>
-                  {status.online ? t("sync-online") : t("sync-offline")}
-                </Badge>
-              </div>
-              <div className="diagnostics-grid">
-                <span>{t("sync-pending", { count: status.pendingOutbox })}</span>
-                <span>{t("sync-rejected", { count: status.rejectedOutbox })}</span>
-                {status.clockDrift ? (
-                  <span>{t("sync-clock-warning")}</span>
-                ) : null}
-              </div>
-            </Card>
-          </div>
-
-          <Card tone="plain" className="settings-card settings-split-card">
-            <div>
-              <h2>{t("profile-tour-title")}</h2>
-              <p className="settings-note">{t("profile-tour-body")}</p>
-            </div>
-            <Button type="button" variant="secondary" size="sm" onClick={onReplayTour}>
-              {t("profile-replay-tour")}
-            </Button>
-          </Card>
-
-          <Card tone="plain" className="settings-card settings-split-card">
-            <div>
-              <h2>{t("auth-sign-out")}</h2>
-              <p className="settings-note">{t("profile-logout-note")}</p>
-            </div>
-            <Button type="button" variant="danger" onClick={onLogout}>
-              {t("auth-sign-out")}
-            </Button>
           </Card>
         </div>
       ) : null}

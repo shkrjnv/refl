@@ -15,6 +15,7 @@ afterEach(() => {
   window.localStorage.clear();
   window.history.replaceState({}, "", "/");
   document.documentElement.removeAttribute("data-theme");
+  document.documentElement.removeAttribute("data-palette");
   document.documentElement.style.removeProperty("color-scheme");
 });
 
@@ -57,7 +58,7 @@ describe("auth and access flow", () => {
         <AuthGate
           api={api}
           inviteCode="INVITE-42"
-          theme="dark"
+          theme="deep-umber"
           skin="living-studio"
           onThemeChange={() => undefined}
           onAuthenticated={(tokens) => {
@@ -127,7 +128,7 @@ describe("auth and access flow", () => {
         <AuthGate
           api={api}
           inviteCode="INVITE-42"
-          theme="dark"
+          theme="deep-umber"
           skin="living-studio"
           onThemeChange={() => undefined}
           onAuthenticated={(tokens) => {
@@ -144,9 +145,9 @@ describe("auth and access flow", () => {
   });
 
   it("persists the palette chosen before sign-in", () => {
-    let selected: ThemeName = "dark";
+    let selected: ThemeName = "deep-umber";
     function Harness() {
-      const [theme, setTheme] = useState<ThemeName>("dark");
+      const [theme, setTheme] = useState<ThemeName>("deep-umber");
       return (
         <I18nProvider initialLocale="en">
           <AuthGate
@@ -180,10 +181,12 @@ describe("auth and access flow", () => {
       );
     }
     render(<Harness />);
-    fireEvent.click(screen.getByRole("button", { name: "Day" }));
-    expect(selected).toBe("light");
-    expect(window.localStorage.getItem("refl.theme")).toBe("light");
-    expect(document.documentElement.dataset.theme).toBe("light");
+    fireEvent.click(screen.getByRole("button", { name: "Cream Paper" }));
+    expect(selected).toBe("cream-paper");
+    expect(window.localStorage.getItem("refl.theme")).toBe("cream-paper");
+    expect(window.localStorage.getItem("refl.palette")).toBe("cream-paper");
+    expect(document.documentElement.dataset["palette"]).toBe("cream-paper");
+    expect(document.documentElement.dataset["theme"]).toBe("light");
   });
 
   it("shows the confirmation check before entering the app", async () => {
@@ -208,7 +211,7 @@ describe("auth and access flow", () => {
         <AuthGate
           api={api}
           inviteCode={null}
-          theme="dark"
+          theme="deep-umber"
           skin="living-studio"
           onThemeChange={() => undefined}
           onAuthenticated={(tokens) => {
