@@ -2054,6 +2054,47 @@ fn another_learning_kc_is_a_valid_alternative_to_a_run_limit() {
 }
 
 #[test]
+fn run_limit_is_cleared_by_a_later_accepted_step_removed_by_starvation() {
+    let b = bundle(2, 40, &[]);
+    let model = KnowledgeModel::default();
+    let params = Params::default();
+    let planner = planner(&model, &b, &params);
+    let now = Timestamp(refl_sim::T0.0);
+    let mut plan = run_limit_plan(now, params.max_run, Vec::new());
+    add_learn(&mut plan, &kc_id(1));
+    plan.done.push(Done {
+        step: step(&kc_id(1), Phase::Block, false, 10),
+        shown: None,
+        rule: Some(Rule::BlockClosed),
+    });
+
+    let mut s = State::new(Profile::default());
+    s.kcs.insert(
+        kc_id(0),
+        KcState {
+            mu: 5.0,
+            var: 0.1,
+            var_at: now,
+            observations: 5,
+            card: None,
+            tau: 0.0,
+            counted: 0,
+            residuals: Vec::new(),
+            production: Vec::new(),
+            ever_mastered: false,
+        },
+    );
+    let adapted = start_run_limit(&planner, &s, &plan, now);
+
+    // k0 is run-limited, then k1 is accepted without production and is
+    // removed by finish. The accepted k1 step must clear the stale RunLimit.
+    assert_eq!(adapted.plan.steps, Vec::<Step>::new());
+    assert_eq!(adapted.plan.end, Some(End::ItemsExhausted));
+    assert_ne!(adapted.plan.end, Some(End::RunLimit));
+    assert_ne!(adapted.plan.end, Some(End::Budget));
+}
+
+#[test]
 fn a_pending_review_without_an_unseen_item_is_not_an_alternative() {
     let b = bundle(1, 40, &[]);
     let model = KnowledgeModel::default();

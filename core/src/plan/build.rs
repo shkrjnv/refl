@@ -189,6 +189,10 @@ impl<'p, 'a> Builder<'p, 'a> {
         }
         self.extend_run(&step);
         self.steps.push(step);
+        // A real accepted step supersedes an earlier RunLimit rejection. If
+        // this step is later removed by finish, only finish's own removal
+        // evidence should remain.
+        self.run_limited = false;
         PushResult::Added
     }
 
