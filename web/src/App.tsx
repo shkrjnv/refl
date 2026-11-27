@@ -6,6 +6,7 @@ import {
   type AuthTokens,
 } from "./api/client";
 import { AppShell, type AppRoute } from "./components/AppShell";
+import type { IellaMood } from "./components/IellaSprite";
 import { Button, Card } from "./components/ui";
 import {
   LearnerStorage,
@@ -18,6 +19,7 @@ import { loadPrototypeContent } from "./prototype/load";
 import { isTourComplete, resetTour } from "./prototype/onboarding";
 import { PrototypeContent } from "./prototype/content";
 import { initialStatus, type AppStatus } from "./prototype/status";
+import { noteActiveDay, readStreak } from "./prototype/streak";
 import { AuthGate } from "./screens/AuthGate";
 import { LessonScreen } from "./screens/LessonScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
@@ -81,6 +83,12 @@ export function App({ initialTheme, initialSkin }: AppProps) {
   const [lessonView, setLessonView] = useState<LessonView | null>(null);
   const [summary, setSummary] = useState<LessonSummary | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [streak, setStreak] = useState(() => readStreak());
+  const [iellaMood, setIellaMood] = useState<IellaMood>("perched");
+  const [iellaSignal, setIellaSignal] = useState(0);
+  const skinRef = useRef<SkinName>(skin);
+  skinRef.current = skin;
+  const appearanceDirtyRef = useRef(false);
 
   const sessionRef = useRef<ReturnType<typeof sessionFromTokens> | null>(null);
   const storageRef = useRef<LearnerStorage | null>(null);
@@ -101,6 +109,11 @@ export function App({ initialTheme, initialSkin }: AppProps) {
     });
   }
   const api = apiRef.current;
+
+  const triggerIella = (mood: IellaMood) => {
+    setIellaMood(mood);
+    setIellaSignal((value) => value + 1);
+  };
 
   useEffect(() => {
     const core = new CoreWorkerClient();
@@ -221,6 +234,11 @@ export function App({ initialTheme, initialSkin }: AppProps) {
         updateReady: loaded.updateReady,
       }));
       await refreshLocalState(store);
+      setStreak(noteActiveDay());
+      if (appearanceDirtyRef.current) {
+        appearanceDirtyRef.current = false;
+        enqueueThemeSelection(store, learnerId, skinRef.current);
+      }
       setTourOpen(!isTourComplete());
       void api
         .pendingRequests()
@@ -240,6 +258,7 @@ export function App({ initialTheme, initialSkin }: AppProps) {
       return;
     }
     setActionError(null);
+    triggerIella("curious");
     try {
       const lesson = new LessonRunner({
         storage: store,
@@ -254,6 +273,7 @@ export function App({ initialTheme, initialSkin }: AppProps) {
       setLessonView(view);
       setRoute("lesson");
       setTourOpen(false);
+      triggerIella("flying");
     } catch {
       setActionError(t("lesson-start-failed"));
     }
@@ -299,6 +319,8 @@ export function App({ initialTheme, initialSkin }: AppProps) {
   };
 
   const handleLessonComplete = (result: LessonSummary) => {
+    triggerIella("proud");
+    setStreak(noteActiveDay());
     setSummary(result);
     setRunner(null);
     setLessonView(null);
@@ -342,6 +364,8 @@ export function App({ initialTheme, initialSkin }: AppProps) {
     setIsAdmin(false);
     setRoute("today");
     setStatus(initialStatus(true));
+    setIellaMood("perched");
+    setIellaSignal((value) => value + 1);
   };
 
   const changeTheme = (next: ThemeName) => {
@@ -350,22 +374,22 @@ export function App({ initialTheme, initialSkin }: AppProps) {
     applyTheme(next);
   };
 
-  const toggleTheme = () => {
-    changeTheme(theme === "light" ? "dark" : "light");
+  const changeAuthTheme = (next: ThemeName) => {
+    appearanceDirtyRef.current = true;
+    changeTheme(next);
   };
 
-  const rememberSkinOnServer = (next: SkinName) => {
-    const store = storageRef.current;
-    const currentIdentity = identity;
-    if (!store || !currentIdentity) {
-      return;
-    }
+  const enqueueThemeSelection = (
+    store: LearnerStorage,
+    learnerId: string,
+    next: SkinName,
+  ) => {
     const stamp = clockRef.current.stamp();
     const payload: JsonObject = { type: "theme_selected", theme: next };
     const event: JsonObject = {
       schema_version: 2,
       event_id: stamp.event_id,
-      learner_id: currentIdentity.learnerId,
+      learner_id: learnerId,
       session_id: null,
       client_ts: stamp.client_ts,
       server_ts: null,
@@ -378,7 +402,7 @@ export function App({ initialTheme, initialSkin }: AppProps) {
       })
       .then(() =>
         store.queueOutbox({
-          learner_id: currentIdentity.learnerId,
+          learner_id: learnerId,
           event_id: stamp.event_id,
           event,
           confirmed: false,
@@ -389,9 +413,21 @@ export function App({ initialTheme, initialSkin }: AppProps) {
       .catch(() => undefined);
   };
 
+  const rememberSkinOnServer = (next: SkinName) => {
+    const store = storageRef.current;
+    const currentIdentity = identity;
+    if (!store || !currentIdentity) {
+      return;
+    }
+    enqueueThemeSelection(store, currentIdentity.learnerId, next);
+  };
+
   const changeSkin = (next: SkinName) => {
     if (next === skin) {
       return;
+    }
+    if (!identity) {
+      appearanceDirtyRef.current = true;
     }
     setSkin(next);
     storeSkin(next);
@@ -410,6 +446,9 @@ export function App({ initialTheme, initialSkin }: AppProps) {
       <AuthGate
         api={api}
         inviteCode={inviteCodeFromUrl()}
+        theme={theme}
+        skin={skin}
+        onThemeChange={changeAuthTheme}
         onAuthenticated={(tokens, method) => {
           void handleAuthenticated(tokens, method).catch(() =>
             setContentError(true),
@@ -453,6 +492,9 @@ export function App({ initialTheme, initialSkin }: AppProps) {
       active={activeRoute}
       onNavigate={(next) => {
         if (next !== "lesson") {
+          if (next !== route) {
+            triggerIella("flying");
+          }
           setRoute(next);
         }
       }}
@@ -461,11 +503,14 @@ export function App({ initialTheme, initialSkin }: AppProps) {
       locales={locales}
       onLocaleChange={setLocale}
       theme={theme}
-      onToggleTheme={toggleTheme}
+      onThemeChange={changeTheme}
       skin={skin}
       onSkinChange={changeSkin}
       onIellaActivate={replayTour}
+      onIellaReactive={() => triggerIella("curious")}
       lessonAvailable={runner !== null}
+      iellaMood={iellaMood}
+      iellaSignal={iellaSignal}
     >
       {actionError ? (
         <p className="inline-alert danger" role="alert">
@@ -477,6 +522,7 @@ export function App({ initialTheme, initialSkin }: AppProps) {
           content={content}
           stateJson={stateJson}
           learnerLabel={learnerLabel}
+          streak={streak}
           status={status}
           onStart={() => void startLesson()}
           onOpenStats={() => setRoute("stats")}
@@ -490,6 +536,7 @@ export function App({ initialTheme, initialSkin }: AppProps) {
           initialView={lessonView}
           onViewChange={setLessonView}
           onComplete={handleLessonComplete}
+          onMood={triggerIella}
           onExit={() => {
             setRoute("today");
             setRunner(null);
@@ -506,6 +553,7 @@ export function App({ initialTheme, initialSkin }: AppProps) {
         <SummaryScreen
           summary={summary}
           onDone={() => {
+            triggerIella("proud");
             setRoute("today");
             const store = storageRef.current;
             if (store) {

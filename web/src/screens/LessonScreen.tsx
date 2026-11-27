@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 
-import { IellaSprite } from "../components/IellaSprite";
+import type { IellaMood } from "../components/IellaSprite";
 import { RichText } from "../components/RichText";
+import { StudioIcon } from "../components/StudioIcons";
 import { Button, Card, ProgressBar } from "../components/ui";
 import { useTranslation } from "../i18n";
 import {
@@ -18,6 +19,7 @@ export interface LessonScreenProps {
   onComplete: (summary: LessonSummary) => void;
   onExit: () => void;
   onViewChange?: (view: LessonView) => void;
+  onMood?: (mood: IellaMood) => void;
 }
 
 interface ChoiceInputProps {
@@ -95,6 +97,7 @@ export function LessonScreen({
   onComplete,
   onExit,
   onViewChange,
+  onMood,
 }: LessonScreenProps) {
   const { t } = useTranslation();
   const [view, setView] = useState<LessonView>(initialView);
@@ -151,6 +154,9 @@ export function LessonScreen({
           : await runner.submitAnswer(response);
       setView(next);
       setHintOpen(false);
+      if (next.feedback) {
+        onMood?.(next.feedback.correct ? "proud" : "curious");
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : t("common-unknown-error"));
     } finally {
@@ -190,14 +196,17 @@ export function LessonScreen({
     <div className="lesson-screen">
       <header className="lesson-head">
         <div>
-          <p className="eyebrow">{t("lesson-session-eyebrow")}</p>
           <h1>{phaseLabel}</h1>
         </div>
+        <span
+          className="iella-anchor iella-anchor-lesson"
+          data-iella-perch="lesson"
+          data-iella-route="lesson"
+          aria-hidden="true"
+        />
         <div className="lesson-head-actions">
-          <span className="iella-perch iella-perch-lesson" aria-hidden="true">
-            <IellaSprite size={42} />
-          </span>
           <Button type="button" variant="ghost" size="sm" onClick={onExit}>
+            <StudioIcon name="close" size={16} />
             {t("lesson-exit")}
           </Button>
         </div>
@@ -234,6 +243,7 @@ export function LessonScreen({
               className="hint-toggle"
               onClick={() => setHintOpen((open) => !open)}
             >
+              <StudioIcon name="spark" size={15} />
               {t("lesson-hint")}
             </button>
           </div>
@@ -270,6 +280,7 @@ export function LessonScreen({
             busy={busy}
             onClick={() => void submit()}
           >
+            <StudioIcon name="check" size={16} />
             {t("lesson-check")}
           </Button>
           <p className="item-kcs">{item.kcTitles.join(" · ")}</p>
@@ -303,6 +314,7 @@ export function LessonScreen({
             busy={busy}
             onClick={() => void continueExplanation()}
           >
+            <StudioIcon name="check" size={16} />
             {t("lesson-got-it")}
           </Button>
         </Card>
@@ -353,6 +365,7 @@ export function LessonScreen({
             busy={busy}
             onClick={() => void submit()}
           >
+            <StudioIcon name="check" size={16} />
             {t("lesson-check")}
           </Button>
           <p className="item-kcs">{item.kcTitles.join(" · ")}</p>
@@ -393,6 +406,7 @@ export function LessonScreen({
             busy={busy}
             onClick={() => void advance()}
           >
+            <StudioIcon name="arrow-right" size={16} />
             {t("lesson-next")}
           </Button>
         </Card>

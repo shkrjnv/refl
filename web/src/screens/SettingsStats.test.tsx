@@ -80,7 +80,7 @@ describe("statistics and settings", () => {
     );
     expect(content.contentVersion).toBe("test-content");
     fireEvent.click(screen.getByRole("button", { name: "Russian" }));
-    fireEvent.click(screen.getByRole("button", { name: "Dark" }));
+    fireEvent.click(screen.getByRole("button", { name: "Deep Umber" }));
     fireEvent.click(screen.getByRole("button", { name: /Laboratory/ }));
     expect(locale).toBe("ru");
     expect(selectedTheme).toBe("dark");

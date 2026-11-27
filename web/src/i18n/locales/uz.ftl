@@ -112,7 +112,7 @@ auth-welcome = refl ga xush kelibsiz
 auth-welcome-eyebrow = Birinchi kirish
 auth-welcome-title = Ingliz tilini siz bilan qoladigan studiyada o‘rganing.
 auth-welcome-body = Oflayn javoblar, qisqa mashqlar va artikllar bo‘ylab aniq marshrut.
-auth-subtitle = Davom etish uchun kiring
+auth-subtitle = Bir martalik pochta kodi yoki Telegram orqali kiring.
 auth-dev-code = Ishlab chiqish kodi: { $code }
 auth-change-email = Boshqa pochta
 auth-or = yoki
@@ -256,3 +256,18 @@ app-content-loading-body = Oxirgi mos bundle va mahalliy holat yuklanmoqda.
 profile-logout-blocked = Yuborilmagan javoblar hali shu yerda. Internetga ulanib, qayta urinib ko‘ring.
 
 auth-back-signin = Kirishga qaytish
+
+app-appearance = Ko‘rinish
+app-palette = Palitra
+palette-deep-umber = Chuqur umber
+palette-deep-umber-note = Chuqur umber fonga tushgan eski qog‘oz siyohi va morpho ko‘k.
+palette-cream-paper = Krem qog‘oz
+palette-cream-paper-note = Krem qog‘ozda rizo firuza va lyuminestsent pushti.
+today-streak = { $days } kunlik seriya
+auth-code-group = Olti xonali kirish kodi
+auth-code-digit = { $index}-raqam
+auth-iella-hello = Iella bilan salomlashing
+auth-route-caption = Kichik marshrut birinchi javobdan oldin tayyor.
+auth-route-review = Takrorlash
+auth-route-rule = Yangi qoida
+auth-route-final = Yakun

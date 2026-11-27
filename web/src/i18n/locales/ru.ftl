@@ -112,7 +112,7 @@ auth-welcome = Добро пожаловать в refl
 auth-welcome-eyebrow = Первый вход
 auth-welcome-title = Учите английский в студии, которая остаётся с вами.
 auth-welcome-body = Ответы без сети, короткие занятия и понятный маршрут по артиклям.
-auth-subtitle = Войдите, чтобы продолжить
+auth-subtitle = Войдите по одноразовому коду из письма или через Telegram.
 auth-dev-code = Код для разработки: { $code }
 auth-change-email = Другая почта
 auth-or = или
@@ -256,3 +256,18 @@ app-content-loading-body = Загружаем последний совмест�
 profile-logout-blocked = Неотправленные ответы ещё здесь. Подключитесь к сети и повторите.
 
 auth-back-signin = Вернуться ко входу
+
+app-appearance = Оформление
+app-palette = Палитра
+palette-deep-umber = Глубокий умбра
+palette-deep-umber-note = Чернила старой бумаги на глубоком умбровом фоне с синим морфо.
+palette-cream-paper = Кремовая бумага
+palette-cream-paper-note = Ризо-бирюза и флуоресцентный розовый на кремовой бумаге.
+today-streak = { $days } дней подряд
+auth-code-group = Шестизначный код входа
+auth-code-digit = Цифра { $index }
+auth-iella-hello = Поздороваться с Иеллой
+auth-route-caption = Небольшой маршрут готов ещё до первого ответа.
+auth-route-review = Повторение
+auth-route-rule = Новое правило
+auth-route-final = Финал

@@ -13,8 +13,17 @@ export function HeroIllustration() {
           <stop offset="0.62" className="hero-sky-mid" />
           <stop offset="1" className="hero-sky-bottom" />
         </linearGradient>
+        <radialGradient id="hero-celestial">
+          <stop offset="0" className="hero-celestial-core" />
+          <stop offset="1" className="hero-celestial-edge" />
+        </radialGradient>
       </defs>
       <rect width="560" height="300" fill="url(#hero-sky)" />
+      <ellipse className="hero-celestial" cx="448" cy="196" rx="188" ry="154" fill="url(#hero-celestial)" />
+      <path
+        className="hero-hill-far"
+        d="M0 218 C72 190 126 208 198 188 C272 168 338 204 404 184 C470 164 520 180 560 172 L560 300 L0 300Z"
+      />
       <circle className="hero-sun" cx="448" cy="212" r="52" />
       <circle className="hero-sun-glow" cx="448" cy="212" r="72" />
       <path
@@ -29,6 +38,9 @@ export function HeroIllustration() {
         className="hero-route"
         d="M74 246 C142 246 142 188 210 188 C278 188 278 226 346 226 C408 226 408 166 474 166"
       />
+      <circle className="hero-route-halo hero-route-halo-a" cx="74" cy="246" r="26" />
+      <circle className="hero-route-halo hero-route-halo-b" cx="210" cy="188" r="27" />
+      <circle className="hero-route-halo hero-route-halo-c" cx="346" cy="226" r="27" />
       <g className="hero-route-dot hero-route-dot-a">
         <rect x="62" y="234" width="24" height="24" rx="8" />
         <path d="M68 246l5 5 9-11" />
@@ -55,6 +67,12 @@ export function HeroIllustration() {
       </g>
       <g className="hero-star hero-star-a">
         <path d="M270 42c1 7 3 9 10 10-7 1-9 3-10 10-1-7-3-9-10-10 7-1 9-3 10-10Z" />
+      </g>
+      <g className="hero-star hero-star-c">
+        <path d="M128 40c1 5 2 6 7 7-5 1-6 2-7 7-1-5-2-6-7-7 5-1 6-2 7-7Z" />
+      </g>
+      <g className="hero-star hero-star-d">
+        <path d="M330 90c1 4 2 5 6 6-4 1-5 2-6 6-1-4-2-5-6-6 4-1 5-2 6-6Z" />
       </g>
       <g className="hero-star hero-star-b">
         <path d="M494 74c1 5 2 6 7 7-5 1-6 2-7 7-1-5-2-6-7-7 5-1 6-2 7-7Z" />

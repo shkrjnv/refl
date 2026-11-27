@@ -4,7 +4,9 @@ import {
   useId,
   useRef,
   useState,
+  type ClipboardEvent,
   type FormEvent,
+  type KeyboardEvent,
 } from "react";
 
 import {
@@ -15,10 +17,13 @@ import {
   type VerifyCodeResponse,
   type TelegramLoginPayload,
 } from "../api/client";
-import { HeroIllustration } from "../components/HeroIllustration";
-import { IellaSprite } from "../components/IellaSprite";
+import { AuthBackdrop } from "../components/AuthBackdrop";
+import { PaletteToggle } from "../components/AppearanceMenu";
+import { IellaSprite, type IellaMood } from "../components/IellaSprite";
+import { StudioIcon } from "../components/StudioIcons";
 import { Button, Card } from "../components/ui";
 import { useTranslation } from "../i18n";
+import type { SkinName, ThemeName } from "../theme/tokens";
 import {
   markTelegramReady,
   TELEGRAM_OAUTH_ORIGIN,
@@ -52,6 +57,9 @@ export interface PendingNotice {
 export interface AuthScreenProps {
   api: AuthApi;
   inviteCode: string | null;
+  theme: ThemeName;
+  skin: SkinName;
+  onThemeChange: (theme: ThemeName) => void;
   onAuthenticated: (tokens: AuthTokens, method: AuthMethod) => void;
   onPending: (notice: PendingNotice) => void;
   onAccessBlocked: (state: "access_rejected" | "erased") => void;
@@ -66,6 +74,7 @@ const TELEGRAM_QUERY_KEYS = [
   "auth_date",
   "hash",
 ] as const;
+const CODE_LENGTH = 6;
 
 function clearTelegramParams(): void {
   if (typeof window === "undefined") {
@@ -103,9 +112,20 @@ function authErrorKey(error: unknown): string {
   return "common-unknown-error";
 }
 
+function digitsFrom(raw: string): string[] {
+  const clean = raw.replace(/\D/g, "").slice(0, CODE_LENGTH);
+  return Array.from(
+    { length: CODE_LENGTH },
+    (_, index) => clean[index] ?? "",
+  );
+}
+
 export function AuthScreen({
   api,
   inviteCode,
+  theme,
+  skin,
+  onThemeChange,
   onAuthenticated,
   onPending,
   onAccessBlocked,
@@ -115,14 +135,19 @@ export function AuthScreen({
   const codeId = useId();
   const [stage, setStage] = useState<"email" | "code">("email");
   const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
+  const [digits, setDigits] = useState<string[]>(() =>
+    Array.from({ length: CODE_LENGTH }, () => ""),
+  );
   const [sent, setSent] = useState<RequestCodeResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [telegram] = useState(() => telegramInitData());
+  const [iellaMood, setIellaMood] = useState<IellaMood>("curious");
   const handledReturnRef = useRef(false);
+  const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
   const callbacksRef = useRef({ onAuthenticated, onPending, onAccessBlocked });
   callbacksRef.current = { onAuthenticated, onPending, onAccessBlocked };
+  const code = digits.join("");
 
   const handleResponse = (response: VerifyCodeResponse, method: AuthMethod) => {
     clearTelegramParams();
@@ -140,6 +165,7 @@ export function AuthScreen({
     async (payload: TelegramLoginPayload) => {
       setBusy(true);
       setError(null);
+      setIellaMood("flying");
       try {
         const response = await api.telegramLogin(
           payload,
@@ -153,6 +179,7 @@ export function AuthScreen({
             return;
           }
         }
+        setIellaMood("proud");
         setError(authErrorKey(caught));
       } finally {
         setBusy(false);
@@ -217,10 +244,13 @@ export function AuthScreen({
     event.preventDefault();
     setBusy(true);
     setError(null);
+    setIellaMood("curious");
     try {
       const response = await api.requestCode(email.trim());
       setSent(response);
+      setDigits(Array.from({ length: CODE_LENGTH }, () => ""));
       setStage("code");
+      window.setTimeout(() => otpRefs.current[0]?.focus(), 140);
     } catch (caught) {
       setError(authErrorKey(caught));
     } finally {
@@ -230,12 +260,16 @@ export function AuthScreen({
 
   const verifyCode = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (code.length !== CODE_LENGTH) {
+      return;
+    }
     setBusy(true);
     setError(null);
+    setIellaMood("flying");
     try {
       const response = await api.verifyCode(
         email.trim(),
-        code.trim(),
+        code,
         inviteCode,
       );
       handleResponse(response, "email");
@@ -246,10 +280,60 @@ export function AuthScreen({
           return;
         }
       }
+      setIellaMood("curious");
       setError(authErrorKey(caught));
     } finally {
       setBusy(false);
     }
+  };
+
+  const updateDigit = (index: number, raw: string) => {
+    if (raw.length > 1) {
+      const next = digitsFrom(raw);
+      setDigits(next);
+      const filled = next.findIndex((digit) => digit === "");
+      const focusIndex = filled < 0 ? CODE_LENGTH - 1 : filled;
+      otpRefs.current[focusIndex]?.focus();
+      return;
+    }
+    const digit = raw.replace(/\D/g, "").slice(0, 1);
+    setDigits((current) =>
+      current.map((value, position) => (position === index ? digit : value)),
+    );
+    if (digit && index < CODE_LENGTH - 1) {
+      otpRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const onDigitKeyDown = (
+    index: number,
+    event: KeyboardEvent<HTMLInputElement>,
+  ) => {
+    if (event.key === "Backspace" && digits[index] === "" && index > 0) {
+      event.preventDefault();
+      otpRefs.current[index - 1]?.focus();
+      return;
+    }
+    if (event.key === "ArrowLeft" && index > 0) {
+      event.preventDefault();
+      otpRefs.current[index - 1]?.focus();
+    }
+    if (event.key === "ArrowRight" && index < CODE_LENGTH - 1) {
+      event.preventDefault();
+      otpRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const onPasteCode = (event: ClipboardEvent<HTMLDivElement>) => {
+    const raw = event.clipboardData.getData("text");
+    if (!raw) {
+      return;
+    }
+    event.preventDefault();
+    const next = digitsFrom(raw);
+    setDigits(next);
+    const filled = next.findIndex((digit) => digit === "");
+    otpRefs.current[filled < 0 ? CODE_LENGTH - 1 : filled]?.focus();
   };
 
   const startTelegram = () => {
@@ -274,31 +358,77 @@ export function AuthScreen({
     window.location.assign(url);
   };
 
+  const backToEmail = () => {
+    setStage("email");
+    setDigits(Array.from({ length: CODE_LENGTH }, () => ""));
+    setError(null);
+    setIellaMood("curious");
+  };
+
   return (
     <div className="auth-screen">
       <section className="auth-visual" aria-label={t("auth-welcome")}>
-        <div className="auth-illustration">
-          <HeroIllustration />
+        <AuthBackdrop theme={theme} skin={skin} />
+        <div className="auth-studio-grain" aria-hidden="true" />
+        <div className="auth-studio-head">
+          <span className="brand-mark" aria-hidden="true">
+            r
+          </span>
+          <span className="brand-name">{t("app-name")}</span>
         </div>
         <div className="auth-visual-copy">
-          <div className="iella-arrival">
-            <IellaSprite size={76} />
-          </div>
-          <p className="eyebrow">{t("auth-welcome-eyebrow")}</p>
           <h1>{t("auth-welcome-title")}</h1>
           <p>{t("auth-welcome-body")}</p>
+        </div>
+        <div className="auth-route-preview">
+          <p className="auth-route-caption">{t("auth-route-caption")}</p>
+          <div className="auth-route-stops">
+            <span className="auth-route-stop">
+              <StudioIcon name="sync" size={16} />
+              <span>{t("auth-route-review")}</span>
+            </span>
+            <span className="auth-route-connector" aria-hidden="true" />
+            <span className="auth-route-stop">
+              <StudioIcon name="practice" size={16} />
+              <span>{t("auth-route-rule")}</span>
+            </span>
+            <span className="auth-route-connector" aria-hidden="true" />
+            <span className="auth-route-stop">
+              <StudioIcon name="streak" size={16} />
+              <span>{t("auth-route-final")}</span>
+            </span>
+          </div>
+          <p className="auth-route-time">{t("session-budget", { minutes: 25 })}</p>
+        </div>
+        <div className="auth-iella-scene">
+          <IellaSprite
+            size={76}
+            mood={iellaMood}
+            label={t("auth-iella-hello")}
+            onActivate={() =>
+              setIellaMood((current) =>
+                current === "proud" ? "curious" : "proud",
+              )
+            }
+          />
         </div>
       </section>
 
       <section className="auth-panel">
-        <Card tone="plain" className="auth-card">
+        <div className="auth-palette-corner">
+          <PaletteToggle theme={theme} onThemeChange={onThemeChange} />
+        </div>
+        <Card
+          tone="plain"
+          className={`auth-card auth-card-stage-${stage}`}
+        >
           <div className="auth-card-head">
             <span className="brand-mark" aria-hidden="true">
               r
             </span>
             <div>
-              <p className="eyebrow">{t("auth-title")}</p>
-              <h2>{t("auth-subtitle")}</h2>
+              <h2>{t("auth-title")}</h2>
+              <p className="auth-card-subtitle">{t("auth-subtitle")}</p>
             </div>
           </div>
 
@@ -316,7 +446,10 @@ export function AuthScreen({
           ) : null}
 
           {stage === "email" ? (
-            <form className="auth-form" onSubmit={(event) => void requestCode(event)}>
+            <form
+              className="auth-form auth-form-email"
+              onSubmit={(event) => void requestCode(event)}
+            >
               <label htmlFor={emailId}>{t("auth-email-label")}</label>
               <input
                 id={emailId}
@@ -328,24 +461,45 @@ export function AuthScreen({
                 required
               />
               <Button type="submit" variant="primary" block busy={busy}>
+                <StudioIcon name="arrow-right" size={16} />
                 {t("auth-send-code")}
               </Button>
             </form>
           ) : (
-            <form className="auth-form" onSubmit={(event) => void verifyCode(event)}>
+            <form
+              className="auth-form auth-form-code"
+              onSubmit={(event) => void verifyCode(event)}
+            >
               <label htmlFor={codeId}>{t("auth-code-label")}</label>
-              <input
-                id={codeId}
-                className="code-input"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                maxLength={6}
-                value={code}
-                onChange={(event) =>
-                  setCode(event.target.value.replace(/\D/g, "").slice(0, 6))
-                }
-                required
-              />
+              <div
+                className="auth-code-slots"
+                role="group"
+                aria-label={t("auth-code-group")}
+                onPaste={onPasteCode}
+              >
+                {digits.map((digit, index) => (
+                  <input
+                    key={index}
+                    ref={(element) => {
+                      otpRefs.current[index] = element;
+                    }}
+                    id={index === 0 ? codeId : undefined}
+                    className="auth-code-slot"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    autoComplete={index === 0 ? "one-time-code" : "off"}
+                    maxLength={1}
+                    value={digit}
+                    aria-label={
+                      index === 0
+                        ? undefined
+                        : t("auth-code-digit", { index: index + 1 })
+                    }
+                    onChange={(event) => updateDigit(index, event.target.value)}
+                    onKeyDown={(event) => onDigitKeyDown(index, event)}
+                  />
+                ))}
+              </div>
               {sent ? (
                 <p className="auth-note">
                   {t("auth-code-sent", {
@@ -358,19 +512,23 @@ export function AuthScreen({
                   {t("auth-dev-code", { code: sent.code ?? sent.dev_code ?? "" })}
                 </p>
               ) : null}
-              <Button type="submit" variant="primary" block busy={busy}>
+              <Button
+                type="submit"
+                variant="primary"
+                block
+                busy={busy}
+                disabled={code.length !== CODE_LENGTH}
+              >
+                <StudioIcon name="check" size={16} />
                 {t("auth-verify-code")}
               </Button>
               <Button
                 type="button"
                 variant="ghost"
                 block
-                onClick={() => {
-                  setStage("email");
-                  setCode("");
-                  setError(null);
-                }}
+                onClick={backToEmail}
               >
+                <StudioIcon name="arrow-left" size={16} />
                 {t("auth-change-email")}
               </Button>
             </form>
@@ -379,7 +537,14 @@ export function AuthScreen({
           <div className="auth-divider">
             <span>{t("auth-or")}</span>
           </div>
-          <Button type="button" variant="secondary" block busy={busy} onClick={startTelegram}>
+          <Button
+            type="button"
+            variant="secondary"
+            block
+            busy={busy}
+            onClick={startTelegram}
+          >
+            <StudioIcon name="arrow-right" size={16} />
             {t("auth-telegram")}
           </Button>
           {telegram ? (

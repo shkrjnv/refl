@@ -1,4 +1,5 @@
 import type { ApiClient } from "../api/client";
+import { PaletteToggle } from "../components/AppearanceMenu";
 import { IellaSprite } from "../components/IellaSprite";
 import { Badge, Button, Card } from "../components/ui";
 import type { OutboxRecord } from "../db/storage";
@@ -118,26 +119,7 @@ export function SettingsScreen({
             ))}
           </div>
           <p className="eyebrow appearance-mode-label">{t("profile-mode")}</p>
-          <div className="settings-options">
-            <Button
-              type="button"
-              variant={theme === "light" ? "primary" : "secondary"}
-              size="sm"
-              aria-pressed={theme === "light"}
-              onClick={() => onThemeChange("light")}
-            >
-              {t("common-light")}
-            </Button>
-            <Button
-              type="button"
-              variant={theme === "dark" ? "primary" : "secondary"}
-              size="sm"
-              aria-pressed={theme === "dark"}
-              onClick={() => onThemeChange("dark")}
-            >
-              {t("common-dark")}
-            </Button>
-          </div>
+          <PaletteToggle theme={theme} onThemeChange={onThemeChange} />
         </Card>
 
         <Card tone="plain" className="settings-card">

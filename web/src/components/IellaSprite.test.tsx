@@ -8,12 +8,32 @@ import { IellaSprite } from "./IellaSprite";
 afterEach(cleanup);
 
 describe("Iella sprite", () => {
-  it("keeps a padded viewBox and matching aspect ratio", () => {
+  it("keeps a padded viewBox and articulated layers", () => {
     const { container } = render(<IellaSprite size={64} />);
     const svg = container.querySelector("svg");
-    expect(svg?.getAttribute("viewBox")).toBe("-1 -2 16 15");
-    expect(svg?.getAttribute("height")).toBe("60");
+    expect(svg?.getAttribute("viewBox")).toBe("-2 -2 24 19");
     expect(svg?.getAttribute("overflow")).toBe("visible");
+    expect(container.querySelectorAll(".iella-wing")).toHaveLength(2);
+    expect(container.querySelector(".iella-eyes")).toBeTruthy();
+    expect(container.querySelector(".iella-feet")).toBeTruthy();
+  });
+
+  it("exposes mood and perch state for the companion engine", () => {
+    const { container, rerender } = render(
+      <IellaSprite size={64} mood="perched" look="left" />,
+    );
+    let svg = container.querySelector("svg");
+    expect(svg?.getAttribute("data-mood")).toBe("perched");
+    expect(svg?.getAttribute("data-perched")).toBe("true");
+    expect(svg?.getAttribute("data-look")).toBe("left");
+
+    rerender(<IellaSprite size={64} mood="flying" />);
+    svg = container.querySelector("svg");
+    expect(svg?.getAttribute("data-mood")).toBe("flying");
+    expect(svg?.getAttribute("data-perched")).toBe("false");
+
+    rerender(<IellaSprite size={64} mood="proud" />);
+    expect(container.querySelector(".iella-happy-eyes")).toBeTruthy();
   });
 
   it("exposes an optional labelled tip button", () => {
@@ -21,6 +41,7 @@ describe("Iella sprite", () => {
     render(
       <IellaSprite
         size={48}
+        mood="curious"
         label="Ask Iella for a tip"
         onActivate={() => {
           opened = true;

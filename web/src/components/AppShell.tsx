@@ -2,14 +2,11 @@ import type { ReactNode } from "react";
 
 import type { Locale } from "../i18n";
 import { useTranslation } from "../i18n";
-import {
-  isSkinName,
-  skinLabelKeys,
-  skinNames,
-  type SkinName,
-  type ThemeName,
-} from "../theme/tokens";
-import { IellaSprite } from "./IellaSprite";
+import type { SkinName, ThemeName } from "../theme/tokens";
+import { AppearanceMenu } from "./AppearanceMenu";
+import { IellaCompanion } from "./IellaCompanion";
+import type { IellaMood } from "./IellaSprite";
+import { StudioIcon, type StudioIconName } from "./StudioIcons";
 
 export type AppRoute = "today" | "lesson" | "stats" | "settings";
 
@@ -22,47 +19,21 @@ export interface AppShellProps {
   locales: readonly Locale[];
   onLocaleChange: (locale: Locale) => void;
   theme: ThemeName;
-  onToggleTheme: () => void;
+  onThemeChange: (theme: ThemeName) => void;
   skin: SkinName;
   onSkinChange: (skin: SkinName) => void;
   onIellaActivate?: () => void;
   lessonAvailable?: boolean;
+  iellaMood?: IellaMood;
+  iellaSignal?: number;
+  onIellaReactive?: () => void;
 }
 
 interface NavItem {
   route: AppRoute;
   label: string;
-  glyph: "today" | "practice" | "stats" | "settings";
+  glyph: StudioIconName;
   disabled?: boolean;
-}
-
-function NavGlyph({ name }: { name: NavItem["glyph"] }) {
-  if (name === "today") {
-    return (
-      <svg viewBox="0 0 20 20" aria-hidden="true" className="nav-glyph">
-        <path d="M4 8h12M7 3v3M13 3v3M4 5h12v11H4z" />
-      </svg>
-    );
-  }
-  if (name === "practice") {
-    return (
-      <svg viewBox="0 0 20 20" aria-hidden="true" className="nav-glyph">
-        <path d="M3 7l7-3 7 3-7 3zM6 9v4c2.2 2 5.8 2 8 0V9" />
-      </svg>
-    );
-  }
-  if (name === "stats") {
-    return (
-      <svg viewBox="0 0 20 20" aria-hidden="true" className="nav-glyph">
-        <path d="M4 16V10M8.5 16V5M13 16v-8M17 16v-4" />
-      </svg>
-    );
-  }
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden="true" className="nav-glyph">
-      <path d="M10 7.5a2.5 2.5 0 100 5 2.5 2.5 0 000-5zM10 2v3M10 15v3M2 10h3M15 10h3" />
-    </svg>
-  );
 }
 
 export function AppShell({
@@ -74,14 +45,17 @@ export function AppShell({
   locales,
   onLocaleChange,
   theme,
-  onToggleTheme,
+  onThemeChange,
   skin,
   onSkinChange,
   onIellaActivate,
   lessonAvailable = false,
+  iellaMood = "idle",
+  iellaSignal = 0,
+  onIellaReactive,
 }: AppShellProps) {
   const { t } = useTranslation();
-  const items: NavItem[] = [
+  const primaryItems: NavItem[] = [
     { route: "today", label: t("nav-today"), glyph: "today" },
     {
       route: "lesson",
@@ -89,9 +63,13 @@ export function AppShell({
       glyph: "practice",
       disabled: !lessonAvailable,
     },
-    { route: "stats", label: t("nav-stats"), glyph: "stats" },
-    { route: "settings", label: t("nav-settings"), glyph: "settings" },
+    { route: "stats", label: t("nav-stats"), glyph: "progress" },
   ];
+  const settingsItem: NavItem = {
+    route: "settings",
+    label: t("nav-settings"),
+    glyph: "settings",
+  };
 
   const navigate = (item: NavItem) => {
     if (!item.disabled) {
@@ -108,8 +86,8 @@ export function AppShell({
           </span>
           <span className="brand-name">{t("app-name")}</span>
         </div>
-        <nav className="side-nav">
-          {items.map((item) => (
+        <nav className="side-nav" aria-label={t("nav-label")}>
+          {primaryItems.map((item) => (
             <button
               key={item.route}
               type="button"
@@ -118,34 +96,44 @@ export function AppShell({
               disabled={item.disabled}
               onClick={() => navigate(item)}
             >
-              <NavGlyph name={item.glyph} />
+              <StudioIcon name={item.glyph} />
               <span>{item.label}</span>
             </button>
           ))}
         </nav>
         <div className="sidebar-spacer" />
-        {onIellaActivate ? (
+        <div className="side-nav-utility">
+          <div className="nav-divider" aria-hidden="true" />
           <button
             type="button"
-            className="iella-card iella-card-button"
-            aria-label={t("iella-open-tour")}
-            onClick={onIellaActivate}
+            className={`nav-item${active === settingsItem.route ? " active" : ""}`}
+            aria-current={active === settingsItem.route ? "page" : undefined}
+            onClick={() => navigate(settingsItem)}
           >
-            <IellaSprite size={44} />
-            <span>
-              <strong>{t("iella-name")}</strong>
-              <span>{t("iella-companion")}</span>
-            </span>
+            <StudioIcon name={settingsItem.glyph} />
+            <span>{settingsItem.label}</span>
           </button>
-        ) : (
-          <div className="iella-card">
-            <IellaSprite size={44} />
-            <div>
-              <strong>{t("iella-name")}</strong>
-              <span>{t("iella-companion")}</span>
-            </div>
-          </div>
-        )}
+        </div>
+        <div
+          className="iella-card"
+          data-iella-perch="sidebar"
+          data-iella-route="app"
+        >
+          <span className="iella-card-copy">
+            <span className="iella-card-kicker">{t("iella-companion")}</span>
+            <strong>{t("iella-name")}</strong>
+          </span>
+          {onIellaActivate ? (
+            <button
+              type="button"
+              className="iella-card-action"
+              aria-label={t("iella-open-tour")}
+              onClick={onIellaActivate}
+            >
+              <StudioIcon name="spark" size={16} />
+            </button>
+          ) : null}
+        </div>
         <div className="learner-chip">
           <span className="learner-avatar">{learnerLabel.slice(0, 1)}</span>
           <span className="learner-copy">
@@ -158,6 +146,12 @@ export function AppShell({
       <div className="studio-main">
         <header className="studio-topbar">
           <div className="mobile-brand">
+            <span
+              className="iella-anchor iella-anchor-mobile"
+              data-iella-perch="mobile-brand"
+              data-iella-route="app"
+              aria-hidden="true"
+            />
             <span className="brand-mark" aria-hidden="true">
               r
             </span>
@@ -179,41 +173,29 @@ export function AppShell({
                 </button>
               ))}
             </div>
-            <select
-              className="skin-select"
-              aria-label={t("app-skin")}
-              value={skin}
-              onChange={(event) => {
-                const value = event.target.value;
-                if (isSkinName(value)) {
-                  onSkinChange(value);
+            <AppearanceMenu
+              theme={theme}
+              skin={skin}
+              onThemeChange={(next) => {
+                if (next !== theme) {
+                  onIellaReactive?.();
                 }
+                onThemeChange(next);
               }}
-            >
-              {skinNames.map((candidate) => (
-                <option key={candidate} value={candidate}>
-                  {t(skinLabelKeys[candidate])}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              className="theme-toggle"
-              aria-label={t("app-theme")}
-              onClick={onToggleTheme}
-            >
-              {theme === "light" ? t("common-dark") : t("common-light")}
-            </button>
+              onSkinChange={(next) => {
+                if (next !== skin) {
+                  onIellaReactive?.();
+                }
+                onSkinChange(next);
+              }}
+            />
           </div>
         </header>
         <main className="studio-content">{children}</main>
       </div>
 
       <nav className="mobile-nav" aria-label={t("nav-label")}>
-        <span className="iella-perch iella-perch-dock" aria-hidden="true">
-          <IellaSprite size={34} />
-        </span>
-        {items.map((item) => (
+        {[...primaryItems, settingsItem].map((item) => (
           <button
             key={item.route}
             type="button"
@@ -222,11 +204,17 @@ export function AppShell({
             disabled={item.disabled}
             onClick={() => navigate(item)}
           >
-            <NavGlyph name={item.glyph} />
+            <StudioIcon name={item.glyph} />
             <span>{item.label}</span>
           </button>
         ))}
       </nav>
+      <IellaCompanion
+        activeRoute={active}
+        mood={iellaMood}
+        signal={iellaSignal}
+        onActivate={onIellaActivate}
+      />
     </div>
   );
 }

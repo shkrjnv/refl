@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 
 import { HeroIllustration } from "../components/HeroIllustration";
 import { IellaTour } from "../components/IellaTour";
+import { StudioIcon } from "../components/StudioIcons";
 import { IellaSprite } from "../components/IellaSprite";
 import { Button, Card, ProgressBar } from "../components/ui";
 import { useTranslation } from "../i18n";
@@ -16,6 +17,7 @@ export interface TodayScreenProps {
   content: PrototypeContent;
   stateJson: string | null;
   learnerLabel: string;
+  streak: number;
   status: AppStatus;
   onStart: () => void;
   onOpenStats: () => void;
@@ -33,6 +35,7 @@ export function TodayScreen({
   content,
   stateJson,
   learnerLabel,
+  streak,
   status,
   onStart,
   onOpenStats,
@@ -53,24 +56,38 @@ export function TodayScreen({
     { label: "A1", rank: 0 },
   ).label;
 
-  const statusCues: Array<{ label: string; tone: "warning" | "danger" }> = [];
+  const statusCues: Array<{
+    label: string;
+    tone: "warning" | "danger";
+    icon: "sync" | "offline";
+  }> = [];
   if (!status.online) {
-    statusCues.push({ label: t("sync-offline"), tone: "warning" });
+    statusCues.push({
+      label: t("sync-offline"),
+      tone: "warning",
+      icon: "offline",
+    });
   }
   if (status.pendingOutbox > 0) {
     statusCues.push({
       label: t("sync-pending", { count: status.pendingOutbox }),
       tone: "warning",
+      icon: "sync",
     });
   }
   if (status.rejectedOutbox > 0) {
     statusCues.push({
       label: t("sync-rejected", { count: status.rejectedOutbox }),
       tone: "danger",
+      icon: "offline",
     });
   }
   if (status.clockDrift) {
-    statusCues.push({ label: t("sync-clock-warning"), tone: "warning" });
+    statusCues.push({
+      label: t("sync-clock-warning"),
+      tone: "warning",
+      icon: "sync",
+    });
   }
 
   const tip = tipIndex === null ? null : t(IELLA_TIPS[tipIndex] ?? IELLA_TIPS[0]);
@@ -82,24 +99,27 @@ export function TodayScreen({
           <span className="today-avatar" aria-hidden="true">
             {learnerLabel.slice(0, 1)}
           </span>
-          <div>
-            <p className="today-kicker">{t("today-eyebrow")}</p>
-            <h1>{t("today-greeting", { name: learnerLabel })}</h1>
-          </div>
+          <h1>{t("today-greeting", { name: learnerLabel })}</h1>
         </div>
-        {statusCues.length > 0 ? (
-          <div className="today-status" role="status" aria-live="polite">
-            {statusCues.map((cue) => (
-              <span
-                key={cue.label}
-                className={`sync-cue sync-cue-${cue.tone}`}
-              >
-                <span className="sync-cue-dot" aria-hidden="true" />
-                {cue.label}
-              </span>
-            ))}
-          </div>
-        ) : null}
+        <div className="today-masthead-side">
+          <span className="streak-badge">
+            <StudioIcon name="streak" size={17} />
+            <span>{t("today-streak", { days: streak })}</span>
+          </span>
+          {statusCues.length > 0 ? (
+            <div className="today-status" role="status" aria-live="polite">
+              {statusCues.map((cue) => (
+                <span
+                  key={cue.label}
+                  className={`sync-cue sync-cue-${cue.tone}`}
+                >
+                  <StudioIcon name={cue.icon} size={14} />
+                  {cue.label}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
       </header>
 
       {status.updateReady ? (
@@ -111,8 +131,13 @@ export function TodayScreen({
 
       <section className="today-route" data-tour="route" aria-labelledby="today-route-title">
         <HeroIllustration />
+        <span
+          className="iella-anchor iella-anchor-route"
+          data-iella-perch="today-route"
+          data-iella-route="today"
+          aria-hidden="true"
+        />
         <div className="route-topline">
-          <span className="route-chip">{t("today-route-eyebrow")}</span>
           <span className="route-chip route-chip-time">
             {t("session-budget", { minutes: 25 })}
           </span>
@@ -136,15 +161,11 @@ export function TodayScreen({
           <span>{t("today-level")}</span>
           <strong>{currentLevel}</strong>
         </div>
-        <span className="iella-perch iella-perch-route" aria-hidden="true">
-          <IellaSprite size={62} />
-        </span>
       </section>
 
       <section className="articles-block" aria-labelledby="today-articles-title">
         <div className="articles-heading">
           <div>
-            <p className="eyebrow">{t("today-articles-eyebrow")}</p>
             <h2 id="today-articles-title">{t("today-articles-title")}</h2>
           </div>
           <div className="articles-heading-side">
@@ -163,6 +184,14 @@ export function TodayScreen({
               tone="plain"
               className={`kc-card${kc.mastered ? " kc-card-mastered" : ""}`}
             >
+              {index === 0 ? (
+                <span
+                  className="iella-anchor iella-anchor-card"
+                  data-iella-perch="today-card"
+                  data-iella-route="today"
+                  aria-hidden="true"
+                />
+              ) : null}
               <div className="kc-card-topline">
                 <span className="kc-index" aria-hidden="true">
                   {String(index + 1).padStart(2, "0")}
@@ -184,7 +213,7 @@ export function TodayScreen({
               </div>
               <ProgressBar
                 value={kc.percent}
-                tone={kc.mastered ? "green" : "blue"}
+                tone={kc.mastered ? "green" : kc.observations > 0 ? "coral" : "blue"}
                 label={kc.title}
               />
               <p className="kc-note">
@@ -202,6 +231,7 @@ export function TodayScreen({
       <Card tone="tinted" className="iella-note">
         <IellaSprite
           size={58}
+          mood="curious"
           label={t("iella-tip-open")}
           onActivate={() =>
             setTipIndex((current) =>

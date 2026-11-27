@@ -22,6 +22,7 @@ describe("Iella onboarding", () => {
           content={testContent()}
           stateJson={null}
           learnerLabel="Learner"
+          streak={4}
           status={initialStatus(true)}
           onStart={() => undefined}
           onOpenStats={() => undefined}

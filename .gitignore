@@ -6,3 +6,5 @@ result*
 .direnv/
 .env
 CLAUDE.md
+.pgdata/
+.env.local

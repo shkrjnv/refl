@@ -17,6 +17,7 @@ function renderToday(status = initialStatus(true)) {
         content={testContent()}
         stateJson={null}
         learnerLabel="Learner"
+        streak={6}
         status={status}
         onStart={() => undefined}
         onOpenStats={() => undefined}
@@ -42,6 +43,7 @@ describe("Today clean state", () => {
     ).toBeNull();
     expect(screen.queryByRole("status")).toBeNull();
     expect(screen.getByText("Five rules, one route")).toBeTruthy();
+    expect(screen.getByText("6 day streak")).toBeTruthy();
   });
 
   it("shows a compact cue only when offline or work is pending", () => {

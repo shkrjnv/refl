@@ -6,8 +6,10 @@ import {
   applyAppearance,
   applySkin,
   initialSkin,
+  initialTheme,
   readStoredSkin,
   storeSkin,
+  storeTheme,
 } from "./tokens";
 
 afterEach(() => {
@@ -23,6 +25,12 @@ describe("skin selection", () => {
     storeSkin("laboratory");
     expect(readStoredSkin()).toBe("laboratory");
     expect(initialSkin()).toBe("laboratory");
+  });
+
+  it("defaults to Deep Umber and remembers an explicit palette", () => {
+    expect(initialTheme()).toBe("dark");
+    storeTheme("light");
+    expect(initialTheme()).toBe("light");
   });
 
   it("applies skin and mode together on the document root", () => {

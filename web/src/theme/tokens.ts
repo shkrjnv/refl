@@ -1,11 +1,11 @@
 export const palette = {
-  ink: "#14213d",
-  bg: "#f3f5fa",
-  blue: "#2f6bff",
-  sun: "#ff9f43",
-  green: "#22b07d",
-  coral: "#ff6b6b",
-  purp: "#7c5cff",
+  ink: "#1D2424",
+  bg: "#FAF4E8",
+  blue: "#0D7A78",
+  sun: "#D99B52",
+  green: "#2F8B72",
+  coral: "#FF2E7E",
+  purp: "#6C63B5",
 } as const;
 
 export type Palette = { [Key in keyof typeof palette]: string };
@@ -22,6 +22,7 @@ export const skinNames = [
 export type SkinName = (typeof skinNames)[number];
 
 export const DEFAULT_SKIN: SkinName = "living-studio";
+export const DEFAULT_THEME: ThemeName = "dark";
 
 export const skinLabelKeys: Record<SkinName, string> = {
   "living-studio": "skin-living-studio",
@@ -43,6 +44,7 @@ export interface ThemeTokens extends Palette {
   surface: string;
   surfaceRaised: string;
   surfaceMuted: string;
+  surfaceCard: string;
   border: string;
   borderStrong: string;
   text: string;
@@ -53,6 +55,7 @@ export interface ThemeTokens extends Palette {
   coralDeep: string;
   purpDeep: string;
   focusRing: string;
+  microAccent: string;
   shadowButton: string;
   shadowPrimary: string;
   shadowCard: string;
@@ -77,79 +80,83 @@ export interface ThemeTokens extends Palette {
 export const themes: Record<ThemeName, ThemeTokens> = {
   light: {
     ...palette,
-    surface: "#ffffff",
-    surfaceRaised: "#ffffff",
-    surfaceMuted: "#eef1fb",
-    border: "#e3e8f2",
-    borderStrong: "#c7cfe6",
-    text: "#14213d",
-    textMuted: "#6b7489",
-    blueDeep: "#1d4fd1",
-    sunDeep: "#e07d1f",
-    greenDeep: "#178a60",
-    coralDeep: "#d94f4f",
-    purpDeep: "#5b3fe0",
-    focusRing: "#2f6bff",
-    shadowButton: "0 4px 0 #c7cfe6",
-    shadowPrimary: "0 4px 0 #1d4fd1",
-    shadowCard: "0 6px 0 #e3e8f2",
-    shadowHero: "0 8px 0 #c7cfe6",
-    shadowSoft: "0 18px 45px rgba(20, 33, 61, 0.12)",
-    overlay: "rgba(20, 33, 61, 0.45)",
-    infoSurface: "#eef3ff",
-    infoBorder: "#d6e1ff",
-    warningSurface: "#fff4e6",
-    warningBorder: "#ffe0bd",
-    successSurface: "#eaf8f1",
-    successBorder: "#ccefe1",
-    dangerSurface: "#fff0f0",
-    dangerBorder: "#ffd2d2",
-    iellaInk: "#24346a",
-    iellaBeak: "#e0773c",
-    iellaCream: "#f3e3c3",
-    iellaBrown: "#8b5a2b",
-    iellaEye: "#0e1020",
+    surface: "#FFFDF8",
+    surfaceRaised: "#FFFDF8",
+    surfaceMuted: "#F2E8D5",
+    surfaceCard: "#FFFDF8",
+    border: "#DCCFB8",
+    borderStrong: "#C4B298",
+    text: "#1D2424",
+    textMuted: "#5F665F",
+    blueDeep: "#085E5C",
+    sunDeep: "#A96F2F",
+    greenDeep: "#1F6B57",
+    coralDeep: "#C00058",
+    purpDeep: "#4E478F",
+    focusRing: "#0D7A78",
+    microAccent: "#FF2E7E",
+    shadowButton: "0 4px 0 #DCCFB8",
+    shadowPrimary: "0 4px 0 #085E5C",
+    shadowCard: "0 6px 0 #E6DAC4",
+    shadowHero: "0 8px 0 #C4B298",
+    shadowSoft: "0 18px 45px rgba(29, 36, 36, 0.12)",
+    overlay: "rgba(29, 36, 36, 0.42)",
+    infoSurface: "#E5F0EE",
+    infoBorder: "#B8DAD5",
+    warningSurface: "#F7EAD7",
+    warningBorder: "#E3C79E",
+    successSurface: "#E3F1EA",
+    successBorder: "#B7D8C7",
+    dangerSurface: "#FFE6EF",
+    dangerBorder: "#F4B8CE",
+    iellaInk: "#2B4A45",
+    iellaBeak: "#C97A3A",
+    iellaCream: "#F5E6C8",
+    iellaBrown: "#8A5A32",
+    iellaEye: "#17201E",
   },
   dark: {
     ...palette,
-    bg: "#0e1626",
-    surface: "#151f36",
-    surfaceRaised: "#1b2742",
-    surfaceMuted: "#202d4b",
-    border: "#2a3854",
-    borderStrong: "#3a4b70",
-    text: "#eef3ff",
-    textMuted: "#9aa8c7",
-    blue: "#5b8cff",
-    sun: "#ffb35c",
-    green: "#3bd39a",
-    coral: "#ff8585",
-    purp: "#9a80ff",
-    blueDeep: "#2f6bff",
-    sunDeep: "#e08a2f",
-    greenDeep: "#1f9f6f",
-    coralDeep: "#da5c5c",
-    purpDeep: "#6f52ef",
-    focusRing: "#8fb0ff",
-    shadowButton: "0 4px 0 #0a0f1c",
-    shadowPrimary: "0 4px 0 #1d3f99",
-    shadowCard: "0 6px 0 #0a0f1c",
-    shadowHero: "0 8px 0 #0a0f1c",
-    shadowSoft: "0 18px 45px rgba(0, 0, 0, 0.35)",
-    overlay: "rgba(0, 0, 0, 0.6)",
-    infoSurface: "#172646",
-    infoBorder: "#2d4470",
-    warningSurface: "#342511",
-    warningBorder: "#62451c",
-    successSurface: "#122f25",
-    successBorder: "#235743",
-    dangerSurface: "#351a20",
-    dangerBorder: "#66303b",
-    iellaInk: "#344b8f",
-    iellaBeak: "#f08a4b",
-    iellaCream: "#f3e3c3",
-    iellaBrown: "#a46a35",
-    iellaEye: "#0e1020",
+    bg: "#161210",
+    surface: "#201A17",
+    surfaceRaised: "#28211D",
+    surfaceMuted: "#2E2621",
+    surfaceCard: "#201A17",
+    border: "#45382E",
+    borderStrong: "#6A5644",
+    text: "#EFE6D5",
+    textMuted: "#B7A892",
+    blue: "#2B9AF3",
+    sun: "#D99B52",
+    green: "#4CC9A0",
+    coral: "#FF7A9E",
+    purp: "#8E7DFF",
+    blueDeep: "#1E79C4",
+    sunDeep: "#A96F2F",
+    greenDeep: "#2E9C7A",
+    coralDeep: "#C34661",
+    purpDeep: "#6252B5",
+    focusRing: "#4DB2FF",
+    microAccent: "#D99B52",
+    shadowButton: "0 4px 0 #0B0908",
+    shadowPrimary: "0 4px 0 #1E79C4",
+    shadowCard: "0 6px 0 #0B0908",
+    shadowHero: "0 8px 0 #0B0908",
+    shadowSoft: "0 18px 45px rgba(0, 0, 0, 0.4)",
+    overlay: "rgba(0, 0, 0, 0.66)",
+    infoSurface: "#1B2C3B",
+    infoBorder: "#2E526D",
+    warningSurface: "#332717",
+    warningBorder: "#5D4622",
+    successSurface: "#17332B",
+    successBorder: "#2D5D4D",
+    dangerSurface: "#351F25",
+    dangerBorder: "#66343F",
+    iellaInk: "#C9A87B",
+    iellaBeak: "#E0A35C",
+    iellaCream: "#EFE6D5",
+    iellaBrown: "#A97A4B",
+    iellaEye: "#161210",
   },
 };
 
@@ -162,15 +169,6 @@ export function isThemeName(value: string | null): value is ThemeName {
 
 export function isSkinName(value: string | null): value is SkinName {
   return value !== null && skinNames.includes(value as SkinName);
-}
-
-export function systemTheme(): ThemeName {
-  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
-    return "light";
-  }
-  return window.matchMedia("(prefers-color-scheme: dark)").matches
-    ? "dark"
-    : "light";
 }
 
 export function readStoredTheme(): ThemeName | null {
@@ -197,7 +195,7 @@ export function storeTheme(theme: ThemeName): void {
 }
 
 export function initialTheme(): ThemeName {
-  return readStoredTheme() ?? systemTheme();
+  return readStoredTheme() ?? DEFAULT_THEME;
 }
 
 export function readStoredSkin(): SkinName | null {

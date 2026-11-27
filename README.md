@@ -323,7 +323,7 @@ flowchart LR
   end
   S["server/ — axum + sqlx"]
   DB[(PostgreSQL<br/>event log)]
-  W["web/ — SolidJS PWA<br/>IndexedDB"]
+  W["web/ — React PWA<br/>IndexedDB"]
   N --> CB --> DB
   CB -. uses .-> core
   S --> core
@@ -383,7 +383,7 @@ A subject's methodology adapts through the subject's data (item kinds, input che
 | --- | --- |
 | Core | Rust (version in `rust-toolchain.toml`), native and `wasm32-unknown-unknown`; `wasm32-wasip1` under wasmtime for the native = WASM check |
 | Server | axum + tokio, sqlx, PostgreSQL |
-| Client | TypeScript + SolidJS + Vite, PWA, IndexedDB; types from Rust (ts-rs) |
+| Client | TypeScript + React + Vite, PWA, IndexedDB; types from Rust (ts-rs) |
 | Content | Nickel → `content-build` in Rust |
 | Answer checking | in the core; typos are told apart from real words with the SCOWL word list (en\_US + en\_GB, size 60, from nixpkgs), shipped as a separate versioned file |
 | Memory | FSRS-6 in the core; fsrs-rs only offline, for fitting weights |
@@ -401,13 +401,30 @@ You need Nix with flakes enabled; everything else comes from the environment. Wi
 
 ```sh
 nix develop        # Rust, sqlx-cli, PostgreSQL, Nickel, Node, just, wasmtime
+just dev           # PostgreSQL on :5433, refl-server on :3000, Vite on :5173
 just               # fmt-check, clippy, tests, wasm32 core build, native = WASM fold hash, content-build
 just --list        # individual recipes
 just ci            # full hermetic CI = nix flake check
 ```
 
+`just dev` initializes and starts `.pgdata` on port 5433 with its socket in
+`/tmp`, applies the server migrations, and runs the API and Vite together.
+Create an optional, untracked `.env.local` to pass local integrations:
+
+```sh
+TELEGRAM_BOT_TOKEN=...       # optional Telegram bot for approval notifications
+ADMIN_TELEGRAM_ID=...        # bootstrap admin Telegram id
+ADMIN_TELEGRAM_CHAT_ID=...   # chat that receives approval requests
+ADMIN_EMAIL=...              # bootstrap admin email
+VITE_TELEGRAM_BOT_ID=...     # Telegram Login Widget bot id exposed to Vite
+```
+
+`Ctrl+C` stops the API and Vite together; PostgreSQL keeps running for the
+next `just dev`.
+
 | Recipe | What it does |
 | --- | --- |
+| `just dev` | initialize `.pgdata` on :5433 and run the API plus Vite on :3000/:5173 |
 | `just fmt` / `just fmt-check` | format / check formatting |
 | `just lint` | clippy with `-D warnings` |
 | `just test` | all tests, including the database (temporary PostgreSQL) and TS type freshness |

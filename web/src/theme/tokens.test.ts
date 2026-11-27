@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   DEFAULT_SKIN,
+  DEFAULT_THEME,
   isSkinName,
   palette,
   skinLabelKeys,
@@ -32,6 +33,19 @@ describe("Living Studio tokens", () => {
       expect(theme.shadowButton).toContain("0 4px 0");
       expect(theme.shadowCard).toContain("0 6px 0");
     }
+  });
+
+  it("defines the Deep Umber and Cream Paper signature palettes", () => {
+    expect(DEFAULT_THEME).toBe("dark");
+    expect(palette.bg).toBe("#FAF4E8");
+    expect(palette.blue).toBe("#0D7A78");
+    expect(palette.coral).toBe("#FF2E7E");
+    expect(themes.light.surfaceCard).toBe("#FFFDF8");
+    expect(themes.light.microAccent).toBe("#FF2E7E");
+    expect(themes.dark.bg).toBe("#161210");
+    expect(themes.dark.surface).toBe("#201A17");
+    expect(themes.dark.blue).toBe("#2B9AF3");
+    expect(themes.dark.text).toBe("#EFE6D5");
   });
 
   it("defines the selectable non-ASCII skins with localized label keys", () => {

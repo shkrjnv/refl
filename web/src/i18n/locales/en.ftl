@@ -112,7 +112,7 @@ auth-welcome = Welcome to refl
 auth-welcome-eyebrow = First entry
 auth-welcome-title = Learn English in a studio that stays with you.
 auth-welcome-body = Offline answers, small sessions, and a clear route through the articles.
-auth-subtitle = Sign in to continue
+auth-subtitle = Enter with a one-time email code or Telegram.
 auth-dev-code = Development code: { $code }
 auth-change-email = Use another email
 auth-or = or
@@ -256,3 +256,18 @@ app-content-loading-body = Loading the last compatible bundle and local state.
 profile-logout-blocked = Unsynced answers are still here. Connect to the internet and try again.
 
 auth-back-signin = Back to sign in
+
+app-appearance = Appearance
+app-palette = Palette
+palette-deep-umber = Deep Umber
+palette-deep-umber-note = Old-paper ink on a deep umber canvas with morpho blue.
+palette-cream-paper = Cream Paper
+palette-cream-paper-note = Riso teal and fluorescent pink on cream paper.
+today-streak = { $days } day streak
+auth-code-group = Six-digit sign-in code
+auth-code-digit = Digit { $index }
+auth-iella-hello = Say hello to Iella
+auth-route-caption = A small route is ready before your first answer.
+auth-route-review = Review
+auth-route-rule = New rule
+auth-route-final = Final

@@ -25,6 +25,75 @@ web:
     pnpm --dir web test
     pnpm --dir web build
 
+# One-command local development: PostgreSQL on :5433, refl-server on :3000, Vite on :5173
+dev:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export DATABASE_URL="postgres://refl@127.0.0.1:5433/refl"
+    export BIND_ADDR="127.0.0.1:3000"
+    export DEV_AUTH=1
+    export REGISTRATION_MODE=closed
+    if [ -f .env.local ]; then
+        set -a
+        # shellcheck disable=SC1091
+        . ./.env.local
+        set +a
+    fi
+
+    if [ ! -f .pgdata/PG_VERSION ]; then
+        initdb -D .pgdata --username=refl --auth-local=trust --auth-host=trust --encoding=UTF8 >/dev/null
+    fi
+    if ! grep -Eq "^[[:space:]]*port[[:space:]]*=[[:space:]]*5433[[:space:]]*$" .pgdata/postgresql.conf; then
+        printf "\nport = 5433\n" >> .pgdata/postgresql.conf
+    fi
+    if ! grep -Eq "^[[:space:]]*unix_socket_directories[[:space:]]*=[[:space:]]*'/tmp'[[:space:]]*$" .pgdata/postgresql.conf; then
+        printf "unix_socket_directories = '/tmp'\n" >> .pgdata/postgresql.conf
+    fi
+    pg_ctl -D .pgdata status >/dev/null 2>&1 || pg_ctl -D .pgdata -l .pgdata/pg.log start
+
+    ready=""
+    for _ in $(seq 1 50); do
+        if pg_isready -h /tmp -p 5433 -U refl -d postgres >/dev/null 2>&1; then
+            ready=1
+            break
+        fi
+        sleep 0.2
+    done
+    if [ -z "$ready" ]; then
+        echo "PostgreSQL did not become ready on 127.0.0.1:5433" >&2
+        exit 1
+    fi
+    if ! psql -h /tmp -p 5433 -U refl -d postgres -Atqc "select 1 from pg_database where datname = 'refl'" | grep -q 1; then
+        createdb -h /tmp -p 5433 -U refl refl
+    fi
+    sqlx migrate run --source server/migrations --no-dotenv
+
+    server_pid=""
+    web_pid=""
+    cleanup() {
+        trap - EXIT INT TERM
+        for pid in "$web_pid" "$server_pid"; do
+            if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+                kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+            fi
+        done
+        wait 2>/dev/null || true
+    }
+    trap cleanup EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+
+    echo "refl dev: server http://127.0.0.1:3000, web http://127.0.0.1:5173"
+    echo "Ctrl+C stops both processes and leaves PostgreSQL running."
+    setsid bash -c 'exec cargo run --locked -p refl-server -- serve' &
+    server_pid=$!
+    setsid bash -c 'exec pnpm --dir web dev --host 0.0.0.0' &
+    web_pid=$!
+
+    status=0
+    wait -n "$server_pid" "$web_pid" || status=$?
+    exit "$status"
+
 # The core and its wasm-bindgen bridge must build for the browser; the web
 # client gets the generated JS glue, while compiled wasm/js stay untracked.
 wasm:

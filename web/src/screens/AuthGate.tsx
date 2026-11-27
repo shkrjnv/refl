@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import type { AuthTokens } from "../api/client";
+import type { SkinName, ThemeName } from "../theme/tokens";
 import {
   AuthScreen,
   type AuthApi,
@@ -11,12 +12,18 @@ import { PendingScreen, type AccessState } from "./PendingScreen";
 export interface AuthGateProps {
   api: AuthApi;
   inviteCode: string | null;
+  theme: ThemeName;
+  skin: SkinName;
+  onThemeChange: (theme: ThemeName) => void;
   onAuthenticated: (tokens: AuthTokens, method: "email" | "telegram") => void;
 }
 
 export function AuthGate({
   api,
   inviteCode,
+  theme,
+  skin,
+  onThemeChange,
   onAuthenticated,
 }: AuthGateProps) {
   const [access, setAccess] = useState<AccessState | null>(null);
@@ -37,6 +44,9 @@ export function AuthGate({
     <AuthScreen
       api={api}
       inviteCode={inviteCode}
+      theme={theme}
+      skin={skin}
+      onThemeChange={onThemeChange}
       onAuthenticated={onAuthenticated}
       onPending={setPending}
       onAccessBlocked={setAccess}

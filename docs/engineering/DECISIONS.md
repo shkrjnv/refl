@@ -99,3 +99,14 @@
 - Iella renders on a padded SVG canvas with idle breathing, blinking, looking, perches on Today, lesson, sidebar, and dock, and stays pointer-transparent except for the tip and tour affordances.
 - Telegram OAuth returns accept query params, `#tgAuthResult` base64 JSON, and `postMessage` from `https://oauth.telegram.org`; the return URL is clean and the redirect is same-window via `location.assign`.
 - Added Vitest coverage for Telegram hash parsing, skin persistence/switching, and Today clean-state suppression.
+
+## W5 — studio dev workflow, signature palettes, studio auth, and living companion
+
+- Added `just dev`: it initializes `.pgdata` on `:5433` with its socket in `/tmp`, applies migrations, and runs `refl-server` and Vite under a process-group trap. `.env.local` is optional and untracked.
+- Deep Umber + Old Paper + Morpho Blue is the default dark palette; Cream Paper + Riso Teal + Fluorescent Pink is the light palette. The five skins remain compatible with both modes.
+- Replaced the native skin select with an accessible appearance popover (skins and palettes); Auth has a compact palette toggle that writes `refl.theme` through the shared App state.
+- Auth now uses a local Canvas 2D procedural backdrop, textured opaque card surfaces, a composed route preview, animated OTP slots, and reduced-motion fallbacks.
+- Today uses a flat masthead with a local day streak, a five-column `01`–`05` route, and an animated celestial/parallax hero. Settings moved to a utility group in the sidebar.
+- Added `StudioIcons` (1.75px geometric strokes) for navigation, sync, palette, streak, and lesson controls.
+- Iella has layered body, wings, eyes, tail, and feet with idle, flying, perched, curious, and proud moods. `IellaCompanion` patrols between DOM anchors every 18–25 seconds with cubic Bézier motion and reacts to routes, lessons, answers, palette changes, and clicks without blocking the page.
+- Tests cover palette persistence, appearance selector interaction, Today's clean state and streak, and Iella mood/perch placement.

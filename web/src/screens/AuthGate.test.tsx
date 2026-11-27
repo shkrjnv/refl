@@ -1,16 +1,21 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useState } from "react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { AuthTokens, VerifyCodeResponse } from "../api/client";
 import { I18nProvider } from "../i18n";
+import { applyTheme, storeTheme, type ThemeName } from "../theme/tokens";
 import type { AuthApi } from "./AuthScreen";
 import { AuthGate } from "./AuthGate";
 
 afterEach(() => {
   cleanup();
+  window.localStorage.clear();
   window.history.replaceState({}, "", "/");
+  document.documentElement.removeAttribute("data-theme");
+  document.documentElement.style.removeProperty("color-scheme");
 });
 
 describe("auth and access flow", () => {
@@ -52,6 +57,9 @@ describe("auth and access flow", () => {
         <AuthGate
           api={api}
           inviteCode="INVITE-42"
+          theme="dark"
+          skin="living-studio"
+          onThemeChange={() => undefined}
           onAuthenticated={(tokens) => {
             authenticated = tokens;
           }}
@@ -119,6 +127,9 @@ describe("auth and access flow", () => {
         <AuthGate
           api={api}
           inviteCode="INVITE-42"
+          theme="dark"
+          skin="living-studio"
+          onThemeChange={() => undefined}
           onAuthenticated={(tokens) => {
             authenticated = tokens;
           }}
@@ -130,5 +141,48 @@ describe("auth and access flow", () => {
     await waitFor(() => expect(authenticated).not.toBeNull());
     expect(window.location.hash).toBe("");
     expect(window.location.search).toBe("?invite=INVITE-42");
+  });
+
+  it("persists the palette chosen before sign-in", () => {
+    let selected: ThemeName = "dark";
+    function Harness() {
+      const [theme, setTheme] = useState<ThemeName>("dark");
+      return (
+        <I18nProvider initialLocale="en">
+          <AuthGate
+            api={{
+              requestCode: async () => ({ sent: true, expires_in: 600 }),
+              verifyCode: async () => ({
+                access_token: "a",
+                refresh_token: "r",
+                learner_id: "learner-42",
+                expires_in: 900,
+              }),
+              telegramLogin: async () => ({
+                access_token: "a",
+                refresh_token: "r",
+                learner_id: "learner-42",
+                expires_in: 900,
+              }),
+            }}
+            inviteCode={null}
+            theme={theme}
+            skin="living-studio"
+            onThemeChange={(next) => {
+              selected = next;
+              storeTheme(next);
+              applyTheme(next);
+              setTheme(next);
+            }}
+            onAuthenticated={() => undefined}
+          />
+        </I18nProvider>
+      );
+    }
+    render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: "Cream Paper" }));
+    expect(selected).toBe("light");
+    expect(window.localStorage.getItem("refl.theme")).toBe("light");
+    expect(document.documentElement.dataset.theme).toBe("light");
   });
 });
