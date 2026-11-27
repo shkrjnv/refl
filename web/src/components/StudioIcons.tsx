@@ -200,153 +200,136 @@ export interface BrandLogoProps {
   className?: string;
 }
 
-// Crane-fused ribbon mark adapted from design/reference/refl-logo-ref.jpg.
+// Two interlocking prism brackets: the left r stem and shoulder weave over the
+// right stem, while the mirrored blue/teal r returns the reflection.
 export function BrandLogo({ size = 28, className = "" }: BrandLogoProps) {
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const umber = `brand-umber-${uid}`;
-  const burgundy = `brand-burgundy-${uid}`;
   const cream = `brand-cream-${uid}`;
   const blue = `brand-blue-${uid}`;
-  const blueDark = `brand-blue-dark-${uid}`;
+  const blueLight = `brand-blue-light-${uid}`;
   const teal = `brand-teal-${uid}`;
   return (
     <svg
       className={`brand-logo ${className}`.trim()}
       width={size}
       height={size}
-      viewBox="0 0 64 64"
+      viewBox="0 0 40 40"
       aria-hidden="true"
       focusable="false"
+      data-mark="prism-reflection"
     >
       <defs>
         <linearGradient id={umber} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#5C121A" />
-          <stop offset=".45" stopColor="#2A1712" />
+          <stop offset="0" stopColor="#6B4632" />
+          <stop offset=".45" stopColor="#33231B" />
           <stop offset="1" stopColor="#1A1512" />
-        </linearGradient>
-        <linearGradient id={burgundy} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#7A1824" />
-          <stop offset="1" stopColor="#3A0E12" />
         </linearGradient>
         <linearGradient id={cream} x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stopColor="#FFF9EC" />
-          <stop offset=".55" stopColor="#EAE2D3" />
-          <stop offset="1" stopColor="#CDBBA0" />
+          <stop offset=".55" stopColor="#EAE0CF" />
+          <stop offset="1" stopColor="#C7B49A" />
         </linearGradient>
         <linearGradient id={blue} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#62C1FF" />
-          <stop offset=".45" stopColor="#2B9AF3" />
-          <stop offset=".72" stopColor="#1E88E5" />
-          <stop offset="1" stopColor="#0D5FAE" />
+          <stop offset="0" stopColor="#63C5FF" />
+          <stop offset=".5" stopColor="#1E88E5" />
+          <stop offset="1" stopColor="#0B5AA6" />
         </linearGradient>
-        <linearGradient id={blueDark} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#1569B8" />
-          <stop offset="1" stopColor="#083E75" />
+        <linearGradient id={blueLight} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#8AD5FF" />
+          <stop offset="1" stopColor="#2B8FE0" />
         </linearGradient>
         <linearGradient id={teal} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#23B3AB" />
+          <stop offset="0" stopColor="#2CB8AF" />
           <stop offset=".6" stopColor="#0D7A78" />
-          <stop offset="1" stopColor="#044A48" />
+          <stop offset="1" stopColor="#07504F" />
         </linearGradient>
       </defs>
-      <path
-        className="brand-crane-feather brand-crane-feather-umber"
-        d="M37 40C28 32 18 20 5 12C10 24 18 35 28 42C32 45 36 46 39 45Z"
-        fill={`url(#${umber})`}
-      />
-      <path
-        className="brand-crane-feather brand-crane-feather-burgundy"
-        d="M38 42C32 32 25 20 16 7C18 21 25 33 33 43C35 46 38 47 40 46Z"
-        fill={`url(#${burgundy})`}
-      />
-      <path
-        className="brand-crane-feather brand-crane-feather-cream"
-        d="M39 43C35 31 31 18 26 4C26 18 30 32 35 44C37 47 39 48 41 47Z"
-        fill={`url(#${cream})`}
-      />
-      <path
-        className="brand-crane-feather brand-crane-feather-cream"
-        d="M41 43C40 31 40 17 42 3C43 17 45 30 46 42C46 45 44 47 42 47Z"
-        fill={`url(#${cream})`}
-      />
-      <path
-        className="brand-crane-feather-shade"
-        d="M39 43C34 39 28 35 22 33C28 38 34 42 40 46Z"
-        fill="#5C121A"
-        opacity=".55"
-      />
-      <path
-        className="brand-crane-body"
-        d="M38 45C33 39 34 31 40 28C46 26 52 31 52 38C52 46 46 51 39 49C37 48 36 46 35 44Z"
-        fill={`url(#${blue})`}
-      />
-      <path
-        className="brand-crane-shoulder"
-        d="M38 44C31 42 25 38 20 33C26 37 32 39 39 40Z"
-        fill={`url(#${blue})`}
-      />
-      <path
-        className="brand-crane-wing-panel"
-        d="M40 30C45 31 49 35 50 40C47 38 43 37 39 38C37 36 37 32 40 30Z"
-        fill={`url(#${blueDark})`}
-        opacity=".6"
-      />
-      <path
-        className="brand-crane-body-highlight"
-        d="M39 29C40 35 42 42 39 49C36 43 36 35 37 30Z"
-        fill="#8FD4FF"
-        opacity=".28"
-      />
-      <path
-        className="brand-crane-tail"
-        d="M33 48C26 52 17 56 7 61C16 54 24 49 31 42Z"
-        fill={`url(#${teal})`}
-      />
-      <path
-        className="brand-crane-tail"
-        d="M35 49C31 55 27 59 23 63C27 57 30 52 34 45Z"
-        fill={`url(#${teal})`}
-      />
-      <path
-        className="brand-crane-neck"
-        d="M41 36C40 29 42 22 47 17L49.5 18C46.5 23 45.5 29 45.5 35Z"
-        fill={`url(#${cream})`}
-      />
-      <path
-        className="brand-crane-neck-blue"
-        d="M42 36C42 30 44 24 48 19L49 20C46 25 45 30 45 35Z"
-        fill="#1E88E5"
-      />
-      <path
-        className="brand-crane-crest"
-        d="M46 17C45 13 47 10 50 9C51 12 51 15 50 18C48 19 46 18 46 17Z"
-        fill="#5C121A"
-      />
-      <path
-        className="brand-crane-head"
-        d="M47 17C48 14 50 13 52 14C53 16 52 18 50 19C48 20 47 19 47 17Z"
-        fill="#1A1512"
-      />
-      <path
-        className="brand-crane-beak"
-        d="M50 15L62 13.4L51 18.2Z"
-        fill="#1A1512"
-      />
-      <circle
-        className="brand-crane-eye"
-        cx="50.4"
-        cy="15.6"
-        r=".8"
-        fill="#FFF9EC"
-      />
-      <path
-        className="brand-crane-fold"
-        d="M38 44C32 41 27 38 23 34"
-        stroke="#0B4E8C"
-        strokeWidth=".7"
-        opacity=".45"
-        fill="none"
-      />
+      <g className="brand-prism">
+        {/* Left bracket: Deep Umber stem and cream shoulder crossing the blue stem. */}
+        <path
+          className="brand-prism-stem brand-prism-stem-umber"
+          d="M7 5L12 3.4L12 33L7 35Z"
+          fill={`url(#${umber})`}
+        />
+        <path
+          className="brand-prism-facet"
+          d="M7 5L9 4.4L9 34L7 35Z"
+          fill="#8A5D43"
+          opacity=".55"
+        />
+        <path
+          className="brand-prism-arm brand-prism-arm-cream"
+          d="M11.5 9.5L31 9.5L34 13L31 16.5L11.5 16.5Z"
+          fill={`url(#${cream})`}
+        />
+        <path
+          className="brand-prism-fold"
+          d="M11.5 14.2L31 14.2L33 15.4L31 16.5L11.5 16.5Z"
+          fill="#B9A488"
+          opacity=".78"
+        />
+        <path
+          className="brand-prism-highlight"
+          d="M11.5 9.5L31 9.5L33.2 11.5L13 11.5Z"
+          fill="#FFFDF5"
+          opacity=".58"
+        />
+        {/* Right bracket: Morpho Blue stem and Riso Teal shoulder crossing the umber stem. */}
+        <path
+          className="brand-prism-stem brand-prism-stem-blue"
+          d="M33 9L28 7.4L28 37L33 39Z"
+          fill={`url(#${blue})`}
+        />
+        <path
+          className="brand-prism-facet"
+          d="M33 9L31 8.4L31 38L33 39Z"
+          fill={`url(#${blueLight})`}
+          opacity=".42"
+        />
+        <path
+          className="brand-prism-arm brand-prism-arm-teal"
+          d="M28.5 21.5L9 21.5L6 25L9 28.5L28.5 28.5Z"
+          fill={`url(#${teal})`}
+        />
+        <path
+          className="brand-prism-fold"
+          d="M28.5 26.2L9 26.2L7 27.4L9 28.5L28.5 28.5Z"
+          fill="#064B49"
+          opacity=".8"
+        />
+        <path
+          className="brand-prism-highlight"
+          d="M28.5 21.5L9 21.5L6.8 23.5L27 23.5Z"
+          fill="#44CDC4"
+          opacity=".28"
+        />
+        {/* Over-under shadows make the two brackets read as one woven mark. */}
+        <path
+          className="brand-prism-shadow"
+          d="M29 9.5L34 9.5L34 16.5L31 16.5Z"
+          fill="#063E6F"
+          opacity=".35"
+        />
+        <path
+          className="brand-prism-shadow"
+          d="M6 21.5L11 21.5L11 28.5L9 28.5Z"
+          fill="#0B0705"
+          opacity=".4"
+        />
+        <path
+          className="brand-prism-bevel"
+          d="M11.5 9.5L14 12L11.5 14.5Z"
+          fill="#FFFDF5"
+          opacity=".22"
+        />
+        <path
+          className="brand-prism-bevel"
+          d="M28.5 21.5L26 24L28.5 26.5Z"
+          fill="#75E4DC"
+          opacity=".18"
+        />
+      </g>
     </svg>
   );
 }

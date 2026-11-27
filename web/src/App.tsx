@@ -24,7 +24,6 @@ import {
 import {
   normalizeLayout,
   readLayout,
-  resetLayout,
   storeLayout,
   type DashboardLayout,
   type NavigationPosition,
@@ -34,7 +33,6 @@ import { noteActiveDay, readStreak } from "./prototype/streak";
 import { AuthGate } from "./screens/AuthGate";
 import { LessonScreen } from "./screens/LessonScreen";
 import { ProfileScreen } from "./screens/ProfileScreen";
-import { SettingsScreen } from "./screens/SettingsScreen";
 import { ProgressScreen } from "./screens/ProgressScreen";
 import { SummaryScreen } from "./screens/SummaryScreen";
 import { TodayScreen } from "./screens/TodayScreen";
@@ -244,14 +242,18 @@ export function App({ initialTheme, initialSkin }: AppProps) {
     storageRef.current = store;
     setStorage(store);
     await store.setAuthSession(sessionRef.current);
-    const persistence = await requestPersistentStorage();
-    setStatus((current) => ({ ...current, persistence }));
     setIdentity({
       learnerId,
       label: learnerId.slice(0, 8),
       method,
     });
     setContentError(false);
+    // Persistence is a best-effort capability check; it must not delay entry.
+    void requestPersistentStorage()
+      .then((persistence) =>
+        setStatus((current) => ({ ...current, persistence })),
+      )
+      .catch(() => undefined);
     try {
       const loaded = await loadPrototypeContent(api, store);
       contentRef.current = loaded.content;
@@ -277,7 +279,7 @@ export function App({ initialTheme, initialSkin }: AppProps) {
     }
   };
 
-  const startLesson = async () => {
+  const startLesson = async (minutes = 25) => {
     const store = storageRef.current;
     const loaded = contentRef.current;
     const core = coreRef.current;
@@ -293,6 +295,7 @@ export function App({ initialTheme, initialSkin }: AppProps) {
         learnerId: identity.learnerId,
         locale,
         clock: clockRef.current,
+        budgetMs: Math.max(1, Math.round(minutes)) * 60_000,
       });
       const view = await lesson.start();
       setRunner(lesson);
@@ -403,11 +406,7 @@ export function App({ initialTheme, initialSkin }: AppProps) {
   };
 
   const changeNavigation = (next: NavigationPosition) => {
-    changeLayout({ ...layout, nav: next });
-  };
-
-  const resetDashboardLayout = () => {
-    setLayout(resetLayout());
+    changeLayout({ nav: next });
   };
 
   const changeAuthTheme = (next: ThemeName) => {
@@ -600,10 +599,7 @@ export function App({ initialTheme, initialSkin }: AppProps) {
           streak={streak}
           status={status}
           activity={activity}
-          layout={layout}
-          onLayoutChange={changeLayout}
-          onResetLayout={resetDashboardLayout}
-          onStart={() => void startLesson()}
+          onStart={(minutes) => void startLesson(minutes)}
           onOpenStats={() => setRoute("stats")}
           tourOpen={tourOpen}
           onTourComplete={() => setTourOpen(false)}
@@ -652,12 +648,6 @@ export function App({ initialTheme, initialSkin }: AppProps) {
           stateJson={stateJson}
           streak={streak}
           isAdmin={isAdmin}
-          onOpenSettings={() => setRoute("settings")}
-          onLogout={() => void handleLogout()}
-        />
-      ) : null}
-      {route === "settings" ? (
-        <SettingsScreen
           locale={locale}
           locales={locales}
           onLocaleChange={setLocale}
@@ -671,8 +661,8 @@ export function App({ initialTheme, initialSkin }: AppProps) {
           rejected={rejected}
           onExportCache={exportLocalCache}
           onResetCache={resetLocalCache}
-          isAdmin={isAdmin}
           adminApi={api}
+          onLogout={() => void handleLogout()}
         />
       ) : null}
     </AppShell>

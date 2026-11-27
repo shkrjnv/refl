@@ -41,6 +41,8 @@ describe("custom appearance selector", () => {
     }
     fireEvent.click(screen.getByRole("button", { name: /Laboratory/ }));
     expect(skin).toBe("laboratory");
+    fireEvent.click(screen.getByRole("button", { name: /Pixel World/ }));
+    expect(skin).toBe("pixel-world");
     fireEvent.click(screen.getByRole("button", { name: /Sand & Forest/ }));
     expect(theme).toBe("sand-forest");
     fireEvent.click(screen.getByRole("button", { name: /Midnight Cobalt/ }));

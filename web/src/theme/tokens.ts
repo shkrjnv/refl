@@ -27,6 +27,7 @@ export const skinNames = [
   "soft-neo-brutalism",
   "soft-bento",
   "laboratory",
+  "pixel-world",
 ] as const;
 
 export type SkinName = (typeof skinNames)[number];
@@ -40,6 +41,7 @@ export const skinLabelKeys: Record<SkinName, string> = {
   "soft-neo-brutalism": "skin-soft-neo-brutalism",
   "soft-bento": "skin-soft-bento",
   laboratory: "skin-laboratory",
+  "pixel-world": "skin-pixel-world",
 };
 
 export const skinDescriptionKeys: Record<SkinName, string> = {
@@ -48,6 +50,7 @@ export const skinDescriptionKeys: Record<SkinName, string> = {
   "soft-neo-brutalism": "skin-soft-neo-brutalism-note",
   "soft-bento": "skin-soft-bento-note",
   laboratory: "skin-laboratory-note",
+  "pixel-world": "skin-pixel-world-note",
 };
 
 export const paletteLabelKeys: Record<PaletteName, string> = {

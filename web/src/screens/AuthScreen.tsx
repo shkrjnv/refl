@@ -461,14 +461,14 @@ export function AuthScreen({
         <div className={`auth-form-region auth-stage-${stage}`}>
           <div className="auth-card-head auth-form-header">
             <div>
-              <h2>
+              <h2 className="auth-title-liquid">
                 {stage === "code" ? t("auth-code-title") : t("auth-title")}
               </h2>
-              <p className="auth-card-subtitle">
-                {stage === "code"
-                  ? t("auth-code-target", { target: maskedEmail })
-                  : t("auth-subtitle")}
-              </p>
+              {stage === "code" ? (
+                <p className="auth-card-subtitle">
+                  {t("auth-code-target", { target: maskedEmail })}
+                </p>
+              ) : null}
             </div>
           </div>
 

@@ -40,4 +40,37 @@ describe("compact language switcher", () => {
     fireEvent.click(russian);
     expect(selected).toBe("ru");
   });
+
+  it("highlights only the active language or the hovered/focused language", () => {
+    render(
+      <I18nProvider initialLocale="en">
+        <LanguageMenu
+          locale="en"
+          locales={["en", "ru", "uz"]}
+          onLocaleChange={() => undefined}
+        />
+      </I18nProvider>,
+    );
+
+    const english = screen.getByRole("option", { name: "English" });
+    const russian = screen.getByRole("option", { name: "Russian" });
+    expect(english.className).toContain("is-highlight");
+    expect(russian.className).not.toContain("is-highlight");
+
+    fireEvent.pointerEnter(russian);
+    expect(russian.className).toContain("is-highlight");
+    expect(english.className).not.toContain("is-highlight");
+
+    fireEvent.pointerLeave(russian);
+    expect(english.className).toContain("is-highlight");
+    expect(russian.className).not.toContain("is-highlight");
+
+    fireEvent.focus(russian);
+    expect(russian.className).toContain("is-highlight");
+    expect(english.className).not.toContain("is-highlight");
+
+    fireEvent.blur(russian);
+    expect(english.className).toContain("is-highlight");
+    expect(russian.className).not.toContain("is-highlight");
+  });
 });

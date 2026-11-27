@@ -84,6 +84,14 @@ describe("skin and palette selection", () => {
     expect(document.documentElement.dataset["skin"]).toBe("neo-brutalism");
   });
 
+  it("persists and applies the Pixel World skin", () => {
+    storeSkin("pixel-world");
+    expect(readStoredSkin()).toBe("pixel-world");
+    expect(initialSkin()).toBe("pixel-world");
+    applySkin("pixel-world");
+    expect(document.documentElement.dataset["skin"]).toBe("pixel-world");
+  });
+
   it("ignores unknown or reserved values", () => {
     storeSkin("laboratory");
     window.localStorage.setItem("refl.skin", "pure-ascii");

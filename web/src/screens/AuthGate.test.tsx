@@ -233,13 +233,14 @@ describe("auth and access flow", () => {
       screen.getByRole("heading", { name: "Step into the studio" }),
     ).toBeTruthy();
     expect(
-      screen.getByText(
+      screen.queryByText(
         "One-time code by email, or instant entry with Telegram.",
       ),
-    ).toBeTruthy();
-    expect(document.querySelector(".auth-form-header h2")?.textContent).toBe(
-      "Step into the studio",
-    );
+    ).toBeNull();
+    const title = document.querySelector(".auth-form-header h2");
+    expect(title?.textContent).toBe("Step into the studio");
+    expect(title?.classList.contains("auth-title-liquid")).toBe(true);
+    expect(document.querySelector(".auth-form-header .auth-card-subtitle")).toBeNull();
     for (const name of [
       "Deep Umber",
       "Burgundy Studio",

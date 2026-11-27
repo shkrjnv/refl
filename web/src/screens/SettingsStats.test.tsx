@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { I18nProvider } from "../i18n";
 import type { NavigationPosition } from "../prototype/layout";
 import { initialStatus } from "../prototype/status";
-import { ProfileScreen } from "./ProfileScreen";
+import { ProfileScreen, type ProfileScreenProps } from "./ProfileScreen";
 import { SettingsScreen } from "./SettingsScreen";
 import { ProgressScreen } from "./ProgressScreen";
 import { testContent } from "./testContent";
@@ -14,6 +14,7 @@ import { testContent } from "./testContent";
 afterEach(cleanup);
 
 const KC = "en.gram.article.a-an-sound";
+const MISCONCEPTION = "m.active";
 const stateJson = JSON.stringify({
   kcs: {
     [KC]: {
@@ -23,58 +24,87 @@ const stateJson = JSON.stringify({
     },
   },
   misconceptions: {
-    "m.active": { alpha: 2, beta: 2, manifested: 3, updated_at: 1_700_000_000_000 },
-    "m.cured": { alpha: 0.5, beta: 8.5, manifested: 1, updated_at: 1_700_000_000_000 },
+    [MISCONCEPTION]: {
+      alpha: 2,
+      beta: 2,
+      manifested: 3,
+      updated_at: 1_700_000_000_000,
+    },
+    "m.cured": {
+      alpha: 0.5,
+      beta: 8.5,
+      manifested: 1,
+      updated_at: 1_700_000_000_000,
+    },
   },
 });
 
+function profileProps(): ProfileScreenProps {
+  return {
+    learnerLabel: "Learner",
+    learnerId: "learner-42",
+    authMethod: "email",
+    content: testContent(),
+    stateJson,
+    streak: 6,
+    isAdmin: false,
+    locale: "en",
+    locales: ["en", "ru", "uz"],
+    onLocaleChange: () => undefined,
+    theme: "deep-umber",
+    onThemeChange: () => undefined,
+    skin: "living-studio",
+    onSkinChange: () => undefined,
+    navigationPosition: "left",
+    onNavigationPositionChange: () => undefined,
+    status: initialStatus(true),
+    rejected: [],
+    onExportCache: async () => undefined,
+    onResetCache: async () => undefined,
+    adminApi: null,
+    onLogout: () => undefined,
+  };
+}
+
 describe("statistics, profile, and settings", () => {
-  it("renders equation-free FSRS metrics and analytical charts", () => {
+  it("renders plain-language memory metrics and the analytical charts", () => {
     render(
       <I18nProvider initialLocale="en">
         <ProgressScreen content={testContent()} stateJson={stateJson} />
       </I18nProvider>,
     );
 
-    expect(screen.getByText("FSRS retrievability")).toBeTruthy();
+    expect(screen.getByText("Memory retention")).toBeTruthy();
     expect(
       screen.queryByText("R(t) = (1 + t / (9 · S))⁻¹"),
     ).toBeNull();
-    const stabilityMetric = screen.getByText("Stability S").parentElement;
-    expect(stabilityMetric).not.toBeNull();
-    if (stabilityMetric) {
-      expect(within(stabilityMetric).getByText("12")).toBeTruthy();
+    const strengthMetric = screen.getByText("Memory strength").parentElement;
+    expect(strengthMetric).not.toBeNull();
+    if (strengthMetric) {
+      expect(within(strengthMetric).getByText("12")).toBeTruthy();
     }
-    const difficultyMetric = screen.getByText("Difficulty D").parentElement;
-    expect(difficultyMetric).not.toBeNull();
-    if (difficultyMetric) {
-      expect(within(difficultyMetric).getByText("5.0")).toBeTruthy();
+    const complexityMetric = screen.getByText("Topic complexity").parentElement;
+    expect(complexityMetric).not.toBeNull();
+    if (complexityMetric) {
+      expect(within(complexityMetric).getByText("5.0")).toBeTruthy();
     }
+    expect(screen.getByText("Average review gap")).toBeTruthy();
+    expect(screen.getByText("Mastered rules")).toBeTruthy();
     expect(screen.getByRole("img", { name: "Forgetting curve" })).toBeTruthy();
     expect(screen.getByText("Progress by CEFR band")).toBeTruthy();
     expect(screen.getByText("Domain distribution")).toBeTruthy();
     expect(screen.getByText("Misconceptions")).toBeTruthy();
     expect(screen.getByText("Cure rate 50%")).toBeTruthy();
-    expect(screen.getByText("Forecast quality")).toBeTruthy();
+    expect(screen.getByText("Forecast accuracy")).toBeTruthy();
     expect(
       screen.getByRole("button", { name: /A1: 1 of 1 mastered/ }),
     ).toBeTruthy();
   });
 
-  it("keeps Profile separate from the compact Settings surface", () => {
+  it("embeds public-profile preview, visibility, and private learner cards", () => {
     render(
       <I18nProvider initialLocale="en">
-        <ProfileScreen
-          learnerLabel="Learner"
-          learnerId="learner-42"
-          authMethod="email"
-          content={testContent()}
-          stateJson={stateJson}
-          streak={6}
-          isAdmin={false}
-          onOpenSettings={() => undefined}
-          onLogout={() => undefined}
-        />
+        <ProfileScreen {...profileProps()} />
       </I18nProvider>,
     );
 
@@ -82,15 +112,54 @@ describe("statistics, profile, and settings", () => {
     expect(screen.getByText("learner-42")).toBeTruthy();
     expect(screen.getByText("Learner", { selector: ".ui-badge" })).toBeTruthy();
     expect(screen.getByText("Milestones")).toBeTruthy();
-    expect(screen.getByText("Account and linked methods")).toBeTruthy();
+    expect(screen.getByText("Level progress")).toBeTruthy();
+    expect(screen.getByText("Public profile")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Error notebook" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Quick notes" })).toBeTruthy();
+    for (const label of ["Self", "Team", "Friends", "Everyone"]) {
+      expect(screen.getByRole("button", { name: label })).toBeTruthy();
+    }
     expect(screen.queryByRole("tab")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Everyone" }));
+    fireEvent.click(screen.getByRole("button", { name: "Preview visitor view" }));
+    expect(
+      screen.getByText("Visitor preview. Private notes and errors are hidden."),
+    ).toBeTruthy();
+    expect(screen.queryByText("learner-42")).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Error notebook" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Quick notes" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Milestones" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Exit preview" }));
+    expect(screen.getByRole("heading", { name: "Error notebook" })).toBeTruthy();
+    expect(screen.getByText("learner-42")).toBeTruthy();
   });
 
-  it("switches language, palette, skin, and navigation from settings", () => {
+  it("opens the embedded settings tabs from the Profile header", () => {
+    render(
+      <I18nProvider initialLocale="en">
+        <ProfileScreen {...profileProps()} />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    for (const label of ["Appearance", "Account & Sync", "Offline & Data"]) {
+      expect(screen.getByRole("tab", { name: label })).toBeTruthy();
+    }
+    expect(screen.queryByRole("tab", { name: "Admin" })).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "Account & Sync" }));
+    expect(screen.getByText("Learner identity")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Back to profile" }));
+    expect(screen.getByRole("heading", { name: "Learner" })).toBeTruthy();
+  });
+
+  it("switches language, palette, skin, navigation, and sign-out from settings", () => {
     let locale = "en";
     let selectedPalette = "cream-paper";
     let selectedSkin = "living-studio";
     let navigation: NavigationPosition = "left";
+    let signedOut = false;
     render(
       <I18nProvider initialLocale="en">
         <SettingsScreen
@@ -117,19 +186,28 @@ describe("statistics, profile, and settings", () => {
           onResetCache={async () => undefined}
           isAdmin={false}
           adminApi={null}
+          authMethod="email"
+          learnerId="learner-42"
+          onLogout={() => {
+            signedOut = true;
+          }}
         />
       </I18nProvider>,
     );
 
-    fireEvent.click(screen.getByRole("tab", { name: "Language" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Account & Sync" }));
     fireEvent.click(screen.getByRole("button", { name: "Russian" }));
+    expect(screen.getByText("learner-42")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    expect(signedOut).toBe(true);
     fireEvent.click(screen.getByRole("tab", { name: "Appearance" }));
     fireEvent.click(screen.getByRole("button", { name: /Sand & Forest/ }));
     fireEvent.click(screen.getByRole("button", { name: /Laboratory/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Pixel World/ }));
     fireEvent.click(screen.getByRole("button", { name: "Right rail" }));
     expect(locale).toBe("ru");
     expect(selectedPalette).toBe("sand-forest");
-    expect(selectedSkin).toBe("laboratory");
+    expect(selectedSkin).toBe("pixel-world");
     expect(navigation).toBe("right");
     expect(screen.getByText("Settings")).toBeTruthy();
     fireEvent.click(screen.getByRole("tab", { name: "Offline & Data" }));
@@ -159,7 +237,7 @@ describe("statistics, profile, and settings", () => {
       </I18nProvider>,
     );
     expect(screen.queryByRole("tab", { name: "Admin" })).toBeNull();
-    expect(screen.queryByRole("tab", { name: "Account & Sync" })).toBeNull();
+    expect(screen.getByRole("tab", { name: "Account & Sync" })).toBeTruthy();
     fireEvent.click(screen.getByRole("tab", { name: "Offline & Data" }));
     expect(screen.getByRole("button", { name: "Export JSON" })).toBeTruthy();
 

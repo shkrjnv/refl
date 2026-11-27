@@ -4,7 +4,6 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { I18nProvider } from "../i18n";
-import { defaultLayout } from "../prototype/layout";
 import { initialStatus } from "../prototype/status";
 import { activitySummary } from "../prototype/activity";
 import { TodayScreen } from "./TodayScreen";
@@ -27,9 +26,6 @@ describe("Iella onboarding", () => {
           streak={4}
           status={initialStatus(true)}
           activity={activitySummary([], null)}
-          layout={defaultLayout()}
-          onLayoutChange={() => undefined}
-          onResetLayout={() => undefined}
           onStart={() => undefined}
           onOpenStats={() => undefined}
           tourOpen
@@ -57,9 +53,6 @@ describe("Iella onboarding", () => {
           streak={4}
           status={initialStatus(true)}
           activity={activitySummary([], null)}
-          layout={defaultLayout()}
-          onLayoutChange={() => undefined}
-          onResetLayout={() => undefined}
           onStart={() => undefined}
           onOpenStats={() => undefined}
           tourOpen

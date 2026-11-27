@@ -19,12 +19,17 @@ export function LanguageMenu({
 }: LanguageMenuProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
+  const [highlighted, setHighlighted] = useState<Locale | null>(null);
+  const highlightedLocale = highlighted ?? locale;
 
   return (
     <div
       className={`language-menu ${className}`.trim()}
       data-open={open ? "true" : "false"}
-      onPointerLeave={() => setOpen(false)}
+      onPointerLeave={() => {
+        setOpen(false);
+        setHighlighted(null);
+      }}
     >
       <button
         type="button"
@@ -48,12 +53,17 @@ export function LanguageMenu({
             key={candidate}
             type="button"
             role="option"
-            className={`language-option${candidate === locale ? " active" : ""}`}
+            className={`language-option${highlightedLocale === candidate ? " is-highlight" : ""}${candidate === locale ? " active" : ""}`}
             aria-selected={candidate === locale}
             aria-label={t(`language-${candidate}`)}
             title={t(`language-${candidate}`)}
+            onPointerEnter={() => setHighlighted(candidate)}
+            onPointerLeave={() => setHighlighted(null)}
+            onFocus={() => setHighlighted(candidate)}
+            onBlur={() => setHighlighted(null)}
             onClick={() => {
               onLocaleChange(candidate);
+              setHighlighted(null);
               setOpen(false);
             }}
           >

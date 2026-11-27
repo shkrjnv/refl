@@ -1304,3 +1304,18 @@
     var(--swatch-bg) 50%
   );
 }
+
+/* W13 — Pixel World skin preview and selector swatch. */
+.skin-preview-pixel-world {
+  --preview-bg: #dfeafa;
+  --preview-surface: #f8fbff;
+  --preview-accent: #1e88e5;
+  --preview-border: #1a1512;
+}
+
+.skin-swatch-pixel-world {
+  background:
+    linear-gradient(135deg, transparent 0 46%, #1e88e5 46% 72%, #0d7a78 72%),
+    #f8fbff;
+  image-rendering: pixelated;
+}

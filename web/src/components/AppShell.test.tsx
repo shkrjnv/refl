@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { I18nProvider } from "../i18n";
@@ -36,13 +36,44 @@ function renderShell(
 }
 
 describe("adaptive studio shell", () => {
-  it("opens Profile from the learner card and Settings from the compact gear", () => {
+  it("exposes exactly Today, Practice, Progress, and Profile in both navigations", () => {
+    const routes: AppRoute[] = [];
+    const { container } = renderShell("left", (route) => routes.push(route));
+
+    const sideNav = container.querySelector(".side-nav");
+    const mobileNav = container.querySelector(".mobile-nav");
+    expect(sideNav).toBeTruthy();
+    expect(mobileNav).toBeTruthy();
+    if (!sideNav || !mobileNav) {
+      return;
+    }
+    const sideItems = within(sideNav as HTMLElement).getAllByRole("button");
+    const mobileItems = within(mobileNav as HTMLElement).getAllByRole("button");
+    expect(sideItems.map((item) => item.textContent)).toEqual([
+      "Today",
+      "Practice",
+      "Progress",
+      "Profile",
+    ]);
+    expect(mobileItems.map((item) => item.textContent)).toEqual([
+      "Today",
+      "Practice",
+      "Progress",
+      "Profile",
+    ]);
+    expect(screen.queryByText("Settings")).toBeNull();
+    expect(container.querySelector(".learner-settings-button")).toBeNull();
+
+    fireEvent.click(within(sideNav as HTMLElement).getByRole("button", { name: "Profile" }));
+    expect(routes).toEqual(["profile"]);
+  });
+
+  it("keeps the identity card as a Profile shortcut without a settings gear", () => {
     const routes: AppRoute[] = [];
     renderShell("left", (route) => routes.push(route));
 
     fireEvent.click(screen.getByRole("button", { name: /Learner/ }));
-    fireEvent.click(screen.getAllByRole("button", { name: "Settings" })[0]!);
-    expect(routes).toEqual(["profile", "settings"]);
+    expect(routes).toEqual(["profile"]);
   });
 
   it("docks the primary navigation left, right, or bottom", () => {

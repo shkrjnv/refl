@@ -9,12 +9,7 @@ import { IellaSprite } from "./IellaSprite";
 import { LanguageMenu } from "./LanguageMenu";
 import { BrandLogo, StudioIcon, type StudioIconName } from "./StudioIcons";
 
-export type AppRoute =
-  | "today"
-  | "lesson"
-  | "stats"
-  | "profile"
-  | "settings";
+export type AppRoute = "today" | "lesson" | "stats" | "profile";
 
 export interface AppShellProps {
   active: AppRoute;
@@ -66,17 +61,8 @@ export function AppShell({
       disabled: !lessonAvailable,
     },
     { route: "stats", label: t("nav-stats"), glyph: "progress" },
+    { route: "profile", label: t("nav-profile"), glyph: "profile" },
   ];
-  const profileItem: NavItem = {
-    route: "profile",
-    label: t("nav-profile"),
-    glyph: "profile",
-  };
-  const settingsItem: NavItem = {
-    route: "settings",
-    label: t("nav-settings"),
-    glyph: "gear",
-  };
 
   const navigate = (item: NavItem) => {
     if (!item.disabled) {
@@ -137,15 +123,6 @@ export function AppShell({
               <span>{t("profile-local-learner")}</span>
             </span>
           </button>
-          <button
-            type="button"
-            className={`learner-settings-button${active === "settings" ? " active" : ""}`}
-            aria-label={t("nav-settings")}
-            aria-current={active === "settings" ? "page" : undefined}
-            onClick={() => onNavigate("settings")}
-          >
-            <StudioIcon name="gear" size={18} />
-          </button>
         </div>
       </aside>
 
@@ -173,7 +150,7 @@ export function AppShell({
       </div>
 
       <nav className="mobile-nav" aria-label={t("nav-label")}>
-        {[...primaryItems, profileItem, settingsItem].map((item) => (
+        {primaryItems.map((item) => (
           <button
             key={item.route}
             type="button"

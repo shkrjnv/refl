@@ -1,17 +1,29 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
+import type { ApiClient } from "../api/client";
+import { IellaSprite } from "../components/IellaSprite";
 import { StudioIcon } from "../components/StudioIcons";
 import { Badge, Button, Card, ProgressBar } from "../components/ui";
+import type { OutboxRecord } from "../db/storage";
+import type { Locale } from "../i18n";
 import { useTranslation } from "../i18n";
+import type { NavigationPosition } from "../prototype/layout";
 import type { PrototypeContent } from "../prototype/content";
 import {
-  dueCount,
   kcProgress,
+  levelBreakdown,
   memoryRetention,
+  misconceptionProgress,
   parseLearnerState,
   statsSummary,
   totalReviews,
+  weakestKcs,
 } from "../prototype/progress";
+import type { AppStatus } from "../prototype/status";
+import type { PaletteName, SkinName } from "../theme/tokens";
+import { SettingsScreen } from "./SettingsScreen";
+
+export type ProfileVisibility = "self" | "team" | "friends" | "everyone";
 
 export interface ProfileScreenProps {
   learnerLabel: string;
@@ -21,9 +33,30 @@ export interface ProfileScreenProps {
   stateJson: string | null;
   streak: number;
   isAdmin: boolean;
-  onOpenSettings: () => void;
+  locale: Locale;
+  locales: readonly Locale[];
+  onLocaleChange: (locale: Locale) => void;
+  theme: PaletteName;
+  onThemeChange: (theme: PaletteName) => void;
+  skin: SkinName;
+  onSkinChange: (skin: SkinName) => void;
+  navigationPosition: NavigationPosition;
+  onNavigationPositionChange: (position: NavigationPosition) => void;
+  status: AppStatus;
+  rejected: OutboxRecord[];
+  onExportCache: () => Promise<void>;
+  onResetCache: () => Promise<void>;
+  adminApi: ApiClient | null;
   onLogout: () => void;
 }
+
+const CEFR_ORDER = ["A1", "A2", "B1", "B2"] as const;
+const VISIBILITIES: ProfileVisibility[] = [
+  "self",
+  "team",
+  "friends",
+  "everyone",
+];
 
 interface Milestone {
   id: string;
@@ -40,18 +73,64 @@ export function ProfileScreen({
   stateJson,
   streak,
   isAdmin,
-  onOpenSettings,
+  locale,
+  locales,
+  onLocaleChange,
+  theme,
+  onThemeChange,
+  skin,
+  onSkinChange,
+  navigationPosition,
+  onNavigationPositionChange,
+  status,
+  rejected,
+  onExportCache,
+  onResetCache,
+  adminApi,
   onLogout,
 }: ProfileScreenProps) {
-  const { t, locale } = useTranslation();
+  const { t } = useTranslation();
+  const [view, setView] = useState<"profile" | "settings">("profile");
+  const [visibility, setVisibility] = useState<ProfileVisibility>("self");
+  const [preview, setPreview] = useState(false);
+  const state = useMemo(() => parseLearnerState(stateJson), [stateJson]);
   const progress = useMemo(
-    () => kcProgress(content, parseLearnerState(stateJson), locale),
-    [content, stateJson, locale],
+    () => kcProgress(content, state, locale),
+    [content, state, locale],
   );
   const stats = statsSummary(progress);
   const reviews = totalReviews(progress);
-  const due = dueCount(progress);
   const retention = memoryRetention(progress);
+  const due = progress.filter((kc) => kc.due).length;
+  const levels = levelBreakdown(progress);
+  const firstIncomplete = CEFR_ORDER.findIndex((level) => {
+    const entry = levels.find((candidate) => candidate.level === level);
+    return entry !== undefined && entry.percent < 100;
+  });
+  const highestObserved = CEFR_ORDER.reduce(
+    (index, level, candidate) =>
+      levels.some((entry) => entry.level === level && entry.total > 0)
+        ? candidate
+        : index,
+    0,
+  );
+  const currentIndex = firstIncomplete >= 0 ? firstIncomplete : highestObserved;
+  const levelName = CEFR_ORDER[currentIndex] ?? "A1";
+  const nextLevel = CEFR_ORDER[currentIndex + 1] ?? levelName;
+  const currentLevel = levels.find((entry) => entry.level === levelName);
+  const levelPercent = currentLevel?.percent ?? 0;
+  const levelMastered = currentLevel?.mastered ?? 0;
+  const levelTotal = currentLevel?.total ?? 0;
+  const errors = useMemo(
+    () =>
+      misconceptionProgress(content, state, locale)
+        .filter((entry) => entry.manifested > 0 && entry.status !== "cured")
+        .slice(0, 4),
+    [content, state, locale],
+  );
+  const notes = weakestKcs(progress, 3);
+  const visitor = preview;
+  const privateVisitor = visitor && visibility === "self";
   const milestones: Milestone[] = [
     {
       id: "first-answer",
@@ -85,18 +164,6 @@ export function ProfileScreen({
     },
   ];
 
-  const methodRow = (kind: "email" | "telegram", labelKey: string) => {
-    const linked = authMethod === kind;
-    return (
-      <div className="method-row" key={kind}>
-        <span>{t(labelKey)}</span>
-        <Badge tone={linked ? "green" : "neutral"}>
-          {linked ? t("settings-linked") : t("settings-not-linked")}
-        </Badge>
-      </div>
-    );
-  };
-
   return (
     <div className="profile-screen profile-personal">
       <header className="profile-heading">
@@ -107,12 +174,13 @@ export function ProfileScreen({
           <div className="profile-heading-copy">
             <p className="eyebrow">{t("profile-eyebrow")}</p>
             <h1>{learnerLabel}</h1>
-            <code>{learnerId}</code>
+            {!visitor ? <code>{learnerId}</code> : null}
             <div className="profile-pills">
               <Badge tone={isAdmin ? "sun" : "neutral"}>
                 {isAdmin ? t("profile-role-admin") : t("profile-role-learner")}
               </Badge>
               <Badge tone="green">{t("profile-local")}</Badge>
+              {visitor ? <Badge tone="blue">{t("profile-preview-badge")}</Badge> : null}
             </div>
           </div>
         </div>
@@ -123,142 +191,306 @@ export function ProfileScreen({
           </span>
           <Button
             type="button"
-            variant="secondary"
+            variant={preview ? "primary" : "secondary"}
             size="sm"
-            onClick={onOpenSettings}
+            aria-pressed={preview}
+            onClick={() => setPreview((value) => !value)}
           >
-            <StudioIcon name="gear" size={16} />
-            {t("common-settings")}
+            <StudioIcon name={preview ? "arrow-left" : "profile"} size={16} />
+            {preview ? t("profile-preview-exit") : t("profile-preview-action")}
+          </Button>
+          <Button
+            type="button"
+            variant={view === "settings" ? "primary" : "secondary"}
+            size="sm"
+            aria-pressed={view === "settings"}
+            onClick={() =>
+              setView((current) =>
+                current === "settings" ? "profile" : "settings",
+              )
+            }
+          >
+            <StudioIcon
+              name={view === "settings" ? "arrow-left" : "gear"}
+              size={16}
+            />
+            {view === "settings"
+              ? t("profile-settings-back")
+              : t("profile-settings-open")}
           </Button>
         </div>
       </header>
 
-      <div className="profile-overview">
-        <Card tone="plain" className="profile-stat-card">
-          <span className="profile-stat-label">{t("stats-mastered")}</span>
-          <strong className="profile-stat-value">{stats.mastered}</strong>
-          <span className="profile-stat-note">
-            {t("profile-mastered-note", {
-              total: progress.length,
-              reviews,
-            })}
-          </span>
-          <ProgressBar
-            value={
-              progress.length === 0
-                ? 0
-                : Math.round((stats.mastered / progress.length) * 100)
-            }
-            tone="green"
-            label={t("stats-mastered")}
-          />
-        </Card>
+      {view === "settings" ? (
+        <SettingsScreen
+          embedded
+          locale={locale}
+          locales={locales}
+          onLocaleChange={onLocaleChange}
+          theme={theme}
+          onThemeChange={onThemeChange}
+          skin={skin}
+          onSkinChange={onSkinChange}
+          navigationPosition={navigationPosition}
+          onNavigationPositionChange={onNavigationPositionChange}
+          status={status}
+          rejected={rejected}
+          onExportCache={onExportCache}
+          onResetCache={onResetCache}
+          isAdmin={isAdmin}
+          adminApi={adminApi}
+          authMethod={authMethod}
+          learnerId={learnerId}
+          onLogout={onLogout}
+        />
+      ) : (
+        <>
+          {visitor ? (
+            <div className="profile-preview-banner" role="status">
+              <IellaSprite size={28} mood="curious" />
+              <span>{t("profile-preview-banner")}</span>
+              <Badge tone="blue">{t(`profile-visibility-${visibility}`)}</Badge>
+            </div>
+          ) : null}
 
-        <Card tone="plain" className="profile-stat-card">
-          <span className="profile-stat-label">{t("stats-memory")}</span>
-          <strong className="profile-stat-value">
-            {stats.inMemory}
-            <small>/{progress.length}</small>
-          </strong>
-          <span className="profile-stat-note">
-            {stats.inMemory === 0
-              ? t("stats-memory-empty")
-              : t("profile-memory-note", {
-                  days: Math.max(1, Math.round(stats.averageStability)),
-                  due,
-                })}
-          </span>
-          <ProgressBar
-            value={retention}
-            tone="blue"
-            label={t("stats-memory")}
-          />
-          <span className="profile-stat-inline">
-            {t("profile-retention", { percent: retention })}
-          </span>
-        </Card>
-
-        <Card tone="plain" className="profile-stat-card">
-          <span className="profile-stat-label">{t("profile-reviews")}</span>
-          <strong className="profile-stat-value">{reviews}</strong>
-          <span className="profile-stat-note">{t("profile-reviews-note")}</span>
-          <div className="profile-review-parts">
-            <span>
-              <strong>{streak}</strong>
-              {t("profile-streak-short")}
-            </span>
-            <span>
-              <strong>{due}</strong>
-              {t("today-memory-due-label")}
-            </span>
-          </div>
-        </Card>
-      </div>
-
-      <section className="profile-section" aria-labelledby="profile-milestones-title">
-        <div className="profile-section-heading">
-          <div>
-            <h2 id="profile-milestones-title">{t("profile-milestones")}</h2>
-            <p>{t("profile-milestones-note")}</p>
-          </div>
-        </div>
-        <div className="milestone-grid">
-          {milestones.map((milestone) => (
-            <Card
-              key={milestone.id}
-              tone={milestone.earned ? "plain" : "quiet"}
-              className={`milestone-badge${milestone.earned ? " earned" : ""}`}
-            >
-              <span className="milestone-icon" aria-hidden="true">
-                <StudioIcon
-                  name={milestone.earned ? "check" : "spark"}
-                  size={18}
+          <div className="profile-public-grid">
+            <Card tone="tinted" className="profile-banner-card">
+              <div className="profile-banner-iella">
+                <IellaSprite size={56} mood="proud" />
+                <div>
+                  <span>{t("iella-companion")}</span>
+                  <strong>{t("profile-iella-badge", { level: levelName })}</strong>
+                </div>
+              </div>
+              <div className="profile-level-block">
+                <div className="profile-level-heading">
+                  <span>{t("profile-level-progress")}</span>
+                  <strong>
+                    {levelName}
+                    <StudioIcon name="arrow-right" size={13} />
+                    {nextLevel}
+                  </strong>
+                </div>
+                <ProgressBar
+                  value={levelPercent}
+                  tone="green"
+                  label={t("profile-level-progress")}
                 />
-              </span>
-              <strong>{t(milestone.labelKey)}</strong>
-              <span>{t(milestone.noteKey)}</span>
+                <p>
+                  {levelTotal === 0
+                    ? t("today-level-empty")
+                    : t("profile-level-note", {
+                        mastered: levelMastered,
+                        total: levelTotal,
+                        level: levelName,
+                      })}
+                </p>
+              </div>
             </Card>
-          ))}
-        </div>
-      </section>
 
-      <section className="profile-section" aria-labelledby="profile-account-title">
-        <div className="profile-section-heading">
-          <div>
-            <h2 id="profile-account-title">{t("profile-account-title")}</h2>
-            <p>{t("settings-method-note")}</p>
+            <Card tone="plain" className="profile-visibility-card">
+              <div className="profile-section-heading">
+                <div>
+                  <h2>{t("profile-public-title")}</h2>
+                  <p>{t("profile-public-note")}</p>
+                </div>
+                <StudioIcon name="globe" size={19} />
+              </div>
+              <div
+                className="profile-visibility-options"
+                role="group"
+                aria-label={t("profile-visibility-title")}
+              >
+                {VISIBILITIES.map((candidate) => (
+                  <button
+                    key={candidate}
+                    type="button"
+                    className={`profile-visibility-option${visibility === candidate ? " active" : ""}`}
+                    aria-pressed={visibility === candidate}
+                    onClick={() => setVisibility(candidate)}
+                  >
+                    {t(`profile-visibility-${candidate}`)}
+                  </button>
+                ))}
+              </div>
+              {privateVisitor ? (
+                <p className="profile-visibility-warning">
+                  {t("profile-visibility-private")}
+                </p>
+              ) : null}
+            </Card>
           </div>
-        </div>
-        <div className="settings-two-column">
-          <Card tone="plain" className="settings-card">
-            <h3>{t("profile-linked")}</h3>
-            <div className="method-list">
-              {methodRow("email", "settings-method-email")}
-              {methodRow("telegram", "settings-method-telegram")}
-            </div>
-          </Card>
-          <Card tone="plain" className="settings-card settings-split-card">
-            <div>
-              <h3>{t("auth-sign-out")}</h3>
-              <p className="settings-note">{t("profile-logout-note")}</p>
-            </div>
-            <Button type="button" variant="danger" size="sm" onClick={onLogout}>
-              {t("auth-sign-out")}
-            </Button>
-          </Card>
-        </div>
-      </section>
 
-      <Card tone="tinted" className="profile-route-card">
-        <div>
-          <h2>{t("profile-route-title")}</h2>
-          <p>{t("profile-route-note")}</p>
-        </div>
-        <Button type="button" variant="secondary" size="sm" onClick={onOpenSettings}>
-          <StudioIcon name="gear" size={16} />
-          {t("settings-tab-appearance")}
-        </Button>
-      </Card>
+          {privateVisitor ? (
+            <Card tone="quiet" className="profile-private-card">
+              <StudioIcon name="offline" size={20} />
+              <div>
+                <strong>{t("profile-visibility-private")}</strong>
+                <p>{t("profile-public-note")}</p>
+              </div>
+            </Card>
+          ) : (
+            <>
+              <div className="profile-overview">
+                <Card tone="plain" className="profile-stat-card">
+                  <span className="profile-stat-label">{t("stats-mastered")}</span>
+                  <strong className="profile-stat-value">{stats.mastered}</strong>
+                  <span className="profile-stat-note">
+                    {t("profile-mastered-note", {
+                      total: progress.length,
+                      reviews,
+                    })}
+                  </span>
+                  <ProgressBar
+                    value={
+                      progress.length === 0
+                        ? 0
+                        : Math.round((stats.mastered / progress.length) * 100)
+                    }
+                    tone="green"
+                    label={t("stats-mastered")}
+                  />
+                </Card>
+
+                <Card tone="plain" className="profile-stat-card">
+                  <span className="profile-stat-label">{t("stats-memory")}</span>
+                  <strong className="profile-stat-value">
+                    {stats.inMemory}
+                    <small>/{progress.length}</small>
+                  </strong>
+                  <span className="profile-stat-note">
+                    {stats.inMemory === 0
+                      ? t("stats-memory-empty")
+                      : t("profile-memory-note", {
+                          days: Math.max(1, Math.round(stats.averageStability)),
+                          due,
+                        })}
+                  </span>
+                  <ProgressBar
+                    value={retention}
+                    tone="blue"
+                    label={t("stats-memory")}
+                  />
+                </Card>
+
+                <Card tone="plain" className="profile-stat-card">
+                  <span className="profile-stat-label">{t("profile-reviews")}</span>
+                  <strong className="profile-stat-value">{reviews}</strong>
+                  <span className="profile-stat-note">{t("profile-reviews-note")}</span>
+                  <div className="profile-review-parts">
+                    <span>
+                      <strong>{streak}</strong>
+                      {t("profile-streak-short")}
+                    </span>
+                    <span>
+                      <strong>{due}</strong>
+                      {t("today-memory-due-label")}
+                    </span>
+                  </div>
+                </Card>
+              </div>
+
+              <section className="profile-section" aria-labelledby="profile-milestones-title">
+                <div className="profile-section-heading">
+                  <div>
+                    <h2 id="profile-milestones-title">{t("profile-milestones")}</h2>
+                    <p>{t("profile-milestones-note")}</p>
+                  </div>
+                </div>
+                <div className="milestone-grid">
+                  {milestones.map((milestone) => (
+                    <Card
+                      key={milestone.id}
+                      tone={milestone.earned ? "plain" : "quiet"}
+                      className={`milestone-badge${milestone.earned ? " earned" : ""}`}
+                    >
+                      <span className="milestone-icon" aria-hidden="true">
+                        <StudioIcon
+                          name={milestone.earned ? "check" : "spark"}
+                          size={18}
+                        />
+                      </span>
+                      <strong>{t(milestone.labelKey)}</strong>
+                      <span>{t(milestone.noteKey)}</span>
+                    </Card>
+                  ))}
+                </div>
+              </section>
+
+              {!visitor ? (
+                <>
+                  <section
+                    className="profile-section"
+                    aria-labelledby="profile-errors-title"
+                  >
+                    <div className="profile-section-heading">
+                      <div>
+                        <h2 id="profile-errors-title">{t("profile-error-notebook")}</h2>
+                        <p>{t("profile-error-note")}</p>
+                      </div>
+                      <Badge tone={errors.length > 0 ? "coral" : "neutral"}>
+                        {errors.length}
+                      </Badge>
+                    </div>
+                    {errors.length === 0 ? (
+                      <p className="chart-empty">{t("profile-error-empty")}</p>
+                    ) : (
+                      <div className="profile-error-list">
+                        {errors.map((error) => (
+                          <div className="profile-error-row" key={error.id}>
+                            <span className="profile-error-mark" aria-hidden="true">
+                              ×
+                            </span>
+                            <div>
+                              <strong>{error.title}</strong>
+                              <span>{t(`progress-status-${error.status}`)}</span>
+                            </div>
+                            <Badge tone="coral">
+                              {t("profile-error-count", { count: error.manifested })}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+
+                  <section
+                    className="profile-section"
+                    aria-labelledby="profile-notes-title"
+                  >
+                    <div className="profile-section-heading">
+                      <div>
+                        <h2 id="profile-notes-title">{t("profile-notes-title")}</h2>
+                        <p>{t("profile-notes-note")}</p>
+                      </div>
+                    </div>
+                    {notes.length === 0 ? (
+                      <p className="chart-empty">{t("profile-notes-empty")}</p>
+                    ) : (
+                      <div className="profile-note-list">
+                        {notes.map((note) => (
+                          <div className="profile-note-row" key={note.kcId}>
+                            <div>
+                              <strong>{note.title}</strong>
+                              <span>{t("profile-note-progress", { percent: note.percent })}</span>
+                            </div>
+                            <ProgressBar
+                              value={note.percent}
+                              tone="blue"
+                              label={note.title}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <p className="profile-private-note">{t("profile-notes-private")}</p>
+                  </section>
+                </>
+              ) : null}
+            </>
+          )}
+        </>
+      )}
     </div>
   );
 }

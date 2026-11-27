@@ -6,9 +6,7 @@ import { Badge, Button, Card } from "../components/ui";
 import type { OutboxRecord } from "../db/storage";
 import type { Locale } from "../i18n";
 import { useTranslation } from "../i18n";
-import type {
-  NavigationPosition,
-} from "../prototype/layout";
+import type { NavigationPosition } from "../prototype/layout";
 import type { AppStatus } from "../prototype/status";
 import {
   paletteLabelKeys,
@@ -22,7 +20,7 @@ import {
 } from "../theme/tokens";
 import { AdminAccessSection } from "./AdminAccessSection";
 
-export type SettingsTab = "appearance" | "language" | "offline" | "admin";
+export type SettingsTab = "appearance" | "account" | "offline" | "admin";
 
 export interface SettingsScreenProps {
   locale: Locale;
@@ -40,6 +38,10 @@ export interface SettingsScreenProps {
   onResetCache: () => Promise<void>;
   isAdmin: boolean;
   adminApi: ApiClient | null;
+  embedded?: boolean;
+  authMethod?: "email" | "telegram";
+  learnerId?: string;
+  onLogout?: () => void;
 }
 
 interface SettingsTabItem {
@@ -83,6 +85,10 @@ export function SettingsScreen({
   onResetCache,
   isAdmin,
   adminApi,
+  embedded = false,
+  authMethod,
+  learnerId,
+  onLogout,
 }: SettingsScreenProps) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<SettingsTab>("appearance");
@@ -91,7 +97,7 @@ export function SettingsScreen({
   const [dataError, setDataError] = useState<string | null>(null);
   const tabs: SettingsTabItem[] = [
     { id: "appearance", labelKey: "settings-tab-appearance", icon: "palette" },
-    { id: "language", labelKey: "settings-tab-language", icon: "spark" },
+    { id: "account", labelKey: "settings-tab-account", icon: "profile" },
     { id: "offline", labelKey: "settings-tab-offline", icon: "offline" },
     ...(isAdmin
       ? [
@@ -149,15 +155,39 @@ export function SettingsScreen({
     setDataError(null);
   };
 
+  const methodRow = (kind: "email" | "telegram", labelKey: string) => {
+    const linked = authMethod === kind;
+    return (
+      <div className="method-row" key={kind}>
+        <span>{t(labelKey)}</span>
+        <Badge tone={linked ? "green" : "neutral"}>
+          {linked ? t("settings-linked") : t("settings-not-linked")}
+        </Badge>
+      </div>
+    );
+  };
+
   return (
-    <div className="profile-screen settings-screen">
-      <header className="page-heading">
-        <div>
-          <p className="eyebrow">{t("settings-eyebrow")}</p>
-          <h1>{t("settings-title")}</h1>
-        </div>
-        <Badge tone="green">{t("profile-local")}</Badge>
-      </header>
+    <div
+      className={`profile-screen settings-screen${embedded ? " settings-screen-embedded" : ""}`}
+    >
+      {embedded ? (
+        <header className="page-heading settings-embedded-heading">
+          <div>
+            <p className="eyebrow">{t("settings-eyebrow")}</p>
+            <h1>{t("settings-title")}</h1>
+            <p>{t("settings-embedded-note")}</p>
+          </div>
+        </header>
+      ) : (
+        <header className="page-heading">
+          <div>
+            <p className="eyebrow">{t("settings-eyebrow")}</p>
+            <h1>{t("settings-title")}</h1>
+          </div>
+          <Badge tone="green">{t("profile-local")}</Badge>
+        </header>
+      )}
 
       <div className="settings-tabs" role="tablist" aria-label={t("settings-tabs-label")}>
         {tabs.map((item) => (
@@ -269,30 +299,68 @@ export function SettingsScreen({
         </div>
       ) : null}
 
-      {tab === "language" ? (
+      {tab === "account" ? (
         <div
           className="settings-panel"
-          id="settings-panel-language"
+          id="settings-panel-account"
           role="tabpanel"
-          aria-labelledby="settings-tab-language"
+          aria-labelledby="settings-tab-account"
         >
           <Card tone="plain" className="settings-card">
-            <h2>{t("app-language")}</h2>
-            <p className="settings-note">{t("settings-language-note")}</p>
-            <div className="settings-options">
-              {locales.map((candidate) => (
-                <Button
-                  key={candidate}
-                  type="button"
-                  variant={candidate === locale ? "primary" : "secondary"}
-                  size="sm"
-                  onClick={() => onLocaleChange(candidate)}
-                >
-                  {t(`language-${candidate}`)}
-                </Button>
-              ))}
+            <h2>{t("settings-account-title")}</h2>
+            <p className="settings-note">{t("settings-account-note")}</p>
+            {learnerId ? <code className="settings-identity">{learnerId}</code> : null}
+            <div className="method-list">
+              {methodRow("email", "settings-method-email")}
+              {methodRow("telegram", "settings-method-telegram")}
             </div>
           </Card>
+
+          <div className="settings-two-column">
+            <Card tone="plain" className="settings-card">
+              <h2>{t("app-language")}</h2>
+              <p className="settings-note">{t("settings-language-note")}</p>
+              <div className="settings-options">
+                {locales.map((candidate) => (
+                  <Button
+                    key={candidate}
+                    type="button"
+                    variant={candidate === locale ? "primary" : "secondary"}
+                    size="sm"
+                    onClick={() => onLocaleChange(candidate)}
+                  >
+                    {t(`language-${candidate}`)}
+                  </Button>
+                ))}
+              </div>
+            </Card>
+
+            <Card tone="plain" className="settings-card">
+              <h2>{t("settings-sync-title")}</h2>
+              <p className="settings-note">{t("settings-sync-note")}</p>
+              <div className="settings-sync-status">
+                <span className={`sync-status-dot${status.online ? " online" : ""}`} />
+                <strong>{status.online ? t("sync-online") : t("sync-offline")}</strong>
+                <span>
+                  {status.pendingOutbox > 0
+                    ? t("settings-sync-pending", { count: status.pendingOutbox })
+                    : t("settings-sync-clear")}
+                </span>
+              </div>
+            </Card>
+          </div>
+
+          {onLogout ? (
+            <Card tone="plain" className="settings-card settings-split-card">
+              <div>
+                <h2>{t("auth-sign-out")}</h2>
+                <p className="settings-note">{t("profile-logout-note")}</p>
+              </div>
+              <Button type="button" variant="danger" size="sm" onClick={onLogout}>
+                {t("auth-sign-out")}
+              </Button>
+            </Card>
+          ) : null}
         </div>
       ) : null}
 

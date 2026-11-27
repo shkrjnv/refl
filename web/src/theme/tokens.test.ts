@@ -96,6 +96,7 @@ describe("Living Studio tokens", () => {
       "soft-neo-brutalism",
       "soft-bento",
       "laboratory",
+      "pixel-world",
     ]);
     expect(DEFAULT_SKIN).toBe("living-studio");
     for (const skin of skinNames) {

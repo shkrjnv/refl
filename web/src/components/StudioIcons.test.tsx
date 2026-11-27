@@ -8,23 +8,29 @@ import { BrandLogo, StudioIcon } from "./StudioIcons";
 afterEach(cleanup);
 
 describe("studio identity", () => {
-  it("renders the crane-fused brand emblem without a raster import", () => {
+  it("renders the two-bracket prism reflection mark without a raster import", () => {
     const { container } = render(<BrandLogo size={36} />);
     const svg = container.querySelector("svg.brand-logo");
-    expect(svg?.getAttribute("viewBox")).toBe("0 0 64 64");
+    expect(svg?.getAttribute("viewBox")).toBe("0 0 40 40");
     expect(svg?.getAttribute("height")).toBe("36");
     expect(svg?.getAttribute("width")).toBe("36");
     expect(svg?.getAttribute("aria-hidden")).toBe("true");
+    expect(svg?.getAttribute("data-mark")).toBe("prism-reflection");
     expect(container.querySelector("image")).toBeNull();
-    expect(container.querySelectorAll("defs linearGradient")).toHaveLength(6);
-    expect(container.querySelectorAll(".brand-crane-body")).toHaveLength(1);
-    expect(container.querySelectorAll(".brand-crane-feather-umber")).toHaveLength(1);
-    expect(container.querySelectorAll(".brand-crane-feather-burgundy")).toHaveLength(1);
-    expect(container.querySelectorAll(".brand-crane-feather-cream")).toHaveLength(2);
-    expect(container.querySelectorAll(".brand-crane-tail")).toHaveLength(2);
-    expect(container.querySelectorAll(".brand-crane-neck")).toHaveLength(1);
-    expect(container.querySelectorAll(".brand-crane-head")).toHaveLength(1);
-    expect(container.querySelectorAll(".brand-crane-beak")).toHaveLength(1);
+    expect(container.querySelectorAll("defs linearGradient")).toHaveLength(5);
+    expect(container.querySelectorAll(".brand-prism-stem")).toHaveLength(2);
+    expect(container.querySelectorAll(".brand-prism-arm")).toHaveLength(2);
+    expect(container.querySelectorAll(".brand-prism-stem-umber")).toHaveLength(1);
+    expect(container.querySelectorAll(".brand-prism-stem-blue")).toHaveLength(1);
+    expect(container.querySelectorAll(".brand-prism-arm-cream")).toHaveLength(1);
+    expect(container.querySelectorAll(".brand-prism-arm-teal")).toHaveLength(1);
+    for (const size of [24, 32, 48]) {
+      const { container: sized, unmount } = render(<BrandLogo size={size} />);
+      const mark = sized.querySelector("svg.brand-logo");
+      expect(mark?.getAttribute("width")).toBe(String(size));
+      expect(mark?.getAttribute("height")).toBe(String(size));
+      unmount();
+    }
   });
 
   it("keeps the navigation icon set on the same stroke geometry", () => {
