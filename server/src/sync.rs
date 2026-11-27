@@ -4,18 +4,20 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::Json;
 use axum::extract::State;
+use axum::response::{IntoResponse, Response};
 use refl_core::event::{Decoded, decode_event};
 use refl_core::ids::{EventId, LearnerId};
 use refl_core::value::Timestamp;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Value, json};
 use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
+use crate::auth::AuthenticatedLearner;
 use crate::content;
 use crate::error::AppError;
 use crate::events::{self, InsertError, Inserted, StoredEvent};
-use crate::routes::{AppState, AuthenticatedLearner};
+use crate::routes::AppState;
 
 const MAX_EVENTS: usize = 500;
 const PULL_LIMIT: i64 = 501;
@@ -191,23 +193,31 @@ async fn push_batch(
     Ok((accepted, rejected))
 }
 
+fn erased_response() -> Response {
+    Json(json!({ "erased": true, "status": "erased" })).into_response()
+}
+
 /// Push one batch and return the next page of the learner's log.
 ///
 /// # Errors
 /// `400` for a batch over 500 events or an invalid event envelope; `403` when
 /// the request learner differs from the authenticated one; `426` when the
-/// client core is below `min_core_version`; database errors become `500`.
+/// client core is below `min_core_version`; database errors become `500`. An
+/// erased learner receives `200` with `{ "erased": true }`.
 pub async fn sync(
     State(state): State<AppState>,
     auth: AuthenticatedLearner,
     Json(request): Json<SyncRequest>,
-) -> Result<Json<SyncResponse>, AppError> {
+) -> Result<Response, AppError> {
+    if auth.erased {
+        return Ok(erased_response());
+    }
     if request.events.len() > MAX_EVENTS {
         return Err(AppError::BadRequest(format!(
             "at most {MAX_EVENTS} events per batch"
         )));
     }
-    if request.learner_id != auth.0 {
+    if request.learner_id != auth.learner_id {
         return Err(AppError::forbidden(
             "learner_id does not match the authenticated learner",
         ));
@@ -230,6 +240,15 @@ pub async fn sync(
     let mut tx = state.pool.begin().await?;
     let (accepted, rejected) =
         push_batch(&mut tx, incoming, request.learner_id, now, future_limit).await?;
+    if let Some(session_id) = auth.session_id {
+        sqlx::query(
+            "UPDATE auth_sessions SET refresh_expires_at = now() + interval '90 days', \
+             updated_at = now() WHERE id = $1 AND revoked_at IS NULL",
+        )
+        .bind(session_id)
+        .execute(&mut *tx)
+        .await?;
+    }
     tx.commit().await?;
 
     let rows = events::learner_events_since(
@@ -251,5 +270,6 @@ pub async fn sync(
         server_time: now.0,
         min_core_version: state.config.min_core_version,
         latest_content_version,
-    }))
+    })
+    .into_response())
 }

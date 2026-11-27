@@ -13,7 +13,7 @@ serde_json = "1"
 sha2 = "0.10"
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "postgres", "migrate", "macros", "uuid", "json"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time"] }
-uuid = "1"
+uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
 content-build = { path = "../tools/content-build" }

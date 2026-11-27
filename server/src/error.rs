@@ -12,6 +12,8 @@ pub enum AppError {
     BadRequest(String),
     Unauthorized,
     Forbidden(String),
+    Erased,
+    TooManyRequests,
     NotFound(&'static str),
     UpgradeRequired { min_core_version: String },
     Internal(String),
@@ -44,6 +46,18 @@ impl IntoResponse for AppError {
                 None,
             ),
             Self::Forbidden(message) => (StatusCode::FORBIDDEN, "forbidden", message, None),
+            Self::Erased => (
+                StatusCode::FORBIDDEN,
+                "erased",
+                "account erased".into(),
+                None,
+            ),
+            Self::TooManyRequests => (
+                StatusCode::TOO_MANY_REQUESTS,
+                "rate_limited",
+                "too many requests".into(),
+                None,
+            ),
             Self::NotFound(message) => (StatusCode::NOT_FOUND, "not_found", message.into(), None),
             Self::UpgradeRequired { min_core_version } => (
                 StatusCode::UPGRADE_REQUIRED,

@@ -97,7 +97,6 @@ impl Drop for Cluster {
     }
 }
 
-const LEARNER: Uuid = Uuid::from_u128(0x0193_0000_0000_7000_8000_0000_0000_0001);
 const OTHER: Uuid = Uuid::from_u128(0x0193_0000_0000_7000_8000_0000_0000_0002);
 
 fn event_id(n: u128) -> Uuid {
@@ -109,22 +108,9 @@ fn now_ms() -> i64 {
     i64::try_from(elapsed.as_millis()).unwrap()
 }
 
-async fn user(db: &PgPool, id: Uuid, code: &str) {
-    sqlx::query(
-        "INSERT INTO users (id, public_code, display_name, interface_lang, minor) \
-         VALUES ($1, $2, 'test', 'ru', false)",
-    )
-    .bind(id)
-    .bind(code)
-    .execute(db)
-    .await
-    .unwrap();
-}
-
 async fn migrated(c: &Cluster, name: &str) -> PgPool {
     let db = c.fresh_db(name).await;
     MIGRATOR.run(&db).await.unwrap();
-    user(&db, LEARNER, "AAAA0001").await;
     db
 }
 
@@ -150,24 +136,26 @@ fn sync_body(learner: Uuid, events: &[Value], cursor: i64) -> Value {
     })
 }
 
-fn test_app(pool: PgPool, allow_header_learner_id: bool) -> Router {
+fn test_app(pool: PgPool) -> Router {
     router(AppState {
         pool,
         config: Config {
-            allow_header_learner_id,
+            allow_header_learner_id: false,
+            dev_auth: true,
             min_core_version: "0.0.0".into(),
         },
     })
 }
 
-async fn send(app: Router, body: Value) -> (StatusCode, Value) {
-    let request = Request::builder()
+async fn post(app: Router, uri: &str, body: Value, token: Option<&str>) -> (StatusCode, Value) {
+    let mut builder = Request::builder()
         .method("POST")
-        .uri("/v1/sync")
-        .header(header::CONTENT_TYPE, "application/json")
-        .header(header::AUTHORIZATION, format!("Bearer {LEARNER}"))
-        .body(Body::from(body.to_string()))
-        .unwrap();
+        .uri(uri)
+        .header(header::CONTENT_TYPE, "application/json");
+    if let Some(token) = token {
+        builder = builder.header(header::AUTHORIZATION, format!("Bearer {token}"));
+    }
+    let request = builder.body(Body::from(body.to_string())).unwrap();
     let response = app.oneshot(request).await.unwrap();
     let status = response.status();
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
@@ -184,6 +172,30 @@ async fn get(app: Router, uri: &str) -> (StatusCode, Value) {
     let status = response.status();
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     (status, serde_json::from_slice(&bytes).unwrap())
+}
+
+async fn login(app: &Router, email: &str) -> (Uuid, String, String) {
+    let (status, response) = post(
+        app.clone(),
+        "/v1/auth/request-code",
+        json!({ "email": email }),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let code = response["code"].as_str().unwrap().to_owned();
+    let (status, response) = post(
+        app.clone(),
+        "/v1/auth/verify-code",
+        json!({ "email": email, "code": code }),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let learner = Uuid::parse_str(response["learner_id"].as_str().unwrap()).unwrap();
+    let access = response["access_token"].as_str().unwrap().to_owned();
+    let refresh = response["refresh_token"].as_str().unwrap().to_owned();
+    (learner, access, refresh)
 }
 
 async fn insert_one(db: &PgPool, value: &Value) {
@@ -206,10 +218,11 @@ fn sha256_hex(bytes: &[u8]) -> String {
 
 async fn push_is_idempotent(c: &Cluster) {
     let db = migrated(c, "sync_push").await;
-    let app = test_app(db.clone(), true);
-    let body = sync_body(LEARNER, &[event(event_id(1), LEARNER, now_ms())], 0);
+    let app = test_app(db.clone());
+    let (learner, access, _refresh) = login(&app, "push@example.com").await;
+    let body = sync_body(learner, &[event(event_id(1), learner, now_ms())], 0);
 
-    let (status, response) = send(app.clone(), body.clone()).await;
+    let (status, response) = post(app.clone(), "/v1/sync", body.clone(), Some(&access)).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(response["accepted"], json!([event_id(1).to_string()]));
     assert_eq!(response["rejected"], json!([]));
@@ -219,10 +232,11 @@ async fn push_is_idempotent(c: &Cluster) {
     assert!(response["server_time"].as_i64().unwrap() > 0);
     assert_eq!(response["latest_content_version"], Value::Null);
 
-    let (status, response) = send(app, body).await;
+    let (status, response) = post(app, "/v1/sync", body, Some(&access)).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(response["accepted"], json!([event_id(1).to_string()]));
-    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM events")
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM events WHERE learner_id = $1")
+        .bind(learner)
         .fetch_one(&db)
         .await
         .unwrap();
@@ -230,25 +244,28 @@ async fn push_is_idempotent(c: &Cluster) {
     db.close().await;
 }
 
-async fn auth_requires_the_dev_flag(c: &Cluster) {
+async fn sync_requires_access_token(c: &Cluster) {
     let db = migrated(c, "sync_auth").await;
-    let app = test_app(db.clone(), false);
-    let body = sync_body(LEARNER, &[], 0);
-    let (status, _) = send(app, body).await;
+    let app = test_app(db.clone());
+    let body = sync_body(OTHER, &[], 0);
+    let (status, _) = post(app, "/v1/sync", body, None).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     db.close().await;
 }
 
 async fn old_core_is_rejected(c: &Cluster) {
     let db = migrated(c, "sync_old_core").await;
+    let app = test_app(db.clone());
+    let (learner, access, _refresh) = login(&app, "old-core@example.com").await;
     let app = router(AppState {
         pool: db.clone(),
         config: Config {
-            allow_header_learner_id: true,
+            allow_header_learner_id: false,
+            dev_auth: true,
             min_core_version: "1.0.0".into(),
         },
     });
-    let (status, response) = send(app, sync_body(LEARNER, &[], 0)).await;
+    let (status, response) = post(app, "/v1/sync", sync_body(learner, &[], 0), Some(&access)).await;
     assert_eq!(status, StatusCode::UPGRADE_REQUIRED);
     assert_eq!(response["min_core_version"], json!("1.0.0"));
     db.close().await;
@@ -256,24 +273,25 @@ async fn old_core_is_rejected(c: &Cluster) {
 
 async fn batch_limit_and_future_events(c: &Cluster) {
     let db = migrated(c, "sync_reject").await;
-    let app = test_app(db.clone(), true);
+    let app = test_app(db.clone());
+    let (learner, access, _refresh) = login(&app, "reject@example.com").await;
 
     let too_many_events = vec![json!({}); 501];
-    let too_many = sync_body(LEARNER, &too_many_events, 0);
-    let (status, _) = send(app.clone(), too_many).await;
+    let too_many = sync_body(learner, &too_many_events, 0);
+    let (status, _) = post(app.clone(), "/v1/sync", too_many, Some(&access)).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
 
     let now = now_ms();
     let body = sync_body(
-        LEARNER,
+        learner,
         &[
             event(event_id(3), OTHER, now),
-            event(event_id(2), LEARNER, now + 25 * 60 * 60 * 1000),
-            event(event_id(1), LEARNER, now),
+            event(event_id(2), learner, now + 25 * 60 * 60 * 1000),
+            event(event_id(1), learner, now),
         ],
         0,
     );
-    let (status, response) = send(app, body).await;
+    let (status, response) = post(app, "/v1/sync", body, Some(&access)).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(response["accepted"], json!([event_id(1).to_string()]));
     let rejected = response["rejected"].as_array().unwrap();
@@ -282,7 +300,8 @@ async fn batch_limit_and_future_events(c: &Cluster) {
     assert!(rejected[0]["reason"].as_str().unwrap().contains("future"));
     assert_eq!(rejected[1]["event_id"], json!(event_id(3).to_string()));
     assert_eq!(rejected[1]["reason"], json!("learner_mismatch"));
-    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM events")
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM events WHERE learner_id = $1")
+        .bind(learner)
         .fetch_one(&db)
         .await
         .unwrap();
@@ -292,13 +311,20 @@ async fn batch_limit_and_future_events(c: &Cluster) {
 
 async fn pull_paginates_by_server_seq(c: &Cluster) {
     let db = migrated(c, "sync_pull").await;
+    let app = test_app(db.clone());
+    let (learner, access, _refresh) = login(&app, "pull@example.com").await;
     let now = now_ms();
     for n in 1..=501 {
-        insert_one(&db, &event(event_id(n), LEARNER, now)).await;
+        insert_one(&db, &event(event_id(n), learner, now)).await;
     }
-    let app = test_app(db.clone(), true);
 
-    let (status, response) = send(app.clone(), sync_body(LEARNER, &[], 0)).await;
+    let (status, response) = post(
+        app.clone(),
+        "/v1/sync",
+        sync_body(learner, &[], 0),
+        Some(&access),
+    )
+    .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(response["events"].as_array().unwrap().len(), 500);
     assert_eq!(response["more"], json!(true));
@@ -312,7 +338,8 @@ async fn pull_paginates_by_server_seq(c: &Cluster) {
         json!(event_id(500).to_string())
     );
 
-    let (status, response) = send(app, sync_body(LEARNER, &[], 500)).await;
+    let (status, response) =
+        post(app, "/v1/sync", sync_body(learner, &[], 500), Some(&access)).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(response["events"].as_array().unwrap().len(), 1);
     assert_eq!(response["more"], json!(false));
@@ -336,7 +363,7 @@ async fn active_content(c: &Cluster) {
     activate(&mut tx, &bundle.content_version.0).await.unwrap();
     tx.commit().await.unwrap();
 
-    let app = test_app(db.clone(), false);
+    let app = test_app(db.clone());
     let (status, response) = get(app, "/v1/content/active").await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
@@ -356,7 +383,7 @@ async fn active_content(c: &Cluster) {
     assert_eq!(response["digest"], json!(expected));
 
     let empty = migrated(c, "sync_content_empty").await;
-    let (status, _) = get(test_app(empty.clone(), true), "/v1/content/active").await;
+    let (status, _) = get(test_app(empty.clone()), "/v1/content/active").await;
     assert_eq!(status, StatusCode::NOT_FOUND);
     empty.close().await;
     db.close().await;
@@ -364,7 +391,7 @@ async fn active_content(c: &Cluster) {
 
 async fn health(c: &Cluster) {
     let db = migrated(c, "sync_health").await;
-    let (status, response) = get(test_app(db.clone(), true), "/health").await;
+    let (status, response) = get(test_app(db.clone()), "/health").await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(response, json!({ "status": "ok" }));
     db.close().await;
@@ -379,7 +406,7 @@ fn sync_api() {
         .unwrap();
     rt.block_on(async {
         push_is_idempotent(&cluster).await;
-        auth_requires_the_dev_flag(&cluster).await;
+        sync_requires_access_token(&cluster).await;
         old_core_is_rejected(&cluster).await;
         batch_limit_and_future_events(&cluster).await;
         pull_paginates_by_server_seq(&cluster).await;

@@ -13,6 +13,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .parse()?;
     let allow_header_learner_id = env::var("ALLOW_HEADER_LEARNER_ID")
         .is_ok_and(|value| value == "1" || value.eq_ignore_ascii_case("true"));
+    let dev_auth =
+        env::var("DEV_AUTH").is_ok_and(|value| value == "1" || value.eq_ignore_ascii_case("true"));
     let min_core_version =
         env::var("MIN_CORE_VERSION").unwrap_or_else(|_| DEFAULT_MIN_CORE_VERSION.into());
 
@@ -24,6 +26,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         pool,
         config: Config {
             allow_header_learner_id,
+            dev_auth,
             min_core_version,
         },
     });
