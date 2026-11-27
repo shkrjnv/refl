@@ -20,9 +20,10 @@ lint:
 test:
     cargo test --locked --workspace --all-features
 
-# The core must build for the browser (no_std + alloc, default features)
+# The core and its wasm-bindgen bridge must build for the browser
 wasm:
     cargo build --locked --release -p refl-core --target wasm32-unknown-unknown
+    cargo build --locked --release -p refl-core-wasm --target wasm32-unknown-unknown
 
 # Fold one generated log and plan three sessions on it natively and in wasm32 (wasmtime): the hashes must match
 wasm-hash events="20000" seed="7":

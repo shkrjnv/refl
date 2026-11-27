@@ -1187,6 +1187,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "refl-core-wasm"
+version = "0.0.0"
+dependencies = [
+ "refl-core",
+ "serde",
+ "serde_json",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "refl-server"
 version = "0.0.0"
 dependencies = [
