@@ -110,3 +110,13 @@
 - Added `StudioIcons` (1.75px geometric strokes) for navigation, sync, palette, streak, and lesson controls.
 - Iella has layered body, wings, eyes, tail, and feet with idle, flying, perched, curious, and proud moods. `IellaCompanion` patrols between DOM anchors every 18–25 seconds with cubic Bézier motion and reacts to routes, lessons, answers, palette changes, and clicks without blocking the page.
 - Tests cover palette persistence, appearance selector interaction, Today's clean state and streak, and Iella mood/perch placement.
+
+## W6 — reversed studio auth, tactile OTP confirmation, and tabbed settings
+
+- Auth now puts the frameless sign-in column on the left (43%) and the studio canvas on the right (57%). The square grid and outer card are gone; Canvas 2D draws slow luminous ribbon arcs and edge rings instead of blurred orbs.
+- The OTP step shows a masked target, large tactile digit slots, and a crisp active outline. Successful email or Telegram auth plays a 650 ms ring/check confirmation before entering the app; reduced motion skips it.
+- Palette labels are now Night and Day with moon/sun emblems. The choice stays in `refl.theme` and passes through the shared App state into the authenticated shell.
+- Iella returns to the original taller pixel silhouette with wings, feet, and crest intact. The random patrol timer is removed; she settles deterministically on the route's chosen perch and only reacts on route, lesson, answer, hover, and click signals with anticipation, Bézier flight, wingbeats, and a landing settle.
+- Today and Progress icons now have distinct sun-horizon and trajectory-node silhouettes. The “Articles in context” hero uses palette-derived atmosphere, contour lines, layered paper hills, ribbons, celestial glow, and five numbered stepping stones.
+- Settings is split into Appearance, Account & Sync, Offline & Data, and role-gated Admin tabs. Offline adds JSON cache export and a two-step local reset; Account exposes both sign-in methods and sync state.
+- Added tests for the OTP confirmation gate, settings tab switching and admin gating, and the restored Iella proportions/moods.

@@ -1,6 +1,9 @@
+import { useState } from "react";
+
 import type { ApiClient } from "../api/client";
 import { PaletteToggle } from "../components/AppearanceMenu";
 import { IellaSprite } from "../components/IellaSprite";
+import { StudioIcon, type StudioIconName } from "../components/StudioIcons";
 import { Badge, Button, Card } from "../components/ui";
 import type { OutboxRecord } from "../db/storage";
 import type { Locale } from "../i18n";
@@ -14,6 +17,8 @@ import {
   type ThemeName,
 } from "../theme/tokens";
 import { AdminAccessSection } from "./AdminAccessSection";
+
+export type SettingsTab = "appearance" | "account" | "offline" | "admin";
 
 export interface SettingsScreenProps {
   learnerLabel: string;
@@ -29,8 +34,16 @@ export interface SettingsScreenProps {
   status: AppStatus;
   rejected: OutboxRecord[];
   onLogout: () => void;
+  onExportCache: () => Promise<void>;
+  onResetCache: () => Promise<void>;
   isAdmin: boolean;
   adminApi: ApiClient | null;
+}
+
+interface SettingsTabItem {
+  id: SettingsTab;
+  labelKey: string;
+  icon: StudioIconName;
 }
 
 function persistenceKey(status: AppStatus): string {
@@ -60,10 +73,72 @@ export function SettingsScreen({
   status,
   rejected,
   onLogout,
+  onExportCache,
+  onResetCache,
   isAdmin,
   adminApi,
 }: SettingsScreenProps) {
   const { t } = useTranslation();
+  const [tab, setTab] = useState<SettingsTab>("appearance");
+  const [resetArmed, setResetArmed] = useState(false);
+  const [dataNotice, setDataNotice] = useState<string | null>(null);
+  const [dataError, setDataError] = useState<string | null>(null);
+  const tabs: SettingsTabItem[] = [
+    {
+      id: "appearance",
+      labelKey: "settings-tab-appearance",
+      icon: "palette",
+    },
+    { id: "account", labelKey: "settings-tab-account", icon: "today" },
+    { id: "offline", labelKey: "settings-tab-offline", icon: "offline" },
+    ...(isAdmin
+      ? [{ id: "admin" as const, labelKey: "settings-tab-admin", icon: "settings" as const }]
+      : []),
+  ];
+
+  const exportCache = async () => {
+    setDataNotice(null);
+    setDataError(null);
+    try {
+      await onExportCache();
+      setDataNotice(t("settings-exported"));
+    } catch {
+      setDataError(t("settings-export-failed"));
+    }
+  };
+
+  const resetCache = async () => {
+    setDataNotice(null);
+    setDataError(null);
+    try {
+      await onResetCache();
+    } catch {
+      setDataError(t("settings-reset-failed"));
+    }
+  };
+
+  const chooseTab = (next: SettingsTab) => {
+    setTab(next);
+    setResetArmed(false);
+    setDataNotice(null);
+    setDataError(null);
+  };
+
+  const methodRow = (
+    kind: "email" | "telegram",
+    labelKey: string,
+  ) => {
+    const linked = authMethod === kind;
+    return (
+      <div className="method-row" key={kind}>
+        <span>{t(labelKey)}</span>
+        <Badge tone={linked ? "green" : "neutral"}>
+          {linked ? t("settings-linked") : t("settings-not-linked")}
+        </Badge>
+      </div>
+    );
+  };
+
   return (
     <div className="profile-screen">
       <header className="page-heading">
@@ -74,31 +149,40 @@ export function SettingsScreen({
         <Badge tone="green">{t("profile-local")}</Badge>
       </header>
 
-      <Card tone="hero" raised className="profile-hero">
-        <div className="profile-avatar">
-          <IellaSprite size={82} />
-        </div>
-        <div className="profile-copy">
-          <p className="eyebrow">{t("profile-learner")}</p>
-          <h2>{learnerLabel}</h2>
-          <p>{t("profile-body")}</p>
-        </div>
-        <div className="profile-auth">
-          <span>{t("profile-linked")}</span>
-          <strong>
-            {authMethod === "telegram"
-              ? t("auth-telegram")
-              : t("auth-email-label")}
-          </strong>
-        </div>
-      </Card>
+      <div className="settings-tabs" role="tablist" aria-label={t("settings-tabs-label")}>
+        {tabs.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            role="tab"
+            id={`settings-tab-${item.id}`}
+            aria-selected={tab === item.id}
+            aria-controls={`settings-panel-${item.id}`}
+            className={`settings-tab${tab === item.id ? " active" : ""}`}
+            onClick={() => chooseTab(item.id)}
+          >
+            <StudioIcon name={item.icon} size={17} />
+            <span>{t(item.labelKey)}</span>
+          </button>
+        ))}
+      </div>
 
-      <div className="settings-grid">
-        <Card tone="plain" className="settings-card settings-appearance">
-          <p className="eyebrow">{t("profile-appearance")}</p>
-          <h2>{t("profile-skin")}</h2>
-          <p className="settings-note">{t("profile-skin-note")}</p>
-          <div className="skin-options">
+      {tab === "appearance" ? (
+        <div
+          className="settings-panel"
+          id="settings-panel-appearance"
+          role="tabpanel"
+          aria-labelledby="settings-tab-appearance"
+        >
+          <div className="settings-panel-heading">
+            <div>
+              <h2>{t("profile-appearance")}</h2>
+              <p>{t("profile-skin-note")}</p>
+            </div>
+            <PaletteToggle theme={theme} onThemeChange={onThemeChange} />
+          </div>
+
+          <div className="skin-options skin-options-wide">
             {skinNames.map((candidate) => (
               <button
                 key={candidate}
@@ -108,9 +192,12 @@ export function SettingsScreen({
                 onClick={() => onSkinChange(candidate)}
               >
                 <span
-                  className={`skin-swatch skin-swatch-${candidate}`}
+                  className={`skin-preview skin-preview-${candidate}`}
                   aria-hidden="true"
-                />
+                >
+                  <span />
+                  <span />
+                </span>
                 <span className="skin-option-copy">
                   <strong>{t(skinLabelKeys[candidate])}</strong>
                   <span>{t(skinDescriptionKeys[candidate])}</span>
@@ -118,81 +205,182 @@ export function SettingsScreen({
               </button>
             ))}
           </div>
-          <p className="eyebrow appearance-mode-label">{t("profile-mode")}</p>
-          <PaletteToggle theme={theme} onThemeChange={onThemeChange} />
-        </Card>
 
-        <Card tone="plain" className="settings-card">
-          <p className="eyebrow">{t("profile-language")}</p>
-          <h2>{t("app-language")}</h2>
-          <div className="settings-options">
-            {locales.map((candidate) => (
-              <Button
-                key={candidate}
-                type="button"
-                variant={candidate === locale ? "primary" : "secondary"}
-                size="sm"
-                onClick={() => onLocaleChange(candidate)}
-              >
-                {t(`language-${candidate}`)}
-              </Button>
-            ))}
-          </div>
-        </Card>
-
-        <Card tone="plain" className="settings-card">
-          <p className="eyebrow">{t("profile-onboarding")}</p>
-          <h2>{t("profile-tour-title")}</h2>
-          <p className="settings-note">{t("profile-tour-body")}</p>
-          <Button type="button" variant="secondary" size="sm" onClick={onReplayTour}>
-            {t("profile-replay-tour")}
-          </Button>
-        </Card>
-      </div>
-
-      <Card tone="plain" className="settings-card diagnostics-card">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">{t("profile-diagnostics")}</p>
-            <h2>{t("profile-sync")}</h2>
-          </div>
-          <Badge tone={status.online ? "green" : "sun"}>
-            {status.online ? t("sync-online") : t("sync-offline")}
-          </Badge>
+          <Card tone="plain" className="settings-card">
+            <h2>{t("app-language")}</h2>
+            <div className="settings-options">
+              {locales.map((candidate) => (
+                <Button
+                  key={candidate}
+                  type="button"
+                  variant={candidate === locale ? "primary" : "secondary"}
+                  size="sm"
+                  onClick={() => onLocaleChange(candidate)}
+                >
+                  {t(`language-${candidate}`)}
+                </Button>
+              ))}
+            </div>
+          </Card>
         </div>
-        <div className="diagnostics-grid">
-          <span>{t("sync-pending", { count: status.pendingOutbox })}</span>
-          <span>{t("sync-rejected", { count: status.rejectedOutbox })}</span>
-          {status.clockDrift ? <span>{t("sync-clock-warning")}</span> : null}
-        </div>
-        <p className={`storage-status storage-${status.persistence}`}>
-          {t(persistenceKey(status))}
-        </p>
-        {rejected.length > 0 ? (
-          <div className="rejected-list">
-            <p className="eyebrow">{t("profile-rejected-events")}</p>
-            {rejected.map((event) => (
-              <div key={event.event_id} className="rejected-row">
-                <code>{event.event_id}</code>
-                <span>{event.rejected_reason ?? t("common-unknown-error")}</span>
+      ) : null}
+
+      {tab === "account" ? (
+        <div
+          className="settings-panel"
+          id="settings-panel-account"
+          role="tabpanel"
+          aria-labelledby="settings-tab-account"
+        >
+          <Card tone="hero" raised className="profile-hero settings-identity">
+            <div className="profile-avatar">
+              <IellaSprite size={64} mood="perched" />
+            </div>
+            <div className="profile-copy">
+              <h2>{learnerLabel}</h2>
+              <p>{t("profile-body")}</p>
+            </div>
+            <div className="profile-auth">
+              <span>{t("profile-local")}</span>
+              <strong>{t("settings-account-title")}</strong>
+            </div>
+          </Card>
+
+          <div className="settings-two-column">
+            <Card tone="plain" className="settings-card">
+              <h2>{t("settings-account-title")}</h2>
+              <div className="method-list">
+                {methodRow("email", "settings-method-email")}
+                {methodRow("telegram", "settings-method-telegram")}
               </div>
-            ))}
+              <p className="settings-note">{t("settings-method-note")}</p>
+            </Card>
+
+            <Card tone="plain" className="settings-card">
+              <div className="settings-card-heading">
+                <h2>{t("profile-sync")}</h2>
+                <Badge tone={status.online ? "green" : "sun"}>
+                  {status.online ? t("sync-online") : t("sync-offline")}
+                </Badge>
+              </div>
+              <div className="diagnostics-grid">
+                <span>{t("sync-pending", { count: status.pendingOutbox })}</span>
+                <span>{t("sync-rejected", { count: status.rejectedOutbox })}</span>
+                {status.clockDrift ? (
+                  <span>{t("sync-clock-warning")}</span>
+                ) : null}
+              </div>
+            </Card>
           </div>
-        ) : null}
-      </Card>
 
-      {isAdmin && adminApi ? <AdminAccessSection api={adminApi} /> : null}
+          <Card tone="plain" className="settings-card settings-split-card">
+            <div>
+              <h2>{t("profile-tour-title")}</h2>
+              <p className="settings-note">{t("profile-tour-body")}</p>
+            </div>
+            <Button type="button" variant="secondary" size="sm" onClick={onReplayTour}>
+              {t("profile-replay-tour")}
+            </Button>
+          </Card>
 
-      <Card tone="plain" className="settings-card logout-card">
-        <div>
-          <p className="eyebrow">{t("profile-session")}</p>
-          <h2>{t("auth-sign-out")}</h2>
-          <p className="settings-note">{t("profile-logout-note")}</p>
+          <Card tone="plain" className="settings-card settings-split-card">
+            <div>
+              <h2>{t("auth-sign-out")}</h2>
+              <p className="settings-note">{t("profile-logout-note")}</p>
+            </div>
+            <Button type="button" variant="danger" onClick={onLogout}>
+              {t("auth-sign-out")}
+            </Button>
+          </Card>
         </div>
-        <Button type="button" variant="danger" onClick={onLogout}>
-          {t("auth-sign-out")}
-        </Button>
-      </Card>
+      ) : null}
+
+      {tab === "offline" ? (
+        <div
+          className="settings-panel"
+          id="settings-panel-offline"
+          role="tabpanel"
+          aria-labelledby="settings-tab-offline"
+        >
+          <Card tone="plain" className="settings-card">
+            <h2>{t("settings-offline-title")}</h2>
+            <p className={`storage-status storage-${status.persistence}`}>
+              {t(persistenceKey(status))}
+            </p>
+            {rejected.length > 0 ? (
+              <div className="rejected-list">
+                <p className="eyebrow">{t("profile-rejected-events")}</p>
+                {rejected.map((event) => (
+                  <div key={event.event_id} className="rejected-row">
+                    <code>{event.event_id}</code>
+                    <span>{event.rejected_reason ?? t("common-unknown-error")}</span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </Card>
+
+          <div className="settings-two-column">
+            <Card tone="plain" className="settings-card">
+              <h2>{t("settings-export-title")}</h2>
+              <p className="settings-note">{t("settings-export-note")}</p>
+              <Button type="button" variant="secondary" size="sm" onClick={() => void exportCache()}>
+                {t("settings-export-action")}
+              </Button>
+            </Card>
+
+            <Card tone="plain" className="settings-card">
+              <h2>{t("settings-reset-title")}</h2>
+              <p className="settings-note">{t("settings-reset-note")}</p>
+              <div className="settings-options">
+                <Button
+                  type="button"
+                  variant="danger"
+                  size="sm"
+                  onClick={() => {
+                    if (!resetArmed) {
+                      setResetArmed(true);
+                      return;
+                    }
+                    setResetArmed(false);
+                    void resetCache();
+                  }}
+                >
+                  {resetArmed ? t("settings-reset-confirm") : t("settings-reset-action")}
+                </Button>
+                {resetArmed ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setResetArmed(false)}
+                  >
+                    {t("common-cancel")}
+                  </Button>
+                ) : null}
+              </div>
+            </Card>
+          </div>
+
+          {dataNotice ? <p className="storage-status storage-granted">{dataNotice}</p> : null}
+          {dataError ? <p className="inline-alert danger" role="alert">{dataError}</p> : null}
+        </div>
+      ) : null}
+
+      {tab === "admin" && isAdmin ? (
+        <div
+          className="settings-panel"
+          id="settings-panel-admin"
+          role="tabpanel"
+          aria-labelledby="settings-tab-admin"
+        >
+          <Card tone="plain" className="settings-card">
+            <h2>{t("settings-registration-title")}</h2>
+            <p className="settings-note">{t("settings-registration-note")}</p>
+          </Card>
+          {adminApi ? <AdminAccessSection api={adminApi} /> : null}
+        </div>
+      ) : null}
     </div>
   );
 }

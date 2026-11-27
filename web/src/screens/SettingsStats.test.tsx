@@ -73,6 +73,8 @@ describe("statistics and settings", () => {
           status={initialStatus(true)}
           rejected={[]}
           onLogout={() => undefined}
+          onExportCache={async () => undefined}
+          onResetCache={async () => undefined}
           isAdmin={false}
           adminApi={null}
         />
@@ -80,12 +82,52 @@ describe("statistics and settings", () => {
     );
     expect(content.contentVersion).toBe("test-content");
     fireEvent.click(screen.getByRole("button", { name: "Russian" }));
-    fireEvent.click(screen.getByRole("button", { name: "Deep Umber" }));
+    fireEvent.click(screen.getByRole("button", { name: "Night" }));
     fireEvent.click(screen.getByRole("button", { name: /Laboratory/ }));
     expect(locale).toBe("ru");
     expect(selectedTheme).toBe("dark");
     expect(selectedSkin).toBe("laboratory");
     expect(screen.getByText("Profile and settings")).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: "Offline & Data" }));
     expect(screen.getByText("Checking offline storage protection...")).toBeTruthy();
+  });
+
+  it("switches settings tabs and keeps the admin tab role-gated", () => {
+    const props = {
+      learnerLabel: "Learner",
+      authMethod: "email" as const,
+      locale: "en" as const,
+      locales: ["en", "ru", "uz"] as const,
+      onLocaleChange: () => undefined,
+      theme: "dark" as const,
+      onThemeChange: () => undefined,
+      skin: "living-studio" as const,
+      onSkinChange: () => undefined,
+      onReplayTour: () => undefined,
+      status: initialStatus(true),
+      rejected: [],
+      onLogout: () => undefined,
+      onExportCache: async () => undefined,
+      onResetCache: async () => undefined,
+      adminApi: null,
+    };
+    const { rerender } = render(
+      <I18nProvider initialLocale="en">
+        <SettingsScreen {...props} isAdmin={false} />
+      </I18nProvider>,
+    );
+    expect(screen.queryByRole("tab", { name: "Admin" })).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "Account & Sync" }));
+    expect(screen.getByText("Sign-in methods are managed by the curator.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: "Offline & Data" }));
+    expect(screen.getByRole("button", { name: "Export JSON" })).toBeTruthy();
+
+    rerender(
+      <I18nProvider initialLocale="en">
+        <SettingsScreen {...props} isAdmin />
+      </I18nProvider>,
+    );
+    fireEvent.click(screen.getByRole("tab", { name: "Admin" }));
+    expect(screen.getByText("Registration mode")).toBeTruthy();
   });
 });

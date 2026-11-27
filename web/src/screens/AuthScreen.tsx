@@ -21,7 +21,7 @@ import { AuthBackdrop } from "../components/AuthBackdrop";
 import { PaletteToggle } from "../components/AppearanceMenu";
 import { IellaSprite, type IellaMood } from "../components/IellaSprite";
 import { StudioIcon } from "../components/StudioIcons";
-import { Button, Card } from "../components/ui";
+import { Button } from "../components/ui";
 import { useTranslation } from "../i18n";
 import type { SkinName, ThemeName } from "../theme/tokens";
 import {
@@ -120,6 +120,23 @@ function digitsFrom(raw: string): string[] {
   );
 }
 
+function maskEmail(email: string): string {
+  const [local = "", domain] = email.split("@");
+  if (!domain) {
+    return email;
+  }
+  const visible = local.slice(0, 1);
+  return `${visible}${"*".repeat(Math.max(2, local.length - 1))}@${domain}`;
+}
+
+function confirmationSkipped(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
+
 export function AuthScreen({
   api,
   inviteCode,
@@ -139,20 +156,41 @@ export function AuthScreen({
     Array.from({ length: CODE_LENGTH }, () => ""),
   );
   const [sent, setSent] = useState<RequestCodeResponse | null>(null);
+  const [confirmation, setConfirmation] = useState<{
+    tokens: AuthTokens;
+    method: AuthMethod;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [telegram] = useState(() => telegramInitData());
   const [iellaMood, setIellaMood] = useState<IellaMood>("curious");
   const handledReturnRef = useRef(false);
   const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const confirmationTimerRef = useRef<number | null>(null);
   const callbacksRef = useRef({ onAuthenticated, onPending, onAccessBlocked });
   callbacksRef.current = { onAuthenticated, onPending, onAccessBlocked };
   const code = digits.join("");
+  const maskedEmail = maskEmail(email.trim());
+
+  const completeAuthentication = (tokens: AuthTokens, method: AuthMethod) => {
+    if (confirmationSkipped()) {
+      callbacksRef.current.onAuthenticated(tokens, method);
+      return;
+    }
+    setConfirmation({ tokens, method });
+    if (confirmationTimerRef.current !== null) {
+      window.clearTimeout(confirmationTimerRef.current);
+    }
+    confirmationTimerRef.current = window.setTimeout(() => {
+      confirmationTimerRef.current = null;
+      callbacksRef.current.onAuthenticated(tokens, method);
+    }, 650);
+  };
 
   const handleResponse = (response: VerifyCodeResponse, method: AuthMethod) => {
     clearTelegramParams();
     if (isAuthTokens(response)) {
-      callbacksRef.current.onAuthenticated(response, method);
+      completeAuthentication(response, method);
       return;
     }
     callbacksRef.current.onPending({
@@ -239,6 +277,15 @@ export function AuthScreen({
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [authenticateTelegram, consumeTelegramReturn]);
+
+  useEffect(
+    () => () => {
+      if (confirmationTimerRef.current !== null) {
+        window.clearTimeout(confirmationTimerRef.current);
+      }
+    },
+    [],
+  );
 
   const requestCode = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -367,68 +414,42 @@ export function AuthScreen({
 
   return (
     <div className="auth-screen">
-      <section className="auth-visual" aria-label={t("auth-welcome")}>
-        <AuthBackdrop theme={theme} skin={skin} />
-        <div className="auth-studio-grain" aria-hidden="true" />
-        <div className="auth-studio-head">
-          <span className="brand-mark" aria-hidden="true">
-            r
-          </span>
-          <span className="brand-name">{t("app-name")}</span>
+      {confirmation ? (
+        <div className="auth-success" role="status" aria-live="polite">
+          <svg
+            className="auth-success-mark"
+            viewBox="0 0 120 120"
+            aria-hidden="true"
+          >
+            <circle className="auth-success-ring" cx="60" cy="60" r="46" />
+            <path className="auth-success-check" d="M37 61l15 15 31-36" />
+          </svg>
+          <p>{t("auth-success")}</p>
         </div>
-        <div className="auth-visual-copy">
-          <h1>{t("auth-welcome-title")}</h1>
-          <p>{t("auth-welcome-body")}</p>
-        </div>
-        <div className="auth-route-preview">
-          <p className="auth-route-caption">{t("auth-route-caption")}</p>
-          <div className="auth-route-stops">
-            <span className="auth-route-stop">
-              <StudioIcon name="sync" size={16} />
-              <span>{t("auth-route-review")}</span>
-            </span>
-            <span className="auth-route-connector" aria-hidden="true" />
-            <span className="auth-route-stop">
-              <StudioIcon name="practice" size={16} />
-              <span>{t("auth-route-rule")}</span>
-            </span>
-            <span className="auth-route-connector" aria-hidden="true" />
-            <span className="auth-route-stop">
-              <StudioIcon name="streak" size={16} />
-              <span>{t("auth-route-final")}</span>
-            </span>
-          </div>
-          <p className="auth-route-time">{t("session-budget", { minutes: 25 })}</p>
-        </div>
-        <div className="auth-iella-scene">
-          <IellaSprite
-            size={76}
-            mood={iellaMood}
-            label={t("auth-iella-hello")}
-            onActivate={() =>
-              setIellaMood((current) =>
-                current === "proud" ? "curious" : "proud",
-              )
-            }
-          />
-        </div>
-      </section>
+      ) : null}
 
-      <section className="auth-panel">
-        <div className="auth-palette-corner">
-          <PaletteToggle theme={theme} onThemeChange={onThemeChange} />
-        </div>
-        <Card
-          tone="plain"
-          className={`auth-card auth-card-stage-${stage}`}
-        >
-          <div className="auth-card-head">
+      <section className="auth-panel" aria-label={t("auth-title")}>
+        <div className="auth-panel-topbar">
+          <div className="auth-brand">
             <span className="brand-mark" aria-hidden="true">
               r
             </span>
+            <span className="brand-name">{t("app-name")}</span>
+          </div>
+          <PaletteToggle theme={theme} onThemeChange={onThemeChange} />
+        </div>
+
+        <div className={`auth-form-region auth-stage-${stage}`}>
+          <div className="auth-card-head">
             <div>
-              <h2>{t("auth-title")}</h2>
-              <p className="auth-card-subtitle">{t("auth-subtitle")}</p>
+              <h2>
+                {stage === "code" ? t("auth-code-title") : t("auth-title")}
+              </h2>
+              <p className="auth-card-subtitle">
+                {stage === "code"
+                  ? t("auth-code-target", { target: maskedEmail })
+                  : t("auth-subtitle")}
+              </p>
             </div>
           </div>
 
@@ -470,7 +491,9 @@ export function AuthScreen({
               className="auth-form auth-form-code"
               onSubmit={(event) => void verifyCode(event)}
             >
-              <label htmlFor={codeId}>{t("auth-code-label")}</label>
+              <label className="visually-hidden" htmlFor={codeId}>
+                {t("auth-code-label")}
+              </label>
               <div
                 className="auth-code-slots"
                 role="group"
@@ -522,12 +545,7 @@ export function AuthScreen({
                 <StudioIcon name="check" size={16} />
                 {t("auth-verify-code")}
               </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                block
-                onClick={backToEmail}
-              >
+              <Button type="button" variant="ghost" block onClick={backToEmail}>
                 <StudioIcon name="arrow-left" size={16} />
                 {t("auth-change-email")}
               </Button>
@@ -551,7 +569,28 @@ export function AuthScreen({
             <p className="auth-note">{t("auth-telegram-detected")}</p>
           ) : null}
           <p className="auth-legal">{t("auth-invite-only")}</p>
-        </Card>
+        </div>
+      </section>
+
+      <section className="auth-visual" aria-label={t("auth-welcome")}>
+        <AuthBackdrop theme={theme} skin={skin} />
+        <div className="auth-studio-grain" aria-hidden="true" />
+        <div className="auth-visual-copy">
+          <h1>{t("auth-welcome-title")}</h1>
+          <p>{t("auth-welcome-body")}</p>
+        </div>
+        <div className="auth-iella-scene">
+          <IellaSprite
+            size={68}
+            mood={iellaMood}
+            label={t("auth-iella-hello")}
+            onActivate={() =>
+              setIellaMood((current) =>
+                current === "proud" ? "curious" : "proud",
+              )
+            }
+          />
+        </div>
       </section>
     </div>
   );

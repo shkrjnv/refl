@@ -35,7 +35,7 @@ describe("Living Studio tokens", () => {
     }
   });
 
-  it("defines the Deep Umber and Cream Paper signature palettes", () => {
+  it("defines the Night and Day signature palettes", () => {
     expect(DEFAULT_THEME).toBe("dark");
     expect(palette.bg).toBe("#FAF4E8");
     expect(palette.blue).toBe("#0D7A78");

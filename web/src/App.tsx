@@ -435,6 +435,49 @@ export function App({ initialTheme, initialSkin }: AppProps) {
     rememberSkinOnServer(next);
   };
 
+  const exportLocalCache = async () => {
+    const store = storageRef.current;
+    if (!store) {
+      return;
+    }
+    const json = await store.exportCache();
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `refl-local-cache-${identity?.learnerId ?? "learner"}.json`;
+    link.rel = "noopener";
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  };
+
+  const resetLocalCache = async () => {
+    const store = storageRef.current;
+    if (!store) {
+      return;
+    }
+    await store.wipe();
+    storageRef.current = null;
+    contentRef.current = null;
+    sessionRef.current = null;
+    setStorage(null);
+    setContent(null);
+    setStateJson(null);
+    setContentError(false);
+    setIdentity(null);
+    setSummary(null);
+    setRunner(null);
+    setLessonView(null);
+    setRejected([]);
+    setIsAdmin(false);
+    setRoute("today");
+    setStatus(initialStatus(true));
+    setIellaMood("perched");
+    setIellaSignal((value) => value + 1);
+  };
+
   const replayTour = () => {
     resetTour();
     setRoute("today");
@@ -581,6 +624,8 @@ export function App({ initialTheme, initialSkin }: AppProps) {
           status={status}
           rejected={rejected}
           onLogout={() => void handleLogout()}
+          onExportCache={exportLocalCache}
+          onResetCache={resetLocalCache}
           isAdmin={isAdmin}
           adminApi={api}
         />

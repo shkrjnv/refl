@@ -32,7 +32,7 @@ describe("custom appearance selector", () => {
     expect(screen.getByRole("dialog", { name: "Appearance" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /Laboratory/ }));
     expect(skin).toBe("laboratory");
-    fireEvent.click(screen.getByRole("button", { name: /Cream Paper/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Day/ }));
     expect(theme).toBe("light");
   });
 });

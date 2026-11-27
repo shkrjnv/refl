@@ -618,6 +618,35 @@ export class LearnerStorage {
     };
   }
 
+  async exportCache(): Promise<string> {
+    const snapshot = await this.getSnapshot();
+    const events = await this.listEvents();
+    const outbox = await this.listOutbox();
+    const unknown = await this.listUnknownEvents();
+    const active = await this.getActiveContent();
+    const cached = await this.getCachedBundle();
+    const cursor = await this.getCursor();
+    const clockOffset = await this.getClockOffset();
+    const themeSelection = await this.getThemeSelection();
+    return JSON.stringify(
+      {
+        exported_at: new Date().toISOString(),
+        learner_id: this.learnerId,
+        cursor,
+        clock_offset_ms: clockOffset,
+        snapshot,
+        events,
+        outbox,
+        unknown_events: unknown,
+        active_content: active,
+        cached_bundle: cached,
+        theme_selection: themeSelection,
+      },
+      null,
+      2,
+    );
+  }
+
   async stageContent(
     candidate: ContentCandidate,
     verifyCompatibility: (bundleJson: string) => Promise<boolean>,

@@ -15,9 +15,10 @@ interface Point {
   y: number;
 }
 
-const SIZE = 64;
-const SVG_HEIGHT = (SIZE * 19) / 24;
-const FEET_RATIO = 18 / 19;
+const DEFAULT_SIZE = 64;
+const SIDEBAR_SIZE = 40;
+const SVG_RATIO = 16 / 17;
+const FEET_RATIO = 13 / 16;
 
 function reducedMotion(): boolean {
   return (
@@ -27,11 +28,11 @@ function reducedMotion(): boolean {
   );
 }
 
-function anchorPoint(anchor: HTMLElement): Point {
+function anchorPoint(anchor: HTMLElement, size: number): Point {
   const rect = anchor.getBoundingClientRect();
   return {
-    x: rect.left + rect.width / 2 - SIZE / 2,
-    y: rect.top - SVG_HEIGHT * FEET_RATIO,
+    x: rect.left + rect.width / 2 - size / 2,
+    y: rect.top - size * SVG_RATIO * FEET_RATIO,
   };
 }
 
@@ -44,22 +45,17 @@ function visibleAnchors(): HTMLElement[] {
   });
 }
 
-function pickAnchor(
-  route: string,
-  previous: HTMLElement | null,
-): HTMLElement | null {
+function perchForRoute(route: string): HTMLElement | null {
   const all = visibleAnchors();
   if (all.length === 0) {
     return null;
   }
-  const routeAnchors = all.filter((anchor) => {
-    const anchorRoute = anchor.dataset["iellaRoute"];
-    return anchorRoute === route || anchorRoute === "app";
-  });
-  const pool = routeAnchors.length > 0 ? routeAnchors : all;
-  const candidates = pool.filter((anchor) => anchor !== previous);
-  const list = candidates.length > 0 ? candidates : pool;
-  return list[Math.floor(Math.random() * list.length)] ?? null;
+  return (
+    all.find((anchor) => anchor.dataset["iellaRoute"] === route) ??
+    all.find((anchor) => anchor.dataset["iellaRoute"] === "app") ??
+    all[0] ??
+    null
+  );
 }
 
 function easeInOut(t: number): number {
@@ -76,12 +72,15 @@ export function IellaCompanion({
   const [placed, setPlaced] = useState(false);
   const [moodState, setMoodState] = useState<IellaMood>("perched");
   const [look, setLook] = useState<IellaLook>("center");
+  const [spriteSize, setSpriteSize] = useState(DEFAULT_SIZE);
+  const [landing, setLanding] = useState(false);
   const nodeRef = useRef<HTMLDivElement | null>(null);
   const anchorRef = useRef<HTMLElement | null>(null);
   const positionRef = useRef<Point>({ x: 0, y: 0 });
   const frameRef = useRef<number | null>(null);
   const animationRef = useRef(0);
   const moodTimerRef = useRef<number | null>(null);
+  const landingTimerRef = useRef<number | null>(null);
   const lastSignalRef = useRef(0);
   const lastRouteRef = useRef(activeRoute);
   const mountedRef = useRef(false);
@@ -113,21 +112,32 @@ export function IellaCompanion({
 
   const moveTo = (anchor: HTMLElement, immediate: boolean) => {
     anchorRef.current = anchor;
-    const target = anchorPoint(anchor);
+    const perch = anchor.dataset["iellaPerch"];
+    const nextSize =
+      perch === "sidebar" || perch === "mobile-brand"
+        ? SIDEBAR_SIZE
+        : DEFAULT_SIZE;
+    setSpriteSize(nextSize);
+    const target = anchorPoint(anchor, nextSize);
     const from = positionRef.current;
     if (frameRef.current !== null) {
       window.cancelAnimationFrame(frameRef.current);
       frameRef.current = null;
     }
+    if (landingTimerRef.current !== null) {
+      window.clearTimeout(landingTimerRef.current);
+      landingTimerRef.current = null;
+    }
+    setLanding(false);
     if (immediate || reducedMotion() || typeof window.requestAnimationFrame !== "function") {
       paint(target);
       setMoodState("perched");
       return;
     }
     const span = Math.hypot(target.x - from.x, target.y - from.y);
-    const duration = Math.min(1500, Math.max(650, span * 1.8));
+    const duration = Math.min(1450, Math.max(680, span * 1.65));
     const normalLength = Math.max(1, span);
-    const curve = Math.min(130, 28 + span * 0.26);
+    const curve = Math.min(110, 24 + span * 0.22);
     const mid = {
       x: (from.x + target.x) / 2,
       y: (from.y + target.y) / 2,
@@ -153,15 +163,19 @@ export function IellaCompanion({
       const progress = Math.min(1, (now - start) / duration);
       const p = easeInOut(progress);
       const one = 1 - p;
+      const baseY =
+        one * one * from.y + 2 * one * p * control.y + p * p * target.y;
+      const anticipation =
+        progress < 0.12
+          ? Math.sin((progress / 0.12) * Math.PI) * 2.4
+          : 0;
+      const lift = -Math.sin(Math.PI * progress) * Math.min(54, 14 + span * 0.06);
       const point = {
         x:
           one * one * from.x +
           2 * one * p * control.x +
           p * p * target.x,
-        y:
-          one * one * from.y +
-          2 * one * p * control.y +
-          p * p * target.y,
+        y: baseY + anticipation + lift,
       };
       paint(point, Math.sin(Math.PI * progress) * direction * 5);
       if (progress < 1) {
@@ -172,6 +186,11 @@ export function IellaCompanion({
       paint(target, 0);
       setLook(direction > 0 ? "left" : "right");
       setMoodState("perched");
+      setLanding(true);
+      landingTimerRef.current = window.setTimeout(() => {
+        setLanding(false);
+        landingTimerRef.current = null;
+      }, 260);
     };
     frameRef.current = window.requestAnimationFrame(tick);
   };
@@ -181,7 +200,7 @@ export function IellaCompanion({
       return;
     }
     mountedRef.current = true;
-    const anchor = pickAnchor(activeRoute, null);
+    const anchor = perchForRoute(activeRoute);
     if (anchor) {
       moveTo(anchor, true);
     }
@@ -195,7 +214,7 @@ export function IellaCompanion({
     }
     lastRouteRef.current = activeRoute;
     const timer = window.setTimeout(() => {
-      const anchor = pickAnchor(activeRoute, anchorRef.current);
+      const anchor = perchForRoute(activeRoute);
       if (anchor) {
         moveTo(anchor, false);
       }
@@ -211,43 +230,28 @@ export function IellaCompanion({
     if (signal === 0) {
       return;
     }
-    if (mood === "flying" || mood === "curious") {
-      const anchor = pickAnchor(activeRoute, anchorRef.current);
-      if (anchor) {
-        moveTo(anchor, false);
-      } else {
-        setTemporaryMood(mood, 1200);
-      }
+    if (mood === "flying") {
+      setTemporaryMood("flying", 700);
       return;
     }
     setTemporaryMood(mood, mood === "proud" ? 1500 : 1100);
-    // The signal is the trigger; the mood value describes the reaction.
-  }, [signal, mood, activeRoute]);
+    // The signal is a reaction; route changes are the only self-initiated move.
+  }, [signal, mood]);
 
-  useEffect(() => {
-    if (reducedMotion()) {
-      return;
-    }
-    let timer = 0;
-    const schedule = () => {
-      const delay = 18_000 + Math.random() * 7_000;
-      timer = window.setTimeout(() => {
-        const anchor = pickAnchor(activeRoute, anchorRef.current);
-        if (anchor) {
-          moveTo(anchor, false);
-        }
-        schedule();
-      }, delay);
-    };
-    schedule();
-    return () => window.clearTimeout(timer);
-  }, [activeRoute]);
 
   useEffect(() => {
     const settle = () => {
       const anchor = anchorRef.current;
       if (anchor && frameRef.current === null) {
-        paint(anchorPoint(anchor));
+        paint(
+          anchorPoint(
+            anchor,
+            anchor.dataset["iellaPerch"] === "sidebar" ||
+              anchor.dataset["iellaPerch"] === "mobile-brand"
+              ? SIDEBAR_SIZE
+              : DEFAULT_SIZE,
+          ),
+        );
       }
     };
     window.addEventListener("resize", settle);
@@ -267,6 +271,9 @@ export function IellaCompanion({
       if (moodTimerRef.current !== null) {
         window.clearTimeout(moodTimerRef.current);
       }
+      if (landingTimerRef.current !== null) {
+        window.clearTimeout(landingTimerRef.current);
+      }
     },
     [],
   );
@@ -278,20 +285,21 @@ export function IellaCompanion({
 
   const sprite = onActivate ? (
     <IellaSprite
-      size={SIZE}
+      size={spriteSize}
       mood={moodState}
       look={look}
       label={t("iella-open-tour")}
       onActivate={handleActivate}
+      onHover={() => setTemporaryMood("curious", 900)}
     />
   ) : (
-    <IellaSprite size={SIZE} mood={moodState} look={look} />
+    <IellaSprite size={spriteSize} mood={moodState} look={look} />
   );
 
   return (
     <div
       ref={nodeRef}
-      className={`iella-companion${placed ? " placed" : ""}`}
+      className={`iella-companion${placed ? " placed" : ""}${landing ? " landing" : ""}`}
       data-mood={moodState}
       aria-hidden={onActivate ? undefined : true}
     >

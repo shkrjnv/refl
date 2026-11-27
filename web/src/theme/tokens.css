@@ -883,3 +883,40 @@
 .palette-swatch-paper {
   background: linear-gradient(135deg, #FAF4E8 0 44%, #0D7A78 44% 74%, #FF2E7E 74%);
 }
+
+/* Settings mini-previews. These are deliberate miniature artboards, not the
+   live page palette, so all five skins remain comparable at a glance. */
+.skin-preview-living-studio {
+  --preview-bg: #faf4e8;
+  --preview-surface: #fffdf8;
+  --preview-accent: #0d7a78;
+  --preview-border: #dccfb8;
+}
+
+.skin-preview-neo-brutalism {
+  --preview-bg: #f3e6cd;
+  --preview-surface: #fff9ed;
+  --preview-accent: #1f5c48;
+  --preview-border: #183a2e;
+}
+
+.skin-preview-soft-neo-brutalism {
+  --preview-bg: #f5ead6;
+  --preview-surface: #fffdf8;
+  --preview-accent: #2a6753;
+  --preview-border: #2a4b3d;
+}
+
+.skin-preview-soft-bento {
+  --preview-bg: #eef1f7;
+  --preview-surface: #ffffff;
+  --preview-accent: #4f63d2;
+  --preview-border: #d7dceb;
+}
+
+.skin-preview-laboratory {
+  --preview-bg: #e8efee;
+  --preview-surface: #f4faf9;
+  --preview-accent: #0b7d82;
+  --preview-border: #9bbfbe;
+}

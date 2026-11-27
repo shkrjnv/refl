@@ -14,7 +14,9 @@ export type StudioIconName =
   | "arrow-right"
   | "chevron-down"
   | "streak"
-  | "spark";
+  | "spark"
+  | "sun"
+  | "moon";
 
 export interface StudioIconProps {
   name: StudioIconName;
@@ -28,9 +30,10 @@ function paths(name: StudioIconName): ReactNode {
     case "today":
       return (
         <>
-          <path d="M4 17.5h16" />
-          <path d="M6.5 17.5v-4.2M12 17.5V9.2M17.5 17.5v-7" />
-          <path d="M4.5 7.5c2.3-2.6 4.7-3.9 7.5-3.9s5.2 1.3 7.5 3.9" />
+          <circle cx="12" cy="11" r="3.2" />
+          <path d="M4 18h16" />
+          <path d="M12 3v2M5.6 5.6l1.4 1.4M18.4 5.6 17 7" />
+          <path d="M6.3 14.8a6.3 6.3 0 0 1 11.4 0" />
         </>
       );
     case "practice":
@@ -44,10 +47,11 @@ function paths(name: StudioIconName): ReactNode {
     case "progress":
       return (
         <>
-          <path d="M4 19V5" />
           <path d="M4 19h16" />
-          <path d="M7.5 15.3v-3.1M12 15.3V8.8M16.5 15.3v-5" />
-          <path d="m7.5 9.4 4.5-3 4.5 2" />
+          <path d="M5.5 16.2c3.2 0 3.2-3.1 6.3-3.1s3.2-4.1 6.3-4.1" />
+          <circle cx="5.5" cy="16.2" r="1.35" />
+          <circle cx="11.8" cy="13.1" r="1.35" />
+          <circle cx="18.1" cy="9" r="1.35" />
         </>
       );
     case "settings":
@@ -116,6 +120,20 @@ function paths(name: StudioIconName): ReactNode {
         <>
           <path d="M12 3.5c.7 4.9 2.1 6.3 7 7-4.9.7-6.3 2.1-7 7-.7-4.9-2.1-6.3-7-7 4.9-.7 6.3-2.1 7-7Z" />
           <path d="M18.5 17.5c.2 1.6.7 2.1 2.3 2.3-1.6.2-2.1.7-2.3 2.3-.2-1.6-.7-2.1-2.3-2.3 1.6-.2 2.1-.7 2.3-2.3Z" />
+        </>
+      );
+    case "sun":
+      return (
+        <>
+          <circle cx="12" cy="12" r="3.4" />
+          <path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M18.7 5.3l-1.4 1.4M6.7 17.3l-1.4 1.4" />
+        </>
+      );
+    case "moon":
+      return (
+        <>
+          <path d="M19.5 15.2A8.2 8.2 0 0 1 8.8 4.5 8.2 8.2 0 1 0 19.5 15.2Z" />
+          <path d="M16.5 4.5v2M15.5 5.5h2" />
         </>
       );
     default:

@@ -42,7 +42,7 @@ export function PaletteToggle({
         aria-label={t("palette-deep-umber")}
         onClick={() => onThemeChange("dark")}
       >
-        <span className="palette-swatch palette-swatch-umber" aria-hidden="true" />
+        <StudioIcon name="moon" size={15} />
         <span>{t("palette-deep-umber")}</span>
       </button>
       <button
@@ -52,7 +52,7 @@ export function PaletteToggle({
         aria-label={t("palette-cream-paper")}
         onClick={() => onThemeChange("light")}
       >
-        <span className="palette-swatch palette-swatch-paper" aria-hidden="true" />
+        <StudioIcon name="sun" size={15} />
         <span>{t("palette-cream-paper")}</span>
       </button>
     </div>
@@ -151,10 +151,7 @@ export function AppearanceMenu({
                 aria-pressed={theme === "dark"}
                 onClick={() => onThemeChange("dark")}
               >
-                <span
-                  className="palette-swatch palette-swatch-umber"
-                  aria-hidden="true"
-                />
+                <StudioIcon name="moon" size={18} />
                 <span>
                   <strong>{t("palette-deep-umber")}</strong>
                   <small>{t("palette-deep-umber-note")}</small>
@@ -166,10 +163,7 @@ export function AppearanceMenu({
                 aria-pressed={theme === "light"}
                 onClick={() => onThemeChange("light")}
               >
-                <span
-                  className="palette-swatch palette-swatch-paper"
-                  aria-hidden="true"
-                />
+                <StudioIcon name="sun" size={18} />
                 <span>
                   <strong>{t("palette-cream-paper")}</strong>
                   <small>{t("palette-cream-paper-note")}</small>

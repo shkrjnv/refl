@@ -138,7 +138,7 @@ describe("auth and access flow", () => {
     );
 
     await waitFor(() => expect(received).toEqual(payload));
-    await waitFor(() => expect(authenticated).not.toBeNull());
+    await waitFor(() => expect(authenticated).not.toBeNull(), { timeout: 2000 });
     expect(window.location.hash).toBe("");
     expect(window.location.search).toBe("?invite=INVITE-42");
   });
@@ -180,9 +180,56 @@ describe("auth and access flow", () => {
       );
     }
     render(<Harness />);
-    fireEvent.click(screen.getByRole("button", { name: "Cream Paper" }));
+    fireEvent.click(screen.getByRole("button", { name: "Day" }));
     expect(selected).toBe("light");
     expect(window.localStorage.getItem("refl.theme")).toBe("light");
     expect(document.documentElement.dataset.theme).toBe("light");
+  });
+
+  it("shows the confirmation check before entering the app", async () => {
+    let authenticated: AuthTokens | null = null;
+    const api: AuthApi = {
+      requestCode: async () => ({ sent: true, expires_in: 600, code: "123456" }),
+      verifyCode: async () => ({
+        access_token: "a",
+        refresh_token: "r",
+        learner_id: "learner-42",
+        expires_in: 900,
+      }),
+      telegramLogin: async () => ({
+        access_token: "a",
+        refresh_token: "r",
+        learner_id: "learner-42",
+        expires_in: 900,
+      }),
+    };
+    render(
+      <I18nProvider initialLocale="en">
+        <AuthGate
+          api={api}
+          inviteCode={null}
+          theme="dark"
+          skin="living-studio"
+          onThemeChange={() => undefined}
+          onAuthenticated={(tokens) => {
+            authenticated = tokens;
+          }}
+        />
+      </I18nProvider>,
+    );
+    fireEvent.change(screen.getByLabelText("Email"), {
+      target: { value: "learner@example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send code" }));
+    await screen.findByText("Development code: 123456");
+    expect(screen.getByText("Enter the code")).toBeTruthy();
+    expect(screen.getByText(/l\*\*\*\*\*\*@example\.com/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Code from the email"), {
+      target: { value: "123456" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    await screen.findByText("Signed in");
+    expect(authenticated).toBeNull();
+    await waitFor(() => expect(authenticated).not.toBeNull(), { timeout: 2000 });
   });
 });

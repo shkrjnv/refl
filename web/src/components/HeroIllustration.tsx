@@ -1,81 +1,117 @@
+const STEPS = [
+  { x: 92, y: 108, number: "01" },
+  { x: 160, y: 218, number: "02" },
+  { x: 268, y: 238, number: "03" },
+  { x: 374, y: 190, number: "04" },
+  { x: 470, y: 168, number: "05" },
+] as const;
+
 export function HeroIllustration() {
   return (
     <svg
       className="hero-illustration"
-      viewBox="0 0 560 300"
+      viewBox="0 0 560 320"
       role="presentation"
       aria-hidden="true"
       preserveAspectRatio="xMidYMid slice"
     >
       <defs>
-        <linearGradient id="hero-sky" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" className="hero-sky-top" />
-          <stop offset="0.62" className="hero-sky-mid" />
-          <stop offset="1" className="hero-sky-bottom" />
+        <linearGradient id="hero-atmosphere" x1="0" y1="0" x2="0.8" y2="1">
+          <stop offset="0" className="hero-atmos-top" />
+          <stop offset="0.56" className="hero-atmos-mid" />
+          <stop offset="1" className="hero-atmos-bottom" />
         </linearGradient>
-        <radialGradient id="hero-celestial">
-          <stop offset="0" className="hero-celestial-core" />
-          <stop offset="1" className="hero-celestial-edge" />
+        <radialGradient id="hero-glow">
+          <stop offset="0" className="hero-glow-core" />
+          <stop offset="1" className="hero-glow-edge" />
         </radialGradient>
       </defs>
-      <rect width="560" height="300" fill="url(#hero-sky)" />
-      <ellipse className="hero-celestial" cx="448" cy="196" rx="188" ry="154" fill="url(#hero-celestial)" />
-      <path
-        className="hero-hill-far"
-        d="M0 218 C72 190 126 208 198 188 C272 168 338 204 404 184 C470 164 520 180 560 172 L560 300 L0 300Z"
+
+      <rect width="560" height="320" fill="url(#hero-atmosphere)" />
+      <ellipse
+        className="hero-celestial-glow"
+        cx="470"
+        cy="72"
+        rx="180"
+        ry="132"
+        fill="url(#hero-glow)"
       />
-      <circle className="hero-sun" cx="448" cy="212" r="52" />
-      <circle className="hero-sun-glow" cx="448" cy="212" r="72" />
-      <path
-        className="hero-hill-back"
-        d="M0 238 C90 204 164 228 244 208 C324 188 396 230 476 204 C512 192 536 198 560 194 L560 300 L0 300Z"
-      />
-      <path
-        className="hero-hill-front"
-        d="M0 262 C108 238 196 258 300 242 C404 226 472 250 560 236 L560 300 L0 300Z"
-      />
-      <path
-        className="hero-route"
-        d="M74 246 C142 246 142 188 210 188 C278 188 278 226 346 226 C408 226 408 166 474 166"
-      />
-      <circle className="hero-route-halo hero-route-halo-a" cx="74" cy="246" r="26" />
-      <circle className="hero-route-halo hero-route-halo-b" cx="210" cy="188" r="27" />
-      <circle className="hero-route-halo hero-route-halo-c" cx="346" cy="226" r="27" />
-      <g className="hero-route-dot hero-route-dot-a">
-        <rect x="62" y="234" width="24" height="24" rx="8" />
-        <path d="M68 246l5 5 9-11" />
+
+      <g className="hero-contours">
+        <path
+          className="hero-contour hero-contour-a"
+          d="M-24 132 C72 100 132 148 222 124 C320 98 376 136 470 108 C510 96 544 102 584 88"
+        />
+        <path
+          className="hero-contour hero-contour-b"
+          d="M-18 168 C74 142 138 184 228 160 C326 134 386 174 472 146 C514 132 550 140 586 126"
+        />
+        <path
+          className="hero-contour hero-contour-c"
+          d="M-22 206 C70 182 142 218 238 198 C334 178 390 212 480 184 C522 172 554 178 584 166"
+        />
+        <path
+          className="hero-contour hero-contour-d"
+          d="M-16 250 C80 228 148 258 242 240 C338 222 400 252 486 226 C526 214 558 220 588 208"
+        />
       </g>
-      <g className="hero-route-dot hero-route-dot-b">
-        <rect x="198" y="176" width="24" height="24" rx="8" />
-        <circle cx="210" cy="188" r="4" />
+
+      <path
+        className="hero-layer hero-layer-far"
+        d="M0 238 C72 206 132 229 206 208 C284 186 350 226 426 202 C486 184 524 196 560 188 L560 320 L0 320Z"
+      />
+      <path
+        className="hero-layer hero-layer-mid"
+        d="M0 268 C86 240 158 263 246 242 C336 220 408 254 488 232 C522 222 544 226 560 220 L560 320 L0 320Z"
+      />
+      <path
+        className="hero-layer hero-layer-near"
+        d="M0 296 C106 272 194 292 296 274 C398 256 470 282 560 262 L560 320 L0 320Z"
+      />
+
+      <g className="hero-ribbons">
+        <path
+          className="hero-ribbon hero-ribbon-a"
+          d="M-20 108 C116 36 204 126 322 74 C420 30 502 52 584 116"
+        />
+        <path
+          className="hero-ribbon hero-ribbon-b"
+          d="M-20 180 C96 122 202 188 318 148 C410 116 510 140 584 188"
+        />
       </g>
-      <g className="hero-route-dot hero-route-dot-c">
-        <rect x="334" y="214" width="24" height="24" rx="8" />
-        <path d="M341 226h10M346 221v10" />
-      </g>
+
+      <path
+        className="hero-route-line"
+        d="M92 108 C128 108 118 218 160 218 C208 218 226 238 268 238 C318 238 328 190 374 190 C414 190 438 168 470 168"
+      />
+
+      {STEPS.map((step, index) => (
+        <g
+          key={step.number}
+          className={`hero-step hero-step-${index + 1}`}
+          transform={`translate(${step.x} ${step.y})`}
+        >
+          <circle className="hero-step-halo" r="25" />
+          <circle className="hero-step-disc" r="18" />
+          <text className="hero-step-number" x="0" y="4">
+            {step.number}
+          </text>
+        </g>
+      ))}
+
       <g className="hero-cloud hero-cloud-a">
-        <circle cx="84" cy="78" r="18" />
-        <circle cx="108" cy="68" r="24" />
-        <circle cx="134" cy="80" r="16" />
-        <rect x="70" y="76" width="80" height="18" rx="9" />
+        <rect x="58" y="46" width="98" height="18" rx="9" />
+        <rect x="80" y="30" width="58" height="16" rx="8" />
       </g>
       <g className="hero-cloud hero-cloud-b">
-        <circle cx="356" cy="54" r="14" />
-        <circle cx="374" cy="46" r="19" />
-        <circle cx="394" cy="56" r="12" />
-        <rect x="346" y="54" width="60" height="14" rx="7" />
+        <rect x="354" y="46" width="74" height="14" rx="7" />
+        <rect x="374" y="34" width="42" height="12" rx="6" />
       </g>
       <g className="hero-star hero-star-a">
-        <path d="M270 42c1 7 3 9 10 10-7 1-9 3-10 10-1-7-3-9-10-10 7-1 9-3 10-10Z" />
-      </g>
-      <g className="hero-star hero-star-c">
-        <path d="M128 40c1 5 2 6 7 7-5 1-6 2-7 7-1-5-2-6-7-7 5-1 6-2 7-7Z" />
-      </g>
-      <g className="hero-star hero-star-d">
-        <path d="M330 90c1 4 2 5 6 6-4 1-5 2-6 6-1-4-2-5-6-6 4-1 5-2 6-6Z" />
+        <path d="M276 42c1 6 2 8 8 9-6 1-7 3-8 9-1-6-2-8-8-9 6-1 7-3 8-9Z" />
       </g>
       <g className="hero-star hero-star-b">
-        <path d="M494 74c1 5 2 6 7 7-5 1-6 2-7 7-1-5-2-6-7-7 5-1 6-2 7-7Z" />
+        <path d="M500 122c1 4 2 5 6 6-4 1-5 2-6 6-1-4-2-5-6-6 4-1 5-2 6-6Z" />
       </g>
     </svg>
   );

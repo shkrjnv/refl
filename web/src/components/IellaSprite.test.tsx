@@ -11,11 +11,13 @@ describe("Iella sprite", () => {
   it("keeps a padded viewBox and articulated layers", () => {
     const { container } = render(<IellaSprite size={64} />);
     const svg = container.querySelector("svg");
-    expect(svg?.getAttribute("viewBox")).toBe("-2 -2 24 19");
+    expect(svg?.getAttribute("viewBox")).toBe("-1 -2 17 16");
     expect(svg?.getAttribute("overflow")).toBe("visible");
     expect(container.querySelectorAll(".iella-wing")).toHaveLength(2);
     expect(container.querySelector(".iella-eyes")).toBeTruthy();
     expect(container.querySelector(".iella-feet")).toBeTruthy();
+    const height = Number(svg?.getAttribute("height"));
+    expect(height).toBeCloseTo((64 * 16) / 17, 4);
   });
 
   it("exposes mood and perch state for the companion engine", () => {
