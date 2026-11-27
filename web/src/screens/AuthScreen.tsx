@@ -172,6 +172,10 @@ export function AuthScreen({
   const [error, setError] = useState<string | null>(null);
   const [telegram] = useState(() => telegramInitData());
   const [iellaMood, setIellaMood] = useState<IellaMood>("curious");
+  const [thermalFocus, setThermalFocus] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   const handledReturnRef = useRef(false);
   const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
   const confirmationTimerRef = useRef<number | null>(null);
@@ -455,7 +459,7 @@ export function AuthScreen({
         </div>
 
         <div className={`auth-form-region auth-stage-${stage}`}>
-          <div className="auth-card-head">
+          <div className="auth-card-head auth-form-header">
             <div>
               <h2>
                 {stage === "code" ? t("auth-code-title") : t("auth-title")}
@@ -493,6 +497,8 @@ export function AuthScreen({
                 autoComplete="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
+                onFocus={() => setThermalFocus({ x: 0.18, y: 0.58 })}
+                onBlur={() => setThermalFocus(null)}
                 placeholder={t("auth-email-placeholder")}
                 required
               />
@@ -534,6 +540,8 @@ export function AuthScreen({
                         : t("auth-code-digit", { index: index + 1 })
                     }
                     onChange={(event) => updateDigit(index, event.target.value)}
+                    onFocus={() => setThermalFocus({ x: 0.12, y: 0.46 })}
+                    onBlur={() => setThermalFocus(null)}
                     onKeyDown={(event) => onDigitKeyDown(index, event)}
                   />
                 ))}
@@ -588,7 +596,7 @@ export function AuthScreen({
       </section>
 
       <section className="auth-visual" aria-label={t("auth-welcome")}>
-        <AuthBackdrop paused={confirmation !== null} />
+        <AuthBackdrop paused={confirmation !== null} focus={thermalFocus} />
         <div className="auth-studio-grain" aria-hidden="true" />
         <div className="auth-visual-copy">
           <h1>{t("auth-welcome-title")}</h1>

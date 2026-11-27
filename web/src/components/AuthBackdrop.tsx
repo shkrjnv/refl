@@ -115,25 +115,43 @@ interface PreparedPlume {
   amplitude: number;
 }
 
-function preparePlumes(time: number): PreparedPlume[] {
-  return PLUMES.map((plume) => {
+interface Warmth {
+  x: number;
+  y: number;
+  weight: number;
+  targetX: number;
+  targetY: number;
+  targetWeight: number;
+}
+
+function preparePlumes(time: number, warmth: Warmth): PreparedPlume[] {
+  return PLUMES.map((plume, index) => {
     const radius =
       plume.radius * (0.92 + Math.sin(time * 0.05 + plume.phase) * 0.08);
+    let cx =
+      plume.cx +
+      Math.sin(time * plume.sx + plume.phase) * plume.ax +
+      Math.sin(time * plume.sx * 0.43 + plume.phase * 2.3) * plume.ax * 0.35;
+    let cy =
+      plume.cy +
+      Math.cos(time * plume.sy + plume.phase) * plume.ay +
+      Math.cos(time * plume.sy * 0.37 + plume.phase * 1.7) * plume.ay * 0.3;
+    let amplitude = plume.amplitude;
+    if (index === 3) {
+      const pull = warmth.weight * 0.26;
+      cx += (warmth.x - cx) * pull;
+      cy += (warmth.y - cy) * pull;
+      amplitude *= 1 + warmth.weight * 0.22;
+    }
     return {
-      cx:
-        plume.cx +
-        Math.sin(time * plume.sx + plume.phase) * plume.ax +
-        Math.sin(time * plume.sx * 0.43 + plume.phase * 2.3) * plume.ax * 0.35,
-      cy:
-        plume.cy +
-        Math.cos(time * plume.sy + plume.phase) * plume.ay +
-        Math.cos(time * plume.sy * 0.37 + plume.phase * 1.7) * plume.ay * 0.3,
+      cx,
+      cy,
       cosine: Math.cos(plume.rotation),
       sine: Math.sin(plume.rotation),
       stretchX: plume.stretchX,
       stretchY: plume.stretchY,
       spread: 2 * radius * radius,
-      amplitude: plume.amplitude,
+      amplitude,
     };
   });
 }
@@ -248,10 +266,11 @@ function drawFrame(
   time: number,
   ramp: readonly Rgb[],
   hot: Rgb,
+  warmth: Warmth,
 ): void {
   const image = context.createImageData(width, height);
   const data = image.data;
-  const plumes = preparePlumes(time);
+  const plumes = preparePlumes(time, warmth);
   for (let y = 0; y < height; y += 1) {
     const ny = y / height;
     for (let x = 0; x < width; x += 1) {
@@ -269,9 +288,43 @@ function drawFrame(
   context.putImageData(image, 0, 0);
 }
 
-export function AuthBackdrop({ paused = false }: { paused?: boolean }) {
+export function AuthBackdrop({
+  paused = false,
+  focus = null,
+}: {
+  paused?: boolean;
+  focus?: { x: number; y: number } | null;
+}) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const lastTimeRef = useRef(0);
+  const focusRef = useRef(focus);
+  focusRef.current = focus;
+  const pointerActiveRef = useRef(false);
+  const warmthRef = useRef<Warmth>({
+    x: 0.5,
+    y: 0.5,
+    weight: 0,
+    targetX: 0.5,
+    targetY: 0.5,
+    targetWeight: 0,
+  });
+
+  useEffect(() => {
+    const reduced =
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced) {
+      return;
+    }
+    const warmth = warmthRef.current;
+    if (focus) {
+      warmth.targetX = focus.x;
+      warmth.targetY = focus.y;
+      warmth.targetWeight = 1;
+    } else if (!pointerActiveRef.current) {
+      warmth.targetWeight = 0;
+    }
+  }, [focus]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -317,6 +370,7 @@ export function AuthBackdrop({ paused = false }: { paused?: boolean }) {
         reduced ? 4.2 : lastTimeRef.current,
         ramp,
         hot,
+        warmthRef.current,
       );
     };
 
@@ -326,6 +380,39 @@ export function AuthBackdrop({ paused = false }: { paused?: boolean }) {
       return () => window.removeEventListener("resize", resize);
     }
 
+    const surface = canvas.parentElement ?? canvas;
+    const onPointerMove = (event: PointerEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width < 1 || rect.height < 1) {
+        return;
+      }
+      const warmth = warmthRef.current;
+      pointerActiveRef.current = true;
+      warmth.targetX = Math.max(
+        0,
+        Math.min(1, (event.clientX - rect.left) / rect.width),
+      );
+      warmth.targetY = Math.max(
+        0,
+        Math.min(1, (event.clientY - rect.top) / rect.height),
+      );
+      warmth.targetWeight = 1;
+    };
+    const onPointerLeave = () => {
+      pointerActiveRef.current = false;
+      const warmth = warmthRef.current;
+      const activeFocus = focusRef.current;
+      if (activeFocus) {
+        warmth.targetX = activeFocus.x;
+        warmth.targetY = activeFocus.y;
+        warmth.targetWeight = 1;
+      } else {
+        warmth.targetWeight = 0;
+      }
+    };
+    surface.addEventListener("pointermove", onPointerMove);
+    surface.addEventListener("pointerleave", onPointerLeave);
+
     const tick = (now: number) => {
       if (disposed) {
         return;
@@ -333,6 +420,10 @@ export function AuthBackdrop({ paused = false }: { paused?: boolean }) {
       if (now - last >= 45) {
         last = now;
         lastTimeRef.current = now / 1000;
+        const warmth = warmthRef.current;
+        warmth.x += (warmth.targetX - warmth.x) * 0.08;
+        warmth.y += (warmth.targetY - warmth.y) * 0.08;
+        warmth.weight += (warmth.targetWeight - warmth.weight) * 0.06;
         drawFrame(
           context,
           canvas.width,
@@ -340,6 +431,7 @@ export function AuthBackdrop({ paused = false }: { paused?: boolean }) {
           lastTimeRef.current,
           ramp,
           hot,
+          warmth,
         );
       }
       frame = window.requestAnimationFrame(tick);
@@ -348,6 +440,8 @@ export function AuthBackdrop({ paused = false }: { paused?: boolean }) {
     return () => {
       disposed = true;
       window.removeEventListener("resize", resize);
+      surface.removeEventListener("pointermove", onPointerMove);
+      surface.removeEventListener("pointerleave", onPointerLeave);
       window.cancelAnimationFrame(frame);
     };
   }, [paused]);

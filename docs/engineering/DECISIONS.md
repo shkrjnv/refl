@@ -167,3 +167,13 @@
 - The activity heatmap covers 16 full weeks (112 cells) in 16 columns with Mon/Wed/Fri cues, per-day tooltips, a localized Less/More legend, and plural today counts. Measured cells are 14.9px at 1440px and 14.2px at 390px with 4px gaps.
 - Added coverage for the exact tour highlight padding/shade panels, the 112-cell heatmap and legend, the mobile edit lock from an active desktop edit state, and the ribbon SVG/nav icon geometry. All 83 web tests pass.
 - `just fmt-check`, `just lint`, `just test`, and `just web` pass; the commit is local and not pushed.
+
+## W11 — 30/70 studio split, Burgundy Studio, tactile light felt, top sheen, and editorial sign-in
+
+- At `>= 1200px` the auth grid is `minmax(400px, 31%) 1fr`, giving ultrawide screens a compact ~30% sign-in rail and ~70% thermal studio. The `901–1199px` band keeps the balanced `42% / 58%` pair, and the layout falls back to a single column on mobile; the narrow rail uses tighter panel padding and a compact five-swatch top bar.
+- Added the fifth palette **Burgundy Studio**: `#1B0B10` canvas, `#271118` surface, `#331720` elevated surface, `#F5ECE3` ink, `#C4ABB2` muted ink, `#E03A5D` crimson-rose primary, and `#E2A652` brass. It is registered in TypeScript tokens, the CSS palette and swatch blocks, local persistence, the settings palette list, and the five-chip appearance selector; the felt panel is tinted deep bordeaux.
+- Light palettes now carry a denser two-tone woven felt layer with higher opacity and fiber contrast (Cream Paper and Sand & Forest), so the grain is visible at normal scale instead of reading as flat beige. Dark palettes retain the quieter weave, and the Burgundy rail lifts it slightly for the bordeaux wool.
+- The felt column receives a top-edge studio sheen: the specified `rgba(255, 244, 228, 0.07) → transparent 26%` wash on dark palettes and a warmer sunlit-paper falloff on light palettes. `AuthBackdrop` now eases a secondary warmth plume toward pointer position or the focused email/OTP field, with damping; the interaction is not attached under `prefers-reduced-motion`.
+- The auth copy is now editorial: “Step into the studio”, “One-time code by email, or instant entry with Telegram.”, with the specified RU/UZ translations. The form header uses `clamp(1.85rem, 2.2vw, 2.35rem)`, weight 700, `-0.03em` tracking and tuned vertical rhythm; the email input and buttons get a two-pixel focus ring with a soft halo.
+- Added coverage for the five-palette registry, Burgundy values/darkness, local persistence and application, appearance-menu selection, and the new editorial AuthScreen copy plus all five palette chips. All 84 web tests pass.
+- `just fmt-check`, `just lint`, `just test`, and `just web` pass; the commit is local and not pushed.

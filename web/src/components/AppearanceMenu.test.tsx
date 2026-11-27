@@ -10,7 +10,7 @@ import { AppearanceMenu } from "./AppearanceMenu";
 afterEach(cleanup);
 
 describe("custom appearance selector", () => {
-  it("opens the popover and switches skin and any of four palettes", () => {
+  it("opens the popover and switches skin and any of five palettes", () => {
     let skin: SkinName = "living-studio";
     let theme: ThemeName = "deep-umber";
     render(
@@ -32,9 +32,10 @@ describe("custom appearance selector", () => {
     expect(screen.getByRole("dialog", { name: "Appearance" })).toBeTruthy();
     for (const name of [
       "Deep Umber",
+      "Burgundy Studio",
+      "Midnight Cobalt",
       "Cream Paper",
       "Sand & Forest",
-      "Midnight Cobalt",
     ]) {
       expect(screen.getByRole("button", { name: new RegExp(name) })).toBeTruthy();
     }
@@ -44,5 +45,7 @@ describe("custom appearance selector", () => {
     expect(theme).toBe("sand-forest");
     fireEvent.click(screen.getByRole("button", { name: /Midnight Cobalt/ }));
     expect(theme).toBe("midnight-cobalt");
+    fireEvent.click(screen.getByRole("button", { name: /Burgundy Studio/ }));
+    expect(theme).toBe("burgundy");
   });
 });

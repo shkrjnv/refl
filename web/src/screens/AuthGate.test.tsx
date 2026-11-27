@@ -198,6 +198,59 @@ describe("auth and access flow", () => {
     expect(document.documentElement.dataset["theme"]).toBe("light");
   });
 
+  it("renders the editorial studio copy and all five palette chips", () => {
+    render(
+      <I18nProvider initialLocale="en">
+        <AuthGate
+          api={{
+            requestCode: async () => ({ sent: true, expires_in: 600 }),
+            verifyCode: async () => ({
+              access_token: "a",
+              refresh_token: "r",
+              learner_id: "learner-42",
+              expires_in: 900,
+            }),
+            telegramLogin: async () => ({
+              access_token: "a",
+              refresh_token: "r",
+              learner_id: "learner-42",
+              expires_in: 900,
+            }),
+          }}
+          inviteCode={null}
+          theme="burgundy"
+          skin="living-studio"
+          locale="en"
+          locales={["en", "ru", "uz"]}
+          onLocaleChange={() => undefined}
+          onThemeChange={() => undefined}
+          onAuthenticated={() => undefined}
+        />
+      </I18nProvider>,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Step into the studio" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        "One-time code by email, or instant entry with Telegram.",
+      ),
+    ).toBeTruthy();
+    expect(document.querySelector(".auth-form-header h2")?.textContent).toBe(
+      "Step into the studio",
+    );
+    for (const name of [
+      "Deep Umber",
+      "Burgundy Studio",
+      "Midnight Cobalt",
+      "Cream Paper",
+      "Sand & Forest",
+    ]) {
+      expect(screen.getByRole("button", { name })).toBeTruthy();
+    }
+  });
+
   it("shows the confirmation check before entering the app", async () => {
     let authenticated: AuthTokens | null = null;
     const api: AuthApi = {

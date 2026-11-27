@@ -12,9 +12,10 @@ export type Palette = { [Key in keyof typeof palette]: string };
 
 export const paletteNames = [
   "deep-umber",
+  "burgundy",
+  "midnight-cobalt",
   "cream-paper",
   "sand-forest",
-  "midnight-cobalt",
 ] as const;
 
 export type PaletteName = (typeof paletteNames)[number];
@@ -51,6 +52,7 @@ export const skinDescriptionKeys: Record<SkinName, string> = {
 
 export const paletteLabelKeys: Record<PaletteName, string> = {
   "deep-umber": "palette-deep-umber",
+  burgundy: "palette-burgundy",
   "cream-paper": "palette-cream-paper",
   "sand-forest": "palette-sand-forest",
   "midnight-cobalt": "palette-midnight-cobalt",
@@ -58,6 +60,7 @@ export const paletteLabelKeys: Record<PaletteName, string> = {
 
 export const paletteNoteKeys: Record<PaletteName, string> = {
   "deep-umber": "palette-deep-umber-note",
+  burgundy: "palette-burgundy-note",
   "cream-paper": "palette-cream-paper-note",
   "sand-forest": "palette-sand-forest-note",
   "midnight-cobalt": "palette-midnight-cobalt-note",
@@ -181,6 +184,49 @@ export const themes: Record<PaletteName, ThemeTokens> = {
     iellaBrown: "#8B5A2B",
     iellaEye: "#0E1020",
   },
+  burgundy: {
+    ...palette,
+    bg: "#1B0B10",
+    surface: "#271118",
+    surfaceRaised: "#331720",
+    surfaceMuted: "#3A1A24",
+    surfaceCard: "#271118",
+    border: "#4A2532",
+    borderStrong: "#6B3849",
+    text: "#F5ECE3",
+    textMuted: "#C4ABB2",
+    blue: "#E03A5D",
+    sun: "#E2A652",
+    green: "#63C7A2",
+    coral: "#FF7C96",
+    purp: "#B98CFF",
+    blueDeep: "#B22845",
+    sunDeep: "#A9782E",
+    greenDeep: "#3D9474",
+    coralDeep: "#B82E4B",
+    purpDeep: "#7A57C7",
+    focusRing: "#FF8DA3",
+    microAccent: "#E2A652",
+    shadowButton: "0 4px 0 #0C0407",
+    shadowPrimary: "0 4px 0 #B22845",
+    shadowCard: "0 6px 0 #0C0407",
+    shadowHero: "0 8px 0 #0C0407",
+    shadowSoft: "0 18px 45px rgba(0, 0, 0, 0.46)",
+    overlay: "rgba(10, 2, 6, 0.68)",
+    infoSurface: "#331822",
+    infoBorder: "#5E2E3E",
+    warningSurface: "#332417",
+    warningBorder: "#635026",
+    successSurface: "#173129",
+    successBorder: "#2E5C4C",
+    dangerSurface: "#35141D",
+    dangerBorder: "#6A2838",
+    iellaInk: "#24346A",
+    iellaBeak: "#E0773C",
+    iellaCream: "#F3E3C3",
+    iellaBrown: "#8B5A2B",
+    iellaEye: "#0E1020",
+  },
   "sand-forest": {
     ...palette,
     bg: "#F3E6CD",
@@ -294,7 +340,11 @@ export function normalizePalette(value: string | null): PaletteName | null {
 }
 
 export function isDarkPalette(paletteName: PaletteName): boolean {
-  return paletteName === "deep-umber" || paletteName === "midnight-cobalt";
+  return (
+    paletteName === "deep-umber" ||
+    paletteName === "burgundy" ||
+    paletteName === "midnight-cobalt"
+  );
 }
 
 export function isSkinName(value: string | null): value is SkinName {

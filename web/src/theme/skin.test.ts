@@ -35,6 +35,7 @@ describe("skin and palette selection", () => {
       "cream-paper",
       "sand-forest",
       "midnight-cobalt",
+      "burgundy",
       "deep-umber",
     ] as const) {
       storeTheme(palette);
@@ -65,6 +66,12 @@ describe("skin and palette selection", () => {
     expect(document.documentElement.dataset["palette"]).toBe("midnight-cobalt");
     expect(document.documentElement.dataset["theme"]).toBe("dark");
     expect(document.documentElement.dataset["skin"]).toBe("soft-bento");
+    expect(document.documentElement.style.colorScheme).toBe("dark");
+
+    applyAppearance("burgundy", "living-studio");
+    expect(document.documentElement.dataset["palette"]).toBe("burgundy");
+    expect(document.documentElement.dataset["theme"]).toBe("dark");
+    expect(document.documentElement.dataset["skin"]).toBe("living-studio");
     expect(document.documentElement.style.colorScheme).toBe("dark");
 
     applyAppearance("sand-forest", "laboratory");

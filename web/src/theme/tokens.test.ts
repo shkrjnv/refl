@@ -30,15 +30,17 @@ describe("Living Studio tokens", () => {
     }
   });
 
-  it("defines four independent palettes with tactile tokens", () => {
+  it("defines five independent palettes with tactile tokens", () => {
     expect(paletteNames).toEqual([
       "deep-umber",
+      "burgundy",
+      "midnight-cobalt",
       "cream-paper",
       "sand-forest",
-      "midnight-cobalt",
     ]);
     expect(DEFAULT_THEME).toBe("deep-umber");
     expect(isDarkPalette("deep-umber")).toBe(true);
+    expect(isDarkPalette("burgundy")).toBe(true);
     expect(isDarkPalette("midnight-cobalt")).toBe(true);
     expect(isDarkPalette("cream-paper")).toBe(false);
     expect(isDarkPalette("sand-forest")).toBe(false);
@@ -55,7 +57,7 @@ describe("Living Studio tokens", () => {
     expect(isPaletteName(null)).toBe(false);
   });
 
-  it("keeps the four signature color stories", () => {
+  it("keeps the five signature color stories", () => {
     expect(themes["cream-paper"].bg).toBe("#FAF4E8");
     expect(themes["cream-paper"].blue).toBe("#0D7A78");
     expect(themes["cream-paper"].coral).toBe("#FF2E7E");
@@ -66,6 +68,13 @@ describe("Living Studio tokens", () => {
     expect(themes["sand-forest"].sun).toBe("#E7A438");
     expect(themes["midnight-cobalt"].blue).toBe("#3D6BFF");
     expect(themes["midnight-cobalt"].sun).toBe("#E9B45E");
+    expect(themes.burgundy.bg).toBe("#1B0B10");
+    expect(themes.burgundy.surface).toBe("#271118");
+    expect(themes.burgundy.surfaceRaised).toBe("#331720");
+    expect(themes.burgundy.text).toBe("#F5ECE3");
+    expect(themes.burgundy.textMuted).toBe("#C4ABB2");
+    expect(themes.burgundy.blue).toBe("#E03A5D");
+    expect(themes.burgundy.sun).toBe("#E2A652");
   });
 
   it("keeps the canonical Iella colors on every palette", () => {

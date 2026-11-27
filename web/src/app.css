@@ -4427,7 +4427,7 @@ input:focus-visible {
 }
 
 .auth-screen {
-  grid-template-columns: minmax(360px, 43%) minmax(0, 57%);
+  grid-template-columns: minmax(360px, 42%) minmax(0, 58%);
 }
 
 .auth-panel {
@@ -6689,9 +6689,9 @@ input:focus-visible {
   background-position: 0 0, 0 0, 43px 67px;
   background-size: 3px 3px, 173px 173px, 97px 97px;
   content: "";
-  filter: contrast(1.12) brightness(1.06);
+  filter: contrast(var(--felt-weave-contrast, 1.12)) brightness(var(--felt-weave-brightness, 1.06));
   mix-blend-mode: overlay;
-  opacity: 0.55;
+  opacity: var(--felt-weave-opacity, 0.55);
   pointer-events: none;
 }
 
@@ -6708,6 +6708,7 @@ input:focus-visible {
   will-change: auto;
   animation: none;
   background:
+    var(--auth-top-sheen),
     radial-gradient(
       ellipse at 50% -10%,
       color-mix(in srgb, var(--auth-panel-text) 13%, transparent),
@@ -8317,4 +8318,139 @@ input:focus-visible {
    settles into two balanced lines inside the same 14ch measure. */
 :lang(uz) .auth-visual-copy h1 {
   letter-spacing: -0.08em;
+}
+
+
+/* W11 — ultrawide studio split, compact gallery top bar, editorial form. */
+@media (min-width: 1200px) {
+  .auth-screen {
+    grid-template-columns: minmax(400px, 31%) 1fr;
+  }
+
+  .auth-panel {
+    padding: 116px clamp(24px, 2.4vw, 54px) 52px;
+  }
+}
+
+.auth-panel-topbar {
+  right: clamp(16px, 2.2vw, 44px);
+  left: clamp(16px, 2.2vw, 44px);
+  gap: 10px;
+}
+
+.auth-brand-group {
+  gap: 8px;
+}
+
+.auth-brand {
+  gap: 8px;
+}
+
+.auth-brand .brand-name {
+  font-size: 18px;
+}
+
+.auth-panel-topbar .palette-toggle {
+  gap: 3px;
+  padding: 3px;
+}
+
+.auth-panel-topbar .palette-choice {
+  padding: 0 4px;
+}
+
+.auth-form-region .auth-form-header {
+  margin-bottom: 28px;
+}
+
+.auth-form-region .auth-form-header h2 {
+  color: var(--text);
+  font-size: clamp(1.85rem, 2.2vw, 2.35rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.03;
+}
+
+.auth-form-region .auth-form-header .auth-card-subtitle {
+  max-width: 38ch;
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.auth-form input:not(.auth-code-slot):focus-visible {
+  border-color: var(--focus-ring);
+  outline: 2px solid color-mix(in srgb, var(--focus-ring) 76%, transparent);
+  outline-offset: 2px;
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--focus-ring) 16%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--text) 4%, transparent);
+}
+
+.auth-form-region .ui-button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.auth-form-region .ui-button-primary:focus-visible {
+  box-shadow:
+    0 0 0 5px color-mix(in srgb, var(--focus-ring) 16%, transparent),
+    var(--shadow-primary);
+}
+
+.auth-form-region .ui-button-secondary:focus-visible {
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--focus-ring) 16%, transparent);
+}
+
+:root[data-palette="cream-paper"] .auth-panel,
+:root[data-palette="sand-forest"] .auth-panel {
+  background-blend-mode: soft-light, soft-light, overlay;
+}
+
+@media (max-width: 620px) {
+  .auth-brand .brand-name {
+    font-size: 17px;
+  }
+
+  .auth-panel-topbar {
+    gap: 8px;
+  }
+}
+
+
+/* Standard laptop split: keep the studio pair balanced between the ultrawide
+   30/70 rail and the single-column mobile stack. */
+@media (min-width: 901px) and (max-width: 1080px) {
+  .auth-screen {
+    grid-template-columns: minmax(360px, 42%) minmax(0, 58%);
+  }
+}
+
+/* W11 — light palettes get a denser two-tone weave so the wool stays tactile. */
+:root[data-palette="cream-paper"] .auth-panel::before,
+:root[data-palette="sand-forest"] .auth-panel::before {
+  background-image:
+    radial-gradient(
+      circle at 1px 1px,
+      color-mix(in srgb, var(--auth-panel-text) 14%, transparent) 0 0.9px,
+      transparent 1.3px
+    ),
+    radial-gradient(
+      circle at 1px 1px,
+      color-mix(in srgb, var(--auth-panel-text) 9%, transparent) 0 0.7px,
+      transparent 1.1px
+    ),
+    var(--felt-texture),
+    var(--felt-texture);
+  background-position: 0 0, 2px 2px, 0 0, 43px 67px;
+  background-size: 4px 4px, 5px 5px, 173px 173px, 97px 97px;
+  filter: contrast(var(--felt-weave-contrast, 1.3)) brightness(var(--felt-weave-brightness, 0.92));
+  opacity: var(--felt-weave-opacity, 0.78);
+}
+
+/* W11 — the compact rail keeps all five swatches visible on phones. */
+@media (max-width: 430px) {
+  .auth-panel-topbar .palette-toggle {
+    max-width: none;
+  }
 }
