@@ -1,4 +1,11 @@
-import { useEffect, useId, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 
 import {
   ApiError,
@@ -14,8 +21,11 @@ import { Button, Card } from "../components/ui";
 import { useTranslation } from "../i18n";
 import {
   markTelegramReady,
+  TELEGRAM_OAUTH_ORIGIN,
   telegramInitData,
   telegramOAuthUrl,
+  telegramPayloadFromLocation,
+  telegramPayloadFromMessage,
   telegramPayloadFromWebApp,
 } from "../prototype/telegram";
 
@@ -47,29 +57,26 @@ export interface AuthScreenProps {
   onAccessBlocked: (state: "access_rejected" | "erased") => void;
 }
 
-function telegramPayloadFromSearch(search: string): TelegramLoginPayload | null {
-  const params = new URLSearchParams(search);
-  const idRaw = params.get("id");
-  const firstName = params.get("first_name");
-  const authDateRaw = params.get("auth_date");
-  const hash = params.get("hash");
-  if (!idRaw || !firstName || !authDateRaw || !hash) {
-    return null;
+const TELEGRAM_QUERY_KEYS = [
+  "id",
+  "first_name",
+  "last_name",
+  "username",
+  "photo_url",
+  "auth_date",
+  "hash",
+] as const;
+
+function clearTelegramParams(): void {
+  if (typeof window === "undefined") {
+    return;
   }
-  const id = Number(idRaw);
-  const authDate = Number(authDateRaw);
-  if (!Number.isFinite(id) || !Number.isFinite(authDate)) {
-    return null;
+  const url = new URL(window.location.href);
+  for (const key of TELEGRAM_QUERY_KEYS) {
+    url.searchParams.delete(key);
   }
-  return {
-    id,
-    first_name: firstName,
-    last_name: params.get("last_name"),
-    username: params.get("username"),
-    photo_url: params.get("photo_url"),
-    auth_date: authDate,
-    hash,
-  };
+  url.hash = "";
+  window.history.replaceState(null, "", `${url.pathname}${url.search}`);
 }
 
 function authErrorKey(error: unknown): string {
@@ -113,77 +120,98 @@ export function AuthScreen({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [telegram] = useState(() => telegramInitData());
-
-  const clearTelegramParams = () => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    const url = new URL(window.location.href);
-    for (const key of [
-      "id",
-      "first_name",
-      "last_name",
-      "username",
-      "photo_url",
-      "auth_date",
-      "hash",
-    ]) {
-      url.searchParams.delete(key);
-    }
-    url.hash = "";
-    window.history.replaceState(
-      null,
-      "",
-      `${url.pathname}${url.search}`,
-    );
-  };
+  const handledReturnRef = useRef(false);
+  const callbacksRef = useRef({ onAuthenticated, onPending, onAccessBlocked });
+  callbacksRef.current = { onAuthenticated, onPending, onAccessBlocked };
 
   const handleResponse = (response: VerifyCodeResponse, method: AuthMethod) => {
+    clearTelegramParams();
     if (isAuthTokens(response)) {
-      if (typeof window !== "undefined") {
-        window.history.replaceState(null, "", window.location.pathname);
-      }
-      onAuthenticated(response, method);
+      callbacksRef.current.onAuthenticated(response, method);
       return;
     }
-    clearTelegramParams();
-    onPending({ learnerId: response.learner_id, method });
+    callbacksRef.current.onPending({
+      learnerId: response.learner_id,
+      method,
+    });
   };
 
-  const authenticateTelegram = async (payload: TelegramLoginPayload) => {
-    setBusy(true);
-    setError(null);
-    try {
-      const response = await api.telegramLogin(
-        payload,
-        typeof window === "undefined" ? "" : window.location.search,
-      );
-      handleResponse(response, "telegram");
-    } catch (caught) {
-      if (caught instanceof ApiError) {
-        if (caught.code === "access_rejected" || caught.code === "erased") {
-          onAccessBlocked(caught.code);
-          return;
+  const authenticateTelegram = useCallback(
+    async (payload: TelegramLoginPayload) => {
+      setBusy(true);
+      setError(null);
+      try {
+        const response = await api.telegramLogin(
+          payload,
+          typeof window === "undefined" ? "" : window.location.search,
+        );
+        handleResponse(response, "telegram");
+      } catch (caught) {
+        if (caught instanceof ApiError) {
+          if (caught.code === "access_rejected" || caught.code === "erased") {
+            callbacksRef.current.onAccessBlocked(caught.code);
+            return;
+          }
         }
+        setError(authErrorKey(caught));
+      } finally {
+        setBusy(false);
       }
-      setError(authErrorKey(caught));
-    } finally {
-      setBusy(false);
+    },
+    [api],
+  );
+
+  const consumeTelegramReturn = useCallback(() => {
+    if (typeof window === "undefined" || handledReturnRef.current) {
+      return;
     }
-  };
+    const payload = telegramPayloadFromLocation(
+      window.location.search,
+      window.location.hash,
+    );
+    if (!payload) {
+      return;
+    }
+    handledReturnRef.current = true;
+    clearTelegramParams();
+    void authenticateTelegram(payload);
+  }, [authenticateTelegram]);
 
   useEffect(() => {
     markTelegramReady();
     if (typeof window === "undefined") {
       return;
     }
-    const payload = telegramPayloadFromSearch(window.location.search);
-    if (payload) {
+    const consume = () => consumeTelegramReturn();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        consume();
+      }
+    };
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== TELEGRAM_OAUTH_ORIGIN || handledReturnRef.current) {
+        return;
+      }
+      const payload = telegramPayloadFromMessage(event.data);
+      if (!payload) {
+        return;
+      }
+      handledReturnRef.current = true;
+      clearTelegramParams();
       void authenticateTelegram(payload);
-    }
-    // The Telegram return URL is handled once per mount. WebApp initData is
-    // used by the explicit Telegram button below.
-  }, []);
+    };
+    consume();
+    window.addEventListener("hashchange", consume);
+    window.addEventListener("focus", consume);
+    window.addEventListener("message", onMessage);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("hashchange", consume);
+      window.removeEventListener("focus", consume);
+      window.removeEventListener("message", onMessage);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [authenticateTelegram, consumeTelegramReturn]);
 
   const requestCode = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -214,7 +242,7 @@ export function AuthScreen({
     } catch (caught) {
       if (caught instanceof ApiError) {
         if (caught.code === "access_rejected" || caught.code === "erased") {
-          onAccessBlocked(caught.code);
+          callbacksRef.current.onAccessBlocked(caught.code);
           return;
         }
       }
@@ -233,17 +261,17 @@ export function AuthScreen({
       return;
     }
     const botId = import.meta.env.VITE_TELEGRAM_BOT_ID ?? "";
-    const returnTo =
-      typeof window === "undefined" ? "" : window.location.href;
-    const url =
-      typeof window === "undefined"
-        ? null
-        : telegramOAuthUrl(botId, window.location.origin, returnTo);
+    if (typeof window === "undefined") {
+      setError("auth-telegram-unavailable");
+      return;
+    }
+    const returnTo = `${window.location.origin}${window.location.pathname}${window.location.search}`;
+    const url = telegramOAuthUrl(botId, window.location.origin, returnTo);
     if (!url) {
       setError("auth-telegram-unavailable");
       return;
     }
-    window.open(url, "_blank", "noopener,noreferrer");
+    window.location.assign(url);
   };
 
   return (

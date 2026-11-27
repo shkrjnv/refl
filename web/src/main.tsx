@@ -3,12 +3,13 @@ import { createRoot } from "react-dom/client";
 
 import { App } from "./App";
 import { I18nProvider } from "./i18n";
-import { applyTheme, initialTheme } from "./theme/tokens";
+import { applyAppearance, initialSkin, initialTheme } from "./theme/tokens";
 import "./theme/tokens.css";
 import "./app.css";
 
 const theme = initialTheme();
-applyTheme(theme);
+const skin = initialSkin();
+applyAppearance(theme, skin);
 
 const rootElement = document.getElementById("root");
 if (!rootElement) {
@@ -18,7 +19,7 @@ if (!rootElement) {
 createRoot(rootElement).render(
   <StrictMode>
     <I18nProvider>
-      <App initialTheme={theme} />
+      <App initialTheme={theme} initialSkin={skin} />
     </I18nProvider>
   </StrictMode>,
 );

@@ -5,17 +5,25 @@ import type { OutboxRecord } from "../db/storage";
 import type { Locale } from "../i18n";
 import { useTranslation } from "../i18n";
 import type { AppStatus } from "../prototype/status";
-import type { ThemeName } from "../theme/tokens";
+import {
+  skinDescriptionKeys,
+  skinLabelKeys,
+  skinNames,
+  type SkinName,
+  type ThemeName,
+} from "../theme/tokens";
 import { AdminAccessSection } from "./AdminAccessSection";
 
-export interface ProfileScreenProps {
+export interface SettingsScreenProps {
   learnerLabel: string;
   authMethod: "email" | "telegram";
   locale: Locale;
   locales: readonly Locale[];
   onLocaleChange: (locale: Locale) => void;
   theme: ThemeName;
-  onToggleTheme: () => void;
+  onThemeChange: (theme: ThemeName) => void;
+  skin: SkinName;
+  onSkinChange: (skin: SkinName) => void;
   onReplayTour: () => void;
   status: AppStatus;
   rejected: OutboxRecord[];
@@ -24,21 +32,36 @@ export interface ProfileScreenProps {
   adminApi: ApiClient | null;
 }
 
-export function ProfileScreen({
+function persistenceKey(status: AppStatus): string {
+  switch (status.persistence) {
+    case "granted":
+      return "storage-persist-granted";
+    case "denied":
+      return "storage-persist-denied";
+    case "unsupported":
+      return "storage-persist-unsupported";
+    default:
+      return "storage-persist-unknown";
+  }
+}
+
+export function SettingsScreen({
   learnerLabel,
   authMethod,
   locale,
   locales,
   onLocaleChange,
   theme,
-  onToggleTheme,
+  onThemeChange,
+  skin,
+  onSkinChange,
   onReplayTour,
   status,
   rejected,
   onLogout,
   isAdmin,
   adminApi,
-}: ProfileScreenProps) {
+}: SettingsScreenProps) {
   const { t } = useTranslation();
   return (
     <div className="profile-screen">
@@ -70,6 +93,53 @@ export function ProfileScreen({
       </Card>
 
       <div className="settings-grid">
+        <Card tone="plain" className="settings-card settings-appearance">
+          <p className="eyebrow">{t("profile-appearance")}</p>
+          <h2>{t("profile-skin")}</h2>
+          <p className="settings-note">{t("profile-skin-note")}</p>
+          <div className="skin-options">
+            {skinNames.map((candidate) => (
+              <button
+                key={candidate}
+                type="button"
+                className={`skin-option${skin === candidate ? " selected" : ""}`}
+                aria-pressed={skin === candidate}
+                onClick={() => onSkinChange(candidate)}
+              >
+                <span
+                  className={`skin-swatch skin-swatch-${candidate}`}
+                  aria-hidden="true"
+                />
+                <span className="skin-option-copy">
+                  <strong>{t(skinLabelKeys[candidate])}</strong>
+                  <span>{t(skinDescriptionKeys[candidate])}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+          <p className="eyebrow appearance-mode-label">{t("profile-mode")}</p>
+          <div className="settings-options">
+            <Button
+              type="button"
+              variant={theme === "light" ? "primary" : "secondary"}
+              size="sm"
+              aria-pressed={theme === "light"}
+              onClick={() => onThemeChange("light")}
+            >
+              {t("common-light")}
+            </Button>
+            <Button
+              type="button"
+              variant={theme === "dark" ? "primary" : "secondary"}
+              size="sm"
+              aria-pressed={theme === "dark"}
+              onClick={() => onThemeChange("dark")}
+            >
+              {t("common-dark")}
+            </Button>
+          </div>
+        </Card>
+
         <Card tone="plain" className="settings-card">
           <p className="eyebrow">{t("profile-language")}</p>
           <h2>{t("app-language")}</h2>
@@ -85,37 +155,6 @@ export function ProfileScreen({
                 {t(`language-${candidate}`)}
               </Button>
             ))}
-          </div>
-        </Card>
-
-        <Card tone="plain" className="settings-card">
-          <p className="eyebrow">{t("profile-theme")}</p>
-          <h2>{t("app-theme")}</h2>
-          <div className="settings-options">
-            <Button
-              type="button"
-              variant={theme === "light" ? "primary" : "secondary"}
-              size="sm"
-              onClick={() => {
-                if (theme !== "light") {
-                  onToggleTheme();
-                }
-              }}
-            >
-              {t("common-light")}
-            </Button>
-            <Button
-              type="button"
-              variant={theme === "dark" ? "primary" : "secondary"}
-              size="sm"
-              onClick={() => {
-                if (theme !== "dark") {
-                  onToggleTheme();
-                }
-              }}
-            >
-              {t("common-dark")}
-            </Button>
           </div>
         </Card>
 
@@ -144,6 +183,9 @@ export function ProfileScreen({
           <span>{t("sync-rejected", { count: status.rejectedOutbox })}</span>
           {status.clockDrift ? <span>{t("sync-clock-warning")}</span> : null}
         </div>
+        <p className={`storage-status storage-${status.persistence}`}>
+          {t(persistenceKey(status))}
+        </p>
         {rejected.length > 0 ? (
           <div className="rejected-list">
             <p className="eyebrow">{t("profile-rejected-events")}</p>

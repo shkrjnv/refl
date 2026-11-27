@@ -38,6 +38,11 @@ export interface UnknownEventRecord {
   saved_at: number;
 }
 
+export interface ThemeSelectionRecord {
+  theme: string;
+  event_id: string;
+}
+
 export interface AuthSessionRecord {
   learner_id: string;
   access_token: string;
@@ -77,7 +82,11 @@ export interface CachedBundleRecord {
   cached_at: number;
 }
 
-type MetaKey = "cursor" | "clock_offset_ms" | "auth_session";
+type MetaKey =
+  | "cursor"
+  | "clock_offset_ms"
+  | "auth_session"
+  | "theme_selection";
 
 interface MetaRecord {
   key: MetaKey;
@@ -536,6 +545,35 @@ export class LearnerStorage {
   async getClockOffset(): Promise<number> {
     const value = await this.getMeta("clock_offset_ms");
     return typeof value === "number" && Number.isFinite(value) ? value : 0;
+  }
+
+  async rememberThemeSelection(
+    selection: ThemeSelectionRecord,
+  ): Promise<void> {
+    const current = await this.getThemeSelection();
+    if (
+      current !== null &&
+      compareEventIds(current.event_id, selection.event_id) >= 0
+    ) {
+      return;
+    }
+    await this.setMeta("theme_selection", {
+      theme: selection.theme,
+      event_id: selection.event_id,
+    });
+  }
+
+  async getThemeSelection(): Promise<ThemeSelectionRecord | null> {
+    const value = await this.getMeta("theme_selection");
+    if (!isJsonObject(value)) {
+      return null;
+    }
+    const theme = value["theme"];
+    const eventId = value["event_id"];
+    if (typeof theme !== "string" || typeof eventId !== "string") {
+      return null;
+    }
+    return { theme, event_id: eventId };
   }
 
   async setAuthSession(session: AuthSessionRecord | null): Promise<void> {

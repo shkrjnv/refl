@@ -5,11 +5,23 @@ import ruSource from "./locales/ru.ftl?raw";
 import uzSource from "./locales/uz.ftl?raw";
 import { createBundle, formatMessage, resolveLocale } from "./index";
 
+function messageKeys(source: string): string[] {
+  return [...source.matchAll(/^([A-Za-z0-9_-]+) = /gm)]
+    .map((match) => match[1] ?? "")
+    .sort();
+}
+
 describe("Fluent locales", () => {
   it("parses en, ru, and uz resources", () => {
     expect(() => createBundle("en", enSource)).not.toThrow();
     expect(() => createBundle("ru", ruSource)).not.toThrow();
     expect(() => createBundle("uz", uzSource)).not.toThrow();
+  });
+
+  it("keeps every locale on the same message keys and Uzbek orthography", () => {
+    expect(messageKeys(ruSource)).toEqual(messageKeys(enSource));
+    expect(messageKeys(uzSource)).toEqual(messageKeys(enSource));
+    expect(uzSource).not.toMatch(/[og]'/);
   });
 
   it("formats localized messages and falls back to English", () => {

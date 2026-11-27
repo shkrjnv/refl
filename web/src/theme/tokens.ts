@@ -11,6 +11,34 @@ export const palette = {
 export type Palette = { [Key in keyof typeof palette]: string };
 export type ThemeName = "light" | "dark";
 
+export const skinNames = [
+  "living-studio",
+  "neo-brutalism",
+  "soft-neo-brutalism",
+  "soft-bento",
+  "laboratory",
+] as const;
+
+export type SkinName = (typeof skinNames)[number];
+
+export const DEFAULT_SKIN: SkinName = "living-studio";
+
+export const skinLabelKeys: Record<SkinName, string> = {
+  "living-studio": "skin-living-studio",
+  "neo-brutalism": "skin-neo-brutalism",
+  "soft-neo-brutalism": "skin-soft-neo-brutalism",
+  "soft-bento": "skin-soft-bento",
+  laboratory: "skin-laboratory",
+};
+
+export const skinDescriptionKeys: Record<SkinName, string> = {
+  "living-studio": "skin-living-studio-note",
+  "neo-brutalism": "skin-neo-brutalism-note",
+  "soft-neo-brutalism": "skin-soft-neo-brutalism-note",
+  "soft-bento": "skin-soft-bento-note",
+  laboratory: "skin-laboratory-note",
+};
+
 export interface ThemeTokens extends Palette {
   surface: string;
   surfaceRaised: string;
@@ -126,9 +154,14 @@ export const themes: Record<ThemeName, ThemeTokens> = {
 };
 
 const THEME_KEY = "refl.theme";
+const SKIN_KEY = "refl.skin";
 
 export function isThemeName(value: string | null): value is ThemeName {
   return value === "light" || value === "dark";
+}
+
+export function isSkinName(value: string | null): value is SkinName {
+  return value !== null && skinNames.includes(value as SkinName);
 }
 
 export function systemTheme(): ThemeName {
@@ -141,6 +174,9 @@ export function systemTheme(): ThemeName {
 }
 
 export function readStoredTheme(): ThemeName | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
   try {
     const value = window.localStorage.getItem(THEME_KEY);
     return isThemeName(value) ? value : null;
@@ -150,6 +186,9 @@ export function readStoredTheme(): ThemeName | null {
 }
 
 export function storeTheme(theme: ThemeName): void {
+  if (typeof window === "undefined") {
+    return;
+  }
   try {
     window.localStorage.setItem(THEME_KEY, theme);
   } catch {
@@ -161,10 +200,53 @@ export function initialTheme(): ThemeName {
   return readStoredTheme() ?? systemTheme();
 }
 
+export function readStoredSkin(): SkinName | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    const value = window.localStorage.getItem(SKIN_KEY);
+    return isSkinName(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+export function storeSkin(skin: SkinName): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.setItem(SKIN_KEY, skin);
+  } catch {
+    // Storage can be unavailable in private or blocked contexts.
+  }
+}
+
+export function initialSkin(): SkinName {
+  return readStoredSkin() ?? DEFAULT_SKIN;
+}
+
 export function applyTheme(
   theme: ThemeName,
   root: HTMLElement = document.documentElement,
 ): void {
   root.dataset.theme = theme;
   root.style.colorScheme = theme;
+}
+
+export function applySkin(
+  skin: SkinName,
+  root: HTMLElement = document.documentElement,
+): void {
+  root.dataset.skin = skin;
+}
+
+export function applyAppearance(
+  theme: ThemeName,
+  skin: SkinName,
+  root: HTMLElement = document.documentElement,
+): void {
+  applyTheme(theme, root);
+  applySkin(skin, root);
 }

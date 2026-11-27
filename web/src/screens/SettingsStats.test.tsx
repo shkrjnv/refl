@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { I18nProvider } from "../i18n";
 import { initialStatus } from "../prototype/status";
-import { ProfileScreen } from "./ProfileScreen";
+import { SettingsScreen } from "./SettingsScreen";
 import { StatsScreen } from "./StatsScreen";
 import { testContent } from "./testContent";
 
@@ -46,13 +46,14 @@ describe("statistics and settings", () => {
     expect(screen.getByText("Mastered KCs")).toBeTruthy();
   });
 
-  it("switches language and theme from settings", () => {
+  it("switches language, skin, and mode from settings", () => {
     const content = testContent();
     let locale = "en";
-    let toggles = 0;
+    let selectedTheme = "light";
+    let selectedSkin = "living-studio";
     render(
       <I18nProvider initialLocale="en">
-        <ProfileScreen
+        <SettingsScreen
           learnerLabel="Learner"
           authMethod="email"
           locale="en"
@@ -61,8 +62,12 @@ describe("statistics and settings", () => {
             locale = next;
           }}
           theme="light"
-          onToggleTheme={() => {
-            toggles += 1;
+          onThemeChange={(next) => {
+            selectedTheme = next;
+          }}
+          skin="living-studio"
+          onSkinChange={(next) => {
+            selectedSkin = next;
           }}
           onReplayTour={() => undefined}
           status={initialStatus(true)}
@@ -76,8 +81,11 @@ describe("statistics and settings", () => {
     expect(content.contentVersion).toBe("test-content");
     fireEvent.click(screen.getByRole("button", { name: "Russian" }));
     fireEvent.click(screen.getByRole("button", { name: "Dark" }));
+    fireEvent.click(screen.getByRole("button", { name: /Laboratory/ }));
     expect(locale).toBe("ru");
-    expect(toggles).toBe(1);
+    expect(selectedTheme).toBe("dark");
+    expect(selectedSkin).toBe("laboratory");
     expect(screen.getByText("Profile and settings")).toBeTruthy();
+    expect(screen.getByText("Checking offline storage protection...")).toBeTruthy();
   });
 });

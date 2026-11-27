@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { palette, themes } from "./tokens";
+import {
+  DEFAULT_SKIN,
+  isSkinName,
+  palette,
+  skinLabelKeys,
+  skinNames,
+  themes,
+} from "./tokens";
 
 describe("Living Studio tokens", () => {
   it("keeps the reference palette in the TypeScript and CSS tokens", () => {
@@ -25,5 +32,22 @@ describe("Living Studio tokens", () => {
       expect(theme.shadowButton).toContain("0 4px 0");
       expect(theme.shadowCard).toContain("0 6px 0");
     }
+  });
+
+  it("defines the selectable non-ASCII skins with localized label keys", () => {
+    expect(skinNames).toEqual([
+      "living-studio",
+      "neo-brutalism",
+      "soft-neo-brutalism",
+      "soft-bento",
+      "laboratory",
+    ]);
+    expect(DEFAULT_SKIN).toBe("living-studio");
+    for (const skin of skinNames) {
+      expect(isSkinName(skin)).toBe(true);
+      expect(skinLabelKeys[skin]).toMatch(/^skin-/);
+    }
+    expect(isSkinName("pure-ascii")).toBe(false);
+    expect(isSkinName(null)).toBe(false);
   });
 });

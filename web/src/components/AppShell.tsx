@@ -2,10 +2,16 @@ import type { ReactNode } from "react";
 
 import type { Locale } from "../i18n";
 import { useTranslation } from "../i18n";
-import type { ThemeName } from "../theme/tokens";
+import {
+  isSkinName,
+  skinLabelKeys,
+  skinNames,
+  type SkinName,
+  type ThemeName,
+} from "../theme/tokens";
 import { IellaSprite } from "./IellaSprite";
 
-export type AppRoute = "today" | "lesson" | "stats" | "profile";
+export type AppRoute = "today" | "lesson" | "stats" | "settings";
 
 export interface AppShellProps {
   active: AppRoute;
@@ -17,6 +23,9 @@ export interface AppShellProps {
   onLocaleChange: (locale: Locale) => void;
   theme: ThemeName;
   onToggleTheme: () => void;
+  skin: SkinName;
+  onSkinChange: (skin: SkinName) => void;
+  onIellaActivate?: () => void;
   lessonAvailable?: boolean;
 }
 
@@ -66,6 +75,9 @@ export function AppShell({
   onLocaleChange,
   theme,
   onToggleTheme,
+  skin,
+  onSkinChange,
+  onIellaActivate,
   lessonAvailable = false,
 }: AppShellProps) {
   const { t } = useTranslation();
@@ -78,7 +90,7 @@ export function AppShell({
       disabled: !lessonAvailable,
     },
     { route: "stats", label: t("nav-stats"), glyph: "stats" },
-    { route: "profile", label: t("nav-settings"), glyph: "settings" },
+    { route: "settings", label: t("nav-settings"), glyph: "settings" },
   ];
 
   const navigate = (item: NavItem) => {
@@ -112,13 +124,28 @@ export function AppShell({
           ))}
         </nav>
         <div className="sidebar-spacer" />
-        <div className="iella-card">
-          <IellaSprite size={44} />
-          <div>
-            <strong>Iella</strong>
-            <span>{t("iella-companion")}</span>
+        {onIellaActivate ? (
+          <button
+            type="button"
+            className="iella-card iella-card-button"
+            aria-label={t("iella-open-tour")}
+            onClick={onIellaActivate}
+          >
+            <IellaSprite size={44} />
+            <span>
+              <strong>{t("iella-name")}</strong>
+              <span>{t("iella-companion")}</span>
+            </span>
+          </button>
+        ) : (
+          <div className="iella-card">
+            <IellaSprite size={44} />
+            <div>
+              <strong>{t("iella-name")}</strong>
+              <span>{t("iella-companion")}</span>
+            </div>
           </div>
-        </div>
+        )}
         <div className="learner-chip">
           <span className="learner-avatar">{learnerLabel.slice(0, 1)}</span>
           <span className="learner-copy">
@@ -152,6 +179,23 @@ export function AppShell({
                 </button>
               ))}
             </div>
+            <select
+              className="skin-select"
+              aria-label={t("app-skin")}
+              value={skin}
+              onChange={(event) => {
+                const value = event.target.value;
+                if (isSkinName(value)) {
+                  onSkinChange(value);
+                }
+              }}
+            >
+              {skinNames.map((candidate) => (
+                <option key={candidate} value={candidate}>
+                  {t(skinLabelKeys[candidate])}
+                </option>
+              ))}
+            </select>
             <button
               type="button"
               className="theme-toggle"
@@ -166,6 +210,9 @@ export function AppShell({
       </div>
 
       <nav className="mobile-nav" aria-label={t("nav-label")}>
+        <span className="iella-perch iella-perch-dock" aria-hidden="true">
+          <IellaSprite size={34} />
+        </span>
         {items.map((item) => (
           <button
             key={item.route}

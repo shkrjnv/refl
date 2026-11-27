@@ -1,9 +1,9 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { HeroIllustration } from "../components/HeroIllustration";
 import { IellaTour } from "../components/IellaTour";
 import { IellaSprite } from "../components/IellaSprite";
-import { Badge, Button, Card, ProgressBar } from "../components/ui";
+import { Button, Card, ProgressBar } from "../components/ui";
 import { useTranslation } from "../i18n";
 import type { PrototypeContent } from "../prototype/content";
 import {
@@ -23,6 +23,12 @@ export interface TodayScreenProps {
   onTourComplete: () => void;
 }
 
+const IELLA_TIPS = [
+  "iella-tip-route",
+  "iella-tip-offline",
+  "iella-tip-memory",
+] as const;
+
 export function TodayScreen({
   content,
   stateJson,
@@ -34,6 +40,7 @@ export function TodayScreen({
   onTourComplete,
 }: TodayScreenProps) {
   const { t, locale } = useTranslation();
+  const [tipIndex, setTipIndex] = useState<number | null>(null);
   const progress = useMemo(
     () => kcProgress(content, parseLearnerState(stateJson), locale),
     [content, stateJson, locale],
@@ -46,58 +53,54 @@ export function TodayScreen({
     { label: "A1", rank: 0 },
   ).label;
 
-  const syncLabel = status.syncing
-    ? t("sync-syncing")
-    : !status.online
-      ? t("sync-offline")
-      : status.pendingOutbox === 0 && status.lastSyncedAt !== null
-        ? t("sync-synced")
-        : t("sync-online");
+  const statusCues: Array<{ label: string; tone: "warning" | "danger" }> = [];
+  if (!status.online) {
+    statusCues.push({ label: t("sync-offline"), tone: "warning" });
+  }
+  if (status.pendingOutbox > 0) {
+    statusCues.push({
+      label: t("sync-pending", { count: status.pendingOutbox }),
+      tone: "warning",
+    });
+  }
+  if (status.rejectedOutbox > 0) {
+    statusCues.push({
+      label: t("sync-rejected", { count: status.rejectedOutbox }),
+      tone: "danger",
+    });
+  }
+  if (status.clockDrift) {
+    statusCues.push({ label: t("sync-clock-warning"), tone: "warning" });
+  }
+
+  const tip = tipIndex === null ? null : t(IELLA_TIPS[tipIndex] ?? IELLA_TIPS[0]);
 
   return (
     <div className="today-screen">
-      <header className="page-heading">
-        <div>
-          <p className="eyebrow">{t("today-eyebrow")}</p>
-          <h1>{t("today-greeting", { name: learnerLabel })}</h1>
+      <header className="today-masthead">
+        <div className="today-identity">
+          <span className="today-avatar" aria-hidden="true">
+            {learnerLabel.slice(0, 1)}
+          </span>
+          <div>
+            <p className="today-kicker">{t("today-eyebrow")}</p>
+            <h1>{t("today-greeting", { name: learnerLabel })}</h1>
+          </div>
         </div>
-        <Badge tone={status.online ? "green" : "sun"}>{syncLabel}</Badge>
+        {statusCues.length > 0 ? (
+          <div className="today-status" role="status" aria-live="polite">
+            {statusCues.map((cue) => (
+              <span
+                key={cue.label}
+                className={`sync-cue sync-cue-${cue.tone}`}
+              >
+                <span className="sync-cue-dot" aria-hidden="true" />
+                {cue.label}
+              </span>
+            ))}
+          </div>
+        ) : null}
       </header>
-
-      <section className="status-strip" aria-label={t("sync-status-label")}>
-        <span className={`status-pill ${status.online ? "online" : "offline"}`}>
-          <span className="status-dot" aria-hidden="true" />
-          {syncLabel}
-        </span>
-        {status.pendingOutbox > 0 ? (
-          <span className="status-note">
-            {t("sync-pending", { count: status.pendingOutbox })}
-          </span>
-        ) : null}
-        {status.rejectedOutbox > 0 ? (
-          <span className="status-note danger">
-            {t("sync-rejected", { count: status.rejectedOutbox })}
-          </span>
-        ) : null}
-        {status.clockDrift ? (
-          <span className="status-note warning">{t("sync-clock-warning")}</span>
-        ) : null}
-        {status.persistence === "denied" ? (
-          <span className="status-note warning">
-            {t("storage-persist-denied")}
-          </span>
-        ) : null}
-        {status.persistence === "unsupported" ? (
-          <span className="status-note warning">
-            {t("storage-unsupported")}
-          </span>
-        ) : null}
-        {status.persistence === "granted" ? (
-          <span className="status-note success">
-            {t("storage-persist-granted")}
-          </span>
-        ) : null}
-      </section>
 
       {status.updateReady ? (
         <div className="update-banner" role="status">
@@ -106,54 +109,78 @@ export function TodayScreen({
         </div>
       ) : null}
 
-      <section className="today-hero" data-tour="route">
+      <section className="today-route" data-tour="route" aria-labelledby="today-route-title">
         <HeroIllustration />
-        <div className="today-hero-copy">
-          <p className="eyebrow">{t("today-route-eyebrow")}</p>
-          <h2>{t("today-route-title")}</h2>
+        <div className="route-topline">
+          <span className="route-chip">{t("today-route-eyebrow")}</span>
+          <span className="route-chip route-chip-time">
+            {t("session-budget", { minutes: 25 })}
+          </span>
+        </div>
+        <div className="route-copy">
+          <h2 id="today-route-title">{t("today-route-title")}</h2>
           <p>{t("today-route-body")}</p>
           <div className="today-hero-actions">
-            <Button type="button" variant="primary" size="lg" data-tour="start" onClick={onStart}>
+            <Button
+              type="button"
+              variant="primary"
+              size="lg"
+              data-tour="start"
+              onClick={onStart}
+            >
               {t("session-start")}
             </Button>
-            <span className="route-time">
-              {t("session-budget", { minutes: 25 })}
-            </span>
           </div>
         </div>
-        <span className="level-stamp" data-tour="level">
+        <div className="route-level" data-tour="level">
           <span>{t("today-level")}</span>
           <strong>{currentLevel}</strong>
+        </div>
+        <span className="iella-perch iella-perch-route" aria-hidden="true">
+          <IellaSprite size={62} />
         </span>
       </section>
 
-      <section className="section-block">
-        <div className="section-heading">
+      <section className="articles-block" aria-labelledby="today-articles-title">
+        <div className="articles-heading">
           <div>
             <p className="eyebrow">{t("today-articles-eyebrow")}</p>
-            <h2>{t("today-articles-title")}</h2>
+            <h2 id="today-articles-title">{t("today-articles-title")}</h2>
           </div>
-          <Button type="button" variant="ghost" size="sm" onClick={onOpenStats}>
-            {t("today-open-stats")}
-          </Button>
+          <div className="articles-heading-side">
+            <span className="articles-count">
+              {t("today-articles-count", { count: progress.length })}
+            </span>
+            <Button type="button" variant="ghost" size="sm" onClick={onOpenStats}>
+              {t("today-open-stats")}
+            </Button>
+          </div>
         </div>
         <div className="kc-grid">
-          {progress.map((kc) => (
-            <Card key={kc.kcId} tone="plain" className="kc-card">
-              <div className="kc-card-head">
-                <div>
-                  <h3>{kc.title}</h3>
-                  <span className="kc-meta">
-                    {kc.mastered
-                      ? t("today-kc-mastered")
-                      : kc.observations > 0
-                        ? t("today-kc-progress")
-                        : t("today-kc-new")}
-                  </span>
-                </div>
-                <Badge tone={kc.mastered ? "green" : "blue"}>
-                  {kc.percent}%
-                </Badge>
+          {progress.map((kc, index) => (
+            <Card
+              key={kc.kcId}
+              tone="plain"
+              className={`kc-card${kc.mastered ? " kc-card-mastered" : ""}`}
+            >
+              <div className="kc-card-topline">
+                <span className="kc-index" aria-hidden="true">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+                <span className="kc-meta">
+                  {kc.mastered
+                    ? t("today-kc-mastered")
+                    : kc.observations > 0
+                      ? t("today-kc-progress")
+                      : t("today-kc-new")}
+                </span>
+              </div>
+              <div className="kc-card-body">
+                <h3>{kc.title}</h3>
+                <span className="kc-percent" aria-hidden="true">
+                  {kc.percent}
+                  <span>%</span>
+                </span>
               </div>
               <ProgressBar
                 value={kc.percent}
@@ -173,10 +200,18 @@ export function TodayScreen({
       </section>
 
       <Card tone="tinted" className="iella-note">
-        <IellaSprite size={56} />
+        <IellaSprite
+          size={58}
+          label={t("iella-tip-open")}
+          onActivate={() =>
+            setTipIndex((current) =>
+              current === null ? 0 : (current + 1) % IELLA_TIPS.length,
+            )
+          }
+        />
         <div>
           <strong>{t("iella-note-title")}</strong>
-          <p>{t("iella-note-body")}</p>
+          <p aria-live="polite">{tip ?? t("iella-note-body")}</p>
         </div>
       </Card>
 

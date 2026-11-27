@@ -90,3 +90,12 @@
 - `ADMIN_EMAIL` and `ADMIN_TELEGRAM_ID` activate matching logins and idempotently add the `admin` role even under closed registration.
 - Added `just web` for the client tests and production build.
 - The access API test covers email and Telegram bootstrap admins, closed registration, and repeated login.
+
+## W4 — design skins, living Iella, clean Today, and Telegram hash return
+
+- Added five selectable skins (`living-studio`, `neo-brutalism`, `soft-neo-brutalism`, `soft-bento`, `laboratory`) alongside light/dark; `refl.skin` stores the local choice, `data-skin` applies it, and a skin change queues a `theme_selected` event whose latest event id wins across devices.
+- Today now shows compact sync cues only for offline, pending, rejected, or clock-warning states. Normal sync and storage-persistence diagnostics were removed from Today; persistence status is reported only in Settings.
+- Auth uses dedicated panel/foreground tokens with a scrim, so the left copy keeps contrast on every skin and mode. Illustration and Iella motion are disabled under `prefers-reduced-motion`.
+- Iella renders on a padded SVG canvas with idle breathing, blinking, looking, perches on Today, lesson, sidebar, and dock, and stays pointer-transparent except for the tip and tour affordances.
+- Telegram OAuth returns accept query params, `#tgAuthResult` base64 JSON, and `postMessage` from `https://oauth.telegram.org`; the return URL is clean and the redirect is same-window via `location.assign`.
+- Added Vitest coverage for Telegram hash parsing, skin persistence/switching, and Today clean-state suppression.

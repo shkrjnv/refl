@@ -20,7 +20,7 @@ import { PrototypeContent } from "./prototype/content";
 import { initialStatus, type AppStatus } from "./prototype/status";
 import { AuthGate } from "./screens/AuthGate";
 import { LessonScreen } from "./screens/LessonScreen";
-import { ProfileScreen } from "./screens/ProfileScreen";
+import { SettingsScreen } from "./screens/SettingsScreen";
 import { StatsScreen } from "./screens/StatsScreen";
 import { SummaryScreen } from "./screens/SummaryScreen";
 import { TodayScreen } from "./screens/TodayScreen";
@@ -28,14 +28,20 @@ import { logoutAndWipe } from "./sync/session";
 import { SyncEngine } from "./sync/engine";
 import { ClientClock } from "./sync/uuidv7";
 import {
+  applySkin,
   applyTheme,
+  isSkinName,
+  storeSkin,
   storeTheme,
+  type SkinName,
   type ThemeName,
 } from "./theme/tokens";
+import type { JsonObject } from "./types/json";
 import { CoreWorkerClient } from "./worker/client";
 
 interface AppProps {
   initialTheme: ThemeName;
+  initialSkin: SkinName;
 }
 
 type VisibleRoute = AppRoute | "summary";
@@ -55,9 +61,10 @@ function sessionFromTokens(tokens: AuthTokens) {
   };
 }
 
-export function App({ initialTheme }: AppProps) {
+export function App({ initialTheme, initialSkin }: AppProps) {
   const { locale, locales, setLocale, t } = useTranslation();
   const [theme, setTheme] = useState<ThemeName>(initialTheme);
+  const [skin, setSkin] = useState<SkinName>(initialSkin);
   const [route, setRoute] = useState<VisibleRoute>("today");
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [storage, setStorage] = useState<LearnerStorage | null>(null);
@@ -163,6 +170,12 @@ export function App({ initialTheme }: AppProps) {
       });
       const result = await engine.run();
       await refreshLocalState(store);
+      const selection = await store.getThemeSelection();
+      if (selection !== null && isSkinName(selection.theme)) {
+        storeSkin(selection.theme);
+        applySkin(selection.theme);
+        setSkin(selection.theme);
+      }
       setStatus((current) => ({
         ...current,
         syncing: false,
@@ -331,11 +344,59 @@ export function App({ initialTheme }: AppProps) {
     setStatus(initialStatus(true));
   };
 
-  const toggleTheme = () => {
-    const next: ThemeName = theme === "light" ? "dark" : "light";
+  const changeTheme = (next: ThemeName) => {
     setTheme(next);
     storeTheme(next);
     applyTheme(next);
+  };
+
+  const toggleTheme = () => {
+    changeTheme(theme === "light" ? "dark" : "light");
+  };
+
+  const rememberSkinOnServer = (next: SkinName) => {
+    const store = storageRef.current;
+    const currentIdentity = identity;
+    if (!store || !currentIdentity) {
+      return;
+    }
+    const stamp = clockRef.current.stamp();
+    const payload: JsonObject = { type: "theme_selected", theme: next };
+    const event: JsonObject = {
+      schema_version: 2,
+      event_id: stamp.event_id,
+      learner_id: currentIdentity.learnerId,
+      session_id: null,
+      client_ts: stamp.client_ts,
+      server_ts: null,
+      payload,
+    };
+    void store
+      .rememberThemeSelection({
+        theme: next,
+        event_id: stamp.event_id,
+      })
+      .then(() =>
+        store.queueOutbox({
+          learner_id: currentIdentity.learnerId,
+          event_id: stamp.event_id,
+          event,
+          confirmed: false,
+        }),
+      )
+      .then(() => refreshLocalState(store))
+      .then(() => syncNow())
+      .catch(() => undefined);
+  };
+
+  const changeSkin = (next: SkinName) => {
+    if (next === skin) {
+      return;
+    }
+    setSkin(next);
+    storeSkin(next);
+    applySkin(next);
+    rememberSkinOnServer(next);
   };
 
   const replayTour = () => {
@@ -401,6 +462,9 @@ export function App({ initialTheme }: AppProps) {
       onLocaleChange={setLocale}
       theme={theme}
       onToggleTheme={toggleTheme}
+      skin={skin}
+      onSkinChange={changeSkin}
+      onIellaActivate={replayTour}
       lessonAvailable={runner !== null}
     >
       {actionError ? (
@@ -454,15 +518,17 @@ export function App({ initialTheme }: AppProps) {
       {route === "stats" ? (
         <StatsScreen content={content} stateJson={stateJson} />
       ) : null}
-      {route === "profile" ? (
-        <ProfileScreen
+      {route === "settings" ? (
+        <SettingsScreen
           learnerLabel={learnerLabel}
           authMethod={identity.method}
           locale={locale}
           locales={locales}
           onLocaleChange={setLocale}
           theme={theme}
-          onToggleTheme={toggleTheme}
+          onThemeChange={changeTheme}
+          skin={skin}
+          onSkinChange={changeSkin}
           onReplayTour={replayTour}
           status={status}
           rejected={rejected}

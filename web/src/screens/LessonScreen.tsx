@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
+import { IellaSprite } from "../components/IellaSprite";
 import { RichText } from "../components/RichText";
 import { Button, Card, ProgressBar } from "../components/ui";
 import { useTranslation } from "../i18n";
@@ -192,9 +193,14 @@ export function LessonScreen({
           <p className="eyebrow">{t("lesson-session-eyebrow")}</p>
           <h1>{phaseLabel}</h1>
         </div>
-        <Button type="button" variant="ghost" size="sm" onClick={onExit}>
-          {t("lesson-exit")}
-        </Button>
+        <div className="lesson-head-actions">
+          <span className="iella-perch iella-perch-lesson" aria-hidden="true">
+            <IellaSprite size={42} />
+          </span>
+          <Button type="button" variant="ghost" size="sm" onClick={onExit}>
+            {t("lesson-exit")}
+          </Button>
+        </div>
       </header>
       <div className="lesson-progress">
         <ProgressBar

@@ -16,6 +16,24 @@ import { ClientClock } from "./uuidv7";
 
 export const MAX_SYNC_BATCH = 500;
 
+function themeSelectionFromEvent(
+  event: JsonValue,
+): { theme: string; event_id: string } | null {
+  if (!isJsonObject(event)) {
+    return null;
+  }
+  const eventId = event["event_id"];
+  const payload = event["payload"];
+  if (typeof eventId !== "string" || !isJsonObject(payload)) {
+    return null;
+  }
+  if (payload["type"] !== "theme_selected") {
+    return null;
+  }
+  const theme = payload["theme"];
+  return typeof theme === "string" ? { theme, event_id: eventId } : null;
+}
+
 export interface SyncCore {
   coreInfo(): Promise<CoreInfo>;
   decodeEvent(event: JsonValue): Promise<DecodedEvent>;
@@ -214,6 +232,10 @@ export class SyncEngine {
           event: decoded.event,
           confirmed: true,
         });
+        const selection = themeSelectionFromEvent(decoded.event);
+        if (selection) {
+          await this.#storage.rememberThemeSelection(selection);
+        }
       }
       if (snapshotPosition !== null && eventId <= snapshotPosition) {
         needsFullReplay = true;
