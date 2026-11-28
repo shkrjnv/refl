@@ -76,6 +76,30 @@ afterEach(() => {
 });
 
 describe("placement runner", () => {
+  it("locks updates for the lifetime of the check", async () => {
+    let active = false;
+    const runner = new PlacementRunner({
+      storage: fakeStorage([]),
+      core: fakeCore(),
+      content: testContent(),
+      learnerId: learner,
+      locale: "en",
+      clock: new ClientClock(),
+      gate: {
+        beginSession: () => {
+          active = true;
+        },
+        endSession: () => {
+          active = false;
+        },
+      },
+    });
+    await runner.start(null);
+    expect(active).toBe(true);
+    runner.finish();
+    expect(active).toBe(false);
+  });
+
   it("logs a placement answer and the diagnostic completion event", async () => {
     const outbox: { event: unknown }[] = [];
     const core = fakeCore();

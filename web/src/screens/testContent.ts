@@ -89,5 +89,6 @@ export function testContent(): PrototypeContent {
     JSON.stringify(bundle),
     "test-content",
     "test-digest",
+    "",
   );
 }

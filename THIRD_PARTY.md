@@ -2,6 +2,17 @@
 
 Every dataset, dictionary, voice or model that refl uses but did not write is listed here before it is used: what it is, where it comes from, its license and what that license requires ([docs/14](docs/14-privacy-license.md), «Чужие данные и модели»).
 
+## Fonts
+
+| | |
+| --- | --- |
+| What | Geologica by Monokrom (variable weight), Pixelify Sans by the Pixelify Sans Project Authors, and a Noto Sans subset for IPA and the Uzbek `ʻ` (U+02BB) |
+| Used for | the interface text (Geologica), pixel display accents (Pixelify Sans), and IPA transcriptions served under the Geologica family so a transcript never falls back to an arbitrary system font |
+| Where from | Google Fonts / upstream projects; the exact `.woff2` files are committed under `web/public/fonts/`; no runtime CDN request is made |
+| License | SIL Open Font License 1.1 for all three; full notices: [`licenses`](web/public/fonts/) in the client assets |
+| What it requires | the copyright and OFL notices travel with the font files; a modified version may not use a Reserved Font Name. We do not modify the font programs; the Noto subset is served under the `Geologica` CSS family name only as a distinct IPA face |
+| How we comply | the OFL text and attribution are shipped with the PWA; `web/src/theme/fonts.test.ts` checks glyph coverage and that no external font URL is referenced |
+
 ## SCOWL word lists
 
 | | |

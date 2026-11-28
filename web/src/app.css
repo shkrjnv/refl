@@ -364,9 +364,10 @@ input:focus-visible {
 }
 
 .brand-name {
+  font-family: var(--font-pixel);
   font-size: 22px;
-  font-weight: 800;
-  letter-spacing: -0.03em;
+  font-weight: 700;
+  letter-spacing: 0.01em;
 }
 
 .side-nav {
@@ -7822,8 +7823,9 @@ input:focus-visible {
 }
 
 .brand-name {
-  font-weight: 800;
-  letter-spacing: -0.045em;
+  font-family: var(--font-pixel);
+  font-weight: 700;
+  letter-spacing: 0.01em;
 }
 
 /* W9 — ambient ring/curve motion and isometric mastery towers. */
@@ -10951,5 +10953,40 @@ input:focus-visible {
   .auth-confirm-mark .confirmation-check-path {
     animation: none;
     stroke-dashoffset: 0;
+  }
+}
+
+/* AGPL source offer: settings card and the persistent app footer. */
+.settings-source-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  color: var(--accent-primary);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.studio-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 0 40px 24px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.studio-footer a {
+  color: var(--accent-primary);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 900px) {
+  .studio-footer {
+    padding: 0 16px 16px;
   }
 }

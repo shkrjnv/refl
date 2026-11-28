@@ -1,4 +1,3 @@
-import type { ActiveContentResponse } from "../api/client";
 import type { Explanation } from "../generated/core/Explanation";
 import type { Instruction } from "../generated/core/Instruction";
 import type { Misconception } from "../generated/core/Misconception";
@@ -8,11 +7,7 @@ import type { LangReviews } from "../generated/core/LangReviews";
 import type { Localized } from "../generated/core/Localized";
 import type { Slot } from "../generated/core/Slot";
 import type { Locale } from "../i18n";
-import {
-  isJsonObject,
-  type JsonObject,
-  type JsonValue,
-} from "../types/json";
+import { isJsonObject, type JsonValue } from "../types/json";
 
 export interface KcEntry {
   kc: Kc;
@@ -88,34 +83,6 @@ export function localizedText(
   return text[locale] ?? text.en ?? text.ru ?? text.uz ?? "";
 }
 
-function collectWords(value: JsonValue, words: Set<string>): void {
-  if (typeof value === "string") {
-    const matches = value.match(/[A-Za-z]+(?:['’][A-Za-z]+)?/g) ?? [];
-    for (const match of matches) {
-      words.add(match.toLowerCase());
-    }
-    return;
-  }
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      collectWords(item, words);
-    }
-    return;
-  }
-  if (isJsonObject(value)) {
-    for (const item of Object.values(value)) {
-      collectWords(item, words);
-    }
-  }
-}
-
-export function lexiconTextForBundle(bundle: JsonValue): string {
-  const words = new Set<string>();
-  collectWords(bundle, words);
-  const sorted = [...words].sort();
-  return sorted.length === 0 ? "" : `${sorted.join("\n")}\n`;
-}
-
 export class PrototypeContent {
   readonly bundleJson: string;
   readonly contentVersion: string;
@@ -132,7 +99,7 @@ export class PrototypeContent {
     bundleJson: string,
     contentVersion: string,
     digest: string,
-    lexiconText?: string,
+    lexiconText: string,
   ) {
     const parsed: unknown = JSON.parse(bundleJson);
     if (!isJsonObject(parsed)) {
@@ -151,16 +118,8 @@ export class PrototypeContent {
     this.explanations = parseObjects<Explanation>(content["explanations"]);
     this.instructions = parseObjects<Instruction>(content["instructions"]);
     this.misconceptions = parseObjects<Misconception>(content["misconceptions"]);
-    this.lexiconText = lexiconText ?? lexiconTextForBundle(parsed);
+    this.lexiconText = lexiconText;
     this.lexiconJson = JSON.stringify({ text: this.lexiconText });
-  }
-
-  static fromActive(response: ActiveContentResponse): PrototypeContent {
-    return new PrototypeContent(
-      JSON.stringify(response.bundle),
-      response.content_version,
-      response.digest,
-    );
   }
 
   articles(): KcEntry[] {
@@ -266,5 +225,3 @@ export class PrototypeContent {
     );
   }
 }
-
-export type { JsonObject };

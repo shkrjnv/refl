@@ -87,11 +87,49 @@ export interface ErasedResponse {
   status: "erased";
 }
 
+export interface ProfileResponse {
+  learner_id: string;
+  public_code: string;
+  display_name: string;
+  interface_lang: string;
+  minor: boolean;
+  access_status: string;
+  created_at: number;
+  privacy: {
+    profile_visibility: string;
+    friend_requests_from: string;
+    updated_at: number;
+  };
+  chat: {
+    personal_messages: boolean;
+    team_chat: boolean;
+  };
+}
+
+export interface EraseResponse {
+  erased: true;
+  status: "erased";
+  erased_at: number | null;
+}
+
 export interface ActiveContentResponse {
   content_version: string;
   min_core_version: string;
+  /** SHA-256 of `bundle_json`, the exact string the client verifies. */
   digest: string;
+  /** Parsed bundle retained for older clients. */
   bundle: JsonValue;
+  /** Exact serialized bundle covered by `digest`. */
+  bundle_json: string;
+}
+
+export interface LexiconResponse {
+  version: string;
+  sha256: string;
+  words: number;
+  bytes: number;
+  text: string;
+  license: string;
 }
 
 export type SyncResultResponse = SyncResponse | ErasedResponse;
@@ -319,10 +357,42 @@ export class ApiClient {
     );
   }
 
+  async lexicon(version: string): Promise<LexiconResponse> {
+    return this.#requestJson<LexiconResponse>(
+      `/v1/content/lexicon/${encodeURIComponent(version)}`,
+      { method: "GET" },
+      false,
+    );
+  }
+
   async sync(request: SyncRequest): Promise<SyncResultResponse> {
     return this.#requestJson<SyncResultResponse>(
       "/v1/sync",
       { method: "POST", body: JSON.stringify(request) },
+      true,
+    );
+  }
+
+  async profile(): Promise<ProfileResponse> {
+    return this.#requestJson<ProfileResponse>(
+      "/v1/profile",
+      { method: "GET" },
+      true,
+    );
+  }
+
+  async exportAccount(): Promise<JsonValue> {
+    return this.#requestJson<JsonValue>(
+      "/v1/export",
+      { method: "GET" },
+      true,
+    );
+  }
+
+  async eraseAccount(): Promise<EraseResponse> {
+    return this.#requestJson<EraseResponse>(
+      "/v1/erase",
+      { method: "POST" },
       true,
     );
   }

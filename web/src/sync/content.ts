@@ -11,6 +11,15 @@ export class ContentUpdateManager {
     this.#gate = gate;
   }
 
+  /** A verified pair is waiting for the next session boundary. */
+  get updateReady(): boolean {
+    return this.#gate.stagedUpdate !== null;
+  }
+
+  get stagedContentVersion(): string | null {
+    return this.#gate.stagedUpdate?.contentVersion ?? null;
+  }
+
   async stage(
     active: ActiveContentResponse,
     dictionary: DictionaryFile,
@@ -19,7 +28,7 @@ export class ContentUpdateManager {
     const candidate: ContentCandidate = {
       content_version: active.content_version,
       core_version: active.min_core_version,
-      bundle_json: JSON.stringify(active.bundle),
+      bundle_json: active.bundle_json,
       bundle_digest: active.digest,
       dictionary,
     };

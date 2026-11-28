@@ -17,6 +17,7 @@ import {
   appendEvent,
   buildEvent,
   ensureInitialState,
+  type SessionGate,
   type SessionOptions,
 } from "./session";
 
@@ -80,6 +81,7 @@ export interface PlacementRunnerOptions {
   learnerId: string;
   locale: Locale;
   clock: ClientClock;
+  gate?: SessionGate;
 }
 
 interface SavedProgress {
@@ -134,6 +136,7 @@ export class PlacementRunner {
   readonly #content: PrototypeContent;
   readonly #locale: Locale;
   readonly #sessionId: string;
+  readonly #gate: SessionGate | undefined;
   #stateJson = "";
   #placement: Placement | null = null;
   #view: PlacementView | null = null;
@@ -151,6 +154,7 @@ export class PlacementRunner {
     this.#content = options.content;
     this.#locale = options.locale;
     this.#sessionId = options.clock.nextEventId();
+    this.#gate = options.gate;
   }
 
   view(): PlacementView {
@@ -161,26 +165,37 @@ export class PlacementRunner {
   }
 
   async start(stateJson: string | null): Promise<PlacementView> {
-    this.#options.clock.setOffset(
-      await this.#options.storage.getClockOffset(),
-    );
-    this.#stateJson =
-      stateJson ?? (await ensureInitialState(this.#options));
-    const saved = readSaved(this.#options.learnerId);
-    const step = saved
-      ? await this.#core.placementNext(
-          this.#content.bundleJson,
-          this.#stateJson,
-          JSON.stringify(saved),
-          this.#options.clock.now(),
-        )
-      : await this.#core.placementStart(
-          this.#content.bundleJson,
-          this.#stateJson,
-          "en",
-          this.#options.clock.now(),
-        );
-    return this.#handle(step);
+    this.#gate?.beginSession();
+    try {
+      this.#options.clock.setOffset(
+        await this.#options.storage.getClockOffset(),
+      );
+      this.#stateJson =
+        stateJson ?? (await ensureInitialState(this.#options));
+      const saved = readSaved(this.#options.learnerId);
+      const step = saved
+        ? await this.#core.placementNext(
+            this.#content.bundleJson,
+            this.#stateJson,
+            JSON.stringify(saved),
+            this.#options.clock.now(),
+          )
+        : await this.#core.placementStart(
+            this.#content.bundleJson,
+            this.#stateJson,
+            "en",
+            this.#options.clock.now(),
+          );
+      return this.#handle(step);
+    } catch (error) {
+      this.#gate?.endSession();
+      throw error;
+    }
+  }
+
+  /** Ends the update lock when the check leaves the screen. */
+  finish(): void {
+    this.#gate?.endSession();
   }
 
   async submit(response: JsonValue): Promise<PlacementView> {

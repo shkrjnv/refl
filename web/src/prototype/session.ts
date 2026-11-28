@@ -4,6 +4,16 @@ import type { JsonObject, JsonValue } from "../types/json";
 import type { CoreInfo, FoldResult } from "../wasm/types";
 import type { PrototypeContent } from "./content";
 
+/**
+ * Marks the interval in which a bundle or model update must not be applied.
+ * The browser bridge owns the real `SessionUpdateGate`; this narrow shape
+ * keeps the lesson and placement runners testable without a worker.
+ */
+export interface SessionGate {
+  beginSession(): void;
+  endSession(): void;
+}
+
 /** The narrow core surface shared by the entry step and the placement runner. */
 export interface SessionCore {
   coreInfo(): Promise<CoreInfo>;
@@ -21,6 +31,7 @@ export interface SessionOptions {
   content: PrototypeContent;
   learnerId: string;
   clock: ClientClock;
+  gate?: SessionGate;
 }
 
 export function buildEvent(

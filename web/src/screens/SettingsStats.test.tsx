@@ -10,6 +10,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
+import type { ProfileResponse } from "../api/client";
 import { I18nProvider } from "../i18n";
 import type { NavigationPosition } from "../prototype/layout";
 import { initialStatus } from "../prototype/status";
@@ -66,7 +67,11 @@ function profileProps(): ProfileScreenProps {
     onNavigationPositionChange: () => undefined,
     status: initialStatus(true),
     rejected: [],
+    minor: false,
+    serverProfile: null,
     onExportCache: async () => undefined,
+    onExportAccount: async () => undefined,
+    onEraseAccount: async () => undefined,
     onResetCache: async () => undefined,
     adminApi: null,
     onLogout: () => undefined,
@@ -183,6 +188,77 @@ describe("statistics, profile, and settings", () => {
     expect(screen.getByRole("heading", { name: "Learner" })).toBeTruthy();
   });
 
+  it("offers account export, erasure and the AGPL source link", async () => {
+    let exported = 0;
+    let erased = 0;
+    render(
+      <I18nProvider initialLocale="en">
+        <ProfileScreen
+          {...profileProps()}
+          onExportAccount={async () => {
+            exported += 1;
+          }}
+          onEraseAccount={async () => {
+            erased += 1;
+          }}
+        />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    const source = screen.getByRole("link", { name: /Open source code/ });
+    expect(source.getAttribute("href")).toContain("refl.uz/source");
+    expect(source.textContent).toContain("AGPL-3.0-only");
+
+    fireEvent.click(screen.getByRole("button", { name: "Download export" }));
+    await waitFor(() => expect(exported).toBe(1));
+    expect(screen.getByText("Account export downloaded.")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Erase account" }));
+    expect(
+      screen.getByRole("button", { name: "Confirm erasure" }),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm erasure" }));
+    await waitFor(() => expect(erased).toBe(1));
+  });
+
+  it("shows the child privacy and chat policy for a minor account", () => {
+    const childProfile: ProfileResponse = {
+      learner_id: "learner-42",
+      public_code: "AAAA0001",
+      display_name: "Learner",
+      interface_lang: "en",
+      minor: true,
+      access_status: "active",
+      created_at: 1_700_000_000_000,
+      privacy: {
+        profile_visibility: "private",
+        friend_requests_from: "team",
+        updated_at: 1_700_000_000_000,
+      },
+      chat: { personal_messages: false, team_chat: true },
+    };
+    render(
+      <I18nProvider initialLocale="en">
+        <ProfileScreen
+          {...profileProps()}
+          minor
+          serverProfile={childProfile}
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByText("Child account")).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Everyone" }).hasAttribute("disabled"),
+    ).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    expect(screen.getByText("Child account privacy")).toBeTruthy();
+    expect(
+      screen.getByText(/Personal messages are off/),
+    ).toBeTruthy();
+  });
+
   it("switches language, palette, skin, navigation, and sign-out from settings", async () => {
     let locale = "en";
     let selectedPalette = "cream-paper";
@@ -211,7 +287,11 @@ describe("statistics, profile, and settings", () => {
           }}
           status={initialStatus(true)}
           rejected={[]}
+          minor={false}
+          serverProfile={null}
           onExportCache={async () => undefined}
+          onExportAccount={async () => undefined}
+          onEraseAccount={async () => undefined}
           onResetCache={async () => undefined}
           isAdmin={false}
           adminApi={null}
@@ -268,7 +348,11 @@ describe("statistics, profile, and settings", () => {
       onNavigationPositionChange: () => undefined,
       status: initialStatus(true),
       rejected: [],
+      minor: false,
+      serverProfile: null,
       onExportCache: async () => undefined,
+      onExportAccount: async () => undefined,
+      onEraseAccount: async () => undefined,
       onResetCache: async () => undefined,
       adminApi: null,
     };

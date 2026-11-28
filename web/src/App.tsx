@@ -5,6 +5,7 @@ import {
   ApiError,
   inviteCodeFromUrl,
   type AuthTokens,
+  type ProfileResponse,
 } from "./api/client";
 import { AppShell, type AppRoute } from "./components/AppShell";
 import { Button, Card } from "./components/ui";
@@ -14,10 +15,15 @@ import {
   type OutboxRecord,
 } from "./db/storage";
 import { useTranslation } from "./i18n";
+import { applyServiceWorkerUpdate } from "./pwa/serviceWorker";
 import { LessonRunner, type LessonSummary, type LessonView } from "./prototype/lesson";
-import { loadPrototypeContent } from "./prototype/load";
+import {
+  contentFromRecord,
+  fetchActiveContentPair,
+  loadPrototypeContent,
+} from "./prototype/load";
 import { isTourComplete, resetTour } from "./prototype/onboarding";
-import { PrototypeContent } from "./prototype/content";
+import type { PrototypeContent } from "./prototype/content";
 import {
   entryDecision,
   hasLearningHistory,
@@ -56,6 +62,7 @@ import {
   storeSessionOwner,
 } from "./sync/session";
 import { SyncEngine } from "./sync/engine";
+import { ContentUpdateManager } from "./sync/content";
 import { ClientClock } from "./sync/uuidv7";
 import {
   applySkin,
@@ -82,6 +89,19 @@ interface Identity {
   method: "email" | "telegram";
 }
 
+function downloadJson(filename: string, json: string): void {
+  const blob = new Blob([json], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.rel = "noopener";
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
 export function App({ initialTheme, initialSkin }: AppProps) {
   const { locale, locales, setLocale, t } = useTranslation();
   const [theme, setTheme] = useState<ThemeName>(initialTheme);
@@ -97,6 +117,9 @@ export function App({ initialTheme, initialSkin }: AppProps) {
   );
   const [rejected, setRejected] = useState<OutboxRecord[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [serverProfile, setServerProfile] = useState<ProfileResponse | null>(
+    null,
+  );
   const [tourOpen, setTourOpen] = useState(false);
   const [entryState, setEntryState] = useState<
     "pending" | "needed" | "done"
@@ -133,6 +156,7 @@ export function App({ initialTheme, initialSkin }: AppProps) {
   const storageRef = useRef<LearnerStorage | null>(null);
   const contentRef = useRef<PrototypeContent | null>(null);
   const coreRef = useRef<CoreWorkerClient | null>(null);
+  const contentUpdatesRef = useRef<ContentUpdateManager | null>(null);
   const clockRef = useRef(new ClientClock());
   const syncingRef = useRef(false);
   const placementActiveRef = useRef(false);
@@ -149,8 +173,11 @@ export function App({ initialTheme, initialSkin }: AppProps) {
         }
         if (session === null) {
           clearSessionOwner();
+          coreRef.current?.updates.endSession();
+          contentUpdatesRef.current = null;
           contentRef.current = null;
           setIdentity(null);
+          setServerProfile(null);
           setStorage(null);
           setContent(null);
           setStateJson(null);
@@ -344,7 +371,19 @@ export function App({ initialTheme, initialSkin }: AppProps) {
       )
       .catch(() => undefined);
     try {
-      const loaded = await loadPrototypeContent(api, store);
+      const core = coreRef.current;
+      if (!core) {
+        throw new Error("the local core is unavailable");
+      }
+      const manager = new ContentUpdateManager(store, core.updates);
+      contentUpdatesRef.current = manager;
+      const loaded = await loadPrototypeContent(
+        api,
+        store,
+        manager,
+        async (bundleJson) =>
+          (await core.checkBundleCompatibility(bundleJson)).compatible,
+      );
       contentRef.current = loaded.content;
       setContent(loaded.content);
       setStatus((current) => ({
@@ -359,6 +398,10 @@ export function App({ initialTheme, initialSkin }: AppProps) {
       }
       setTourOpen(!isTourComplete());
       void api
+        .profile()
+        .then(setServerProfile)
+        .catch(() => setServerProfile(null));
+      void api
         .pendingRequests()
         .then(() => setIsAdmin(true))
         .catch(() => setIsAdmin(false));
@@ -372,8 +415,11 @@ export function App({ initialTheme, initialSkin }: AppProps) {
         clearSessionOwner();
         sessionRef.current = null;
         storageRef.current = null;
+        contentUpdatesRef.current = null;
+        coreRef.current?.updates.endSession();
         setStorage(null);
         setContent(null);
+        setServerProfile(null);
         setIdentity(null);
         setContentError(false);
         setEntryState("pending");
@@ -442,6 +488,7 @@ export function App({ initialTheme, initialSkin }: AppProps) {
         learnerId: identity.learnerId,
         locale,
         clock: clockRef.current,
+        gate: core.updates,
       });
       const snapshot = await store.getSnapshot();
       const view = await runner.start(
@@ -451,6 +498,7 @@ export function App({ initialTheme, initialSkin }: AppProps) {
       setPlacementView(view);
     } catch (error) {
       placementActiveRef.current = false;
+      core.updates.endSession();
       setEntryError(
         error instanceof Error ? error.message : t("common-unknown-error"),
       );
@@ -460,6 +508,8 @@ export function App({ initialTheme, initialSkin }: AppProps) {
   };
 
   const finishPlacement = () => {
+    placementRunner?.finish();
+    coreRef.current?.updates.endSession();
     placementActiveRef.current = false;
     setPlacementRunner(null);
     setPlacementView(null);
@@ -469,13 +519,18 @@ export function App({ initialTheme, initialSkin }: AppProps) {
     if (store) {
       void refreshLocalState(store);
     }
-    void syncNow();
+    void refreshContentUpdate()
+      .then(() => syncNow())
+      .then(() => applyServiceWorkerUpdate());
   };
 
   const exitPlacement = () => {
+    placementRunner?.finish();
+    coreRef.current?.updates.endSession();
     placementActiveRef.current = false;
     setPlacementRunner(null);
     setPlacementView(null);
+    void refreshContentUpdate().then(() => applyServiceWorkerUpdate());
   };
 
   const startLesson = async (minutes = 25) => {
@@ -495,6 +550,7 @@ export function App({ initialTheme, initialSkin }: AppProps) {
         locale,
         clock: clockRef.current,
         budgetMs: Math.max(1, Math.round(minutes)) * 60_000,
+        gate: core.updates,
       });
       const view = await lesson.start();
       setRunner(lesson);
@@ -502,56 +558,82 @@ export function App({ initialTheme, initialSkin }: AppProps) {
       setRoute("lesson");
       setTourOpen(false);
     } catch {
+      core.updates.endSession();
       setActionError(t("lesson-start-failed"));
     }
   };
 
-  const applyStagedUpdate = async () => {
+  const applyStagedUpdate = async (): Promise<boolean> => {
     const store = storageRef.current;
-    if (!store) {
-      return;
+    const manager = contentUpdatesRef.current;
+    const core = coreRef.current;
+    if (!store || !manager || !core) {
+      return false;
     }
     try {
-      const staged = await store.getStagedContent();
-      if (!staged) {
-        return;
+      if (!(await manager.applyBetweenSessions())) {
+        return false;
       }
-      await store.activateStagedContent();
       const active = await store.getActiveContent();
       if (active) {
-        const next = new PrototypeContent(
-          active.bundle_json,
-          active.content_version,
-          active.bundle_digest,
-          active.dictionary.text,
-        );
+        const next = contentFromRecord(active);
         contentRef.current = next;
         setContent(next);
       }
       setStatus((current) => ({ ...current, updateReady: false }));
+      return true;
     } catch {
       // The previous active pair remains usable.
-    }
-    if (!status.updateReady) {
-      return;
-    }
-    try {
-      const loaded = await loadPrototypeContent(api, store, true);
-      contentRef.current = loaded.content;
-      setContent(loaded.content);
-      setStatus((current) => ({ ...current, updateReady: false }));
-    } catch {
-      // Keep the previous compatible bundle until the server is reachable.
+      return false;
     }
   };
 
+  const refreshContentUpdate = async (): Promise<boolean> => {
+    const store = storageRef.current;
+    const manager = contentUpdatesRef.current;
+    const core = coreRef.current;
+    if (!store || !manager || !core) {
+      return false;
+    }
+    try {
+      const active = await store.getActiveContent();
+      const response = await api.activeContent();
+      if (active?.content_version === response.content_version) {
+        return await applyStagedUpdate();
+      }
+      const pair = await fetchActiveContentPair(api, response);
+      await manager.stage(
+        pair.active,
+        pair.dictionary,
+        async (bundleJson) =>
+          (await core.checkBundleCompatibility(bundleJson)).compatible,
+      );
+      setStatus((current) => ({ ...current, updateReady: true }));
+      return await applyStagedUpdate();
+    } catch {
+      // Stay on the previous pair; retry after the next session or sync.
+      return false;
+    }
+  };
+
+  useEffect(() => {
+    if (!initialSyncSettled || !identity || !storage || !content) {
+      return;
+    }
+    void refreshContentUpdate();
+    // Check once per settled session; the version comparison avoids a download
+    // when the active pair is already current.
+  }, [initialSyncSettled, identity, storage, content]);
+
   const handleLessonComplete = (result: LessonSummary) => {
+    runner?.finish();
+    coreRef.current?.updates.endSession();
     setStreak(noteActiveDay());
     setSummary(result);
     setRunner(null);
     setLessonView(null);
     setRoute("summary");
-    void applyStagedUpdate().then(() => syncNow());
+    void refreshContentUpdate().then(() => syncNow());
     void storageRef.current?.getSnapshot().then((snapshot) => {
       setStateJson(snapshot?.state_json ?? null);
     });
@@ -578,11 +660,14 @@ export function App({ initialTheme, initialSkin }: AppProps) {
       // Local data is still wiped when the network logout fails.
     }
     storageRef.current = null;
+    contentUpdatesRef.current = null;
     contentRef.current = null;
     sessionRef.current = null;
+    coreRef.current?.updates.endSession();
     clearSessionOwner();
     setStorage(null);
     setContent(null);
+    setServerProfile(null);
     setIdentity(null);
     setSummary(null);
     setRunner(null);
@@ -680,17 +765,17 @@ export function App({ initialTheme, initialSkin }: AppProps) {
     if (!store) {
       return;
     }
-    const json = await store.exportCache();
-    const blob = new Blob([json], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `refl-local-cache-${identity?.learnerId ?? "learner"}.json`;
-    link.rel = "noopener";
-    document.body.append(link);
-    link.click();
-    link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    downloadJson(
+      `refl-local-cache-${identity?.learnerId ?? "learner"}.json`,
+      await store.exportCache(),
+    );
+  };
+
+  const exportAccountData = async () => {
+    downloadJson(
+      `refl-export-${identity?.learnerId ?? "learner"}.json`,
+      JSON.stringify(await api.exportAccount(), null, 2),
+    );
   };
 
   const resetLocalCache = async () => {
@@ -701,10 +786,13 @@ export function App({ initialTheme, initialSkin }: AppProps) {
     await store.wipe();
     resetEntryChoice(identity?.learnerId);
     storageRef.current = null;
+    contentUpdatesRef.current = null;
     contentRef.current = null;
     sessionRef.current = null;
+    coreRef.current?.updates.endSession();
     setStorage(null);
     setContent(null);
+    setServerProfile(null);
     setStateJson(null);
     setContentError(false);
     setIdentity(null);
@@ -720,6 +808,11 @@ export function App({ initialTheme, initialSkin }: AppProps) {
     placementActiveRef.current = false;
     setRoute("today");
     setStatus(initialStatus(true));
+  };
+
+  const eraseAccount = async () => {
+    await api.eraseAccount();
+    await resetLocalCache();
   };
 
   const replayTour = () => {
@@ -856,6 +949,8 @@ export function App({ initialTheme, initialSkin }: AppProps) {
           onViewChange={setLessonView}
           onComplete={handleLessonComplete}
           onExit={() => {
+            runner?.finish();
+            coreRef.current?.updates.endSession();
             setRoute("today");
             setRunner(null);
             setLessonView(null);
@@ -863,7 +958,9 @@ export function App({ initialTheme, initialSkin }: AppProps) {
             if (store) {
               void refreshLocalState(store);
             }
-            void syncNow();
+            void refreshContentUpdate()
+              .then(() => syncNow())
+              .then(() => applyServiceWorkerUpdate());
           }}
         />
       ) : null}
@@ -876,7 +973,7 @@ export function App({ initialTheme, initialSkin }: AppProps) {
             if (store) {
               void refreshLocalState(store);
             }
-            void syncNow();
+            void syncNow().then(() => applyServiceWorkerUpdate());
           }}
         />
       ) : null}
@@ -903,7 +1000,11 @@ export function App({ initialTheme, initialSkin }: AppProps) {
           onNavigationPositionChange={changeNavigation}
           status={status}
           rejected={rejected}
+          minor={serverProfile?.minor ?? false}
+          serverProfile={serverProfile}
           onExportCache={exportLocalCache}
+          onExportAccount={exportAccountData}
+          onEraseAccount={eraseAccount}
           onResetCache={resetLocalCache}
           adminApi={api}
           onLogout={() => void handleLogout()}

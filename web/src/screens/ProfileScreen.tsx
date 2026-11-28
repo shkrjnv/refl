@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 
-import type { ApiClient } from "../api/client";
+import type { ApiClient, ProfileResponse } from "../api/client";
 import { IellaSprite } from "../components/IellaSprite";
 import { StudioIcon } from "../components/StudioIcons";
 import { Button, Card, ProgressBar, StatusMeta } from "../components/ui";
@@ -44,7 +44,11 @@ export interface ProfileScreenProps {
   onNavigationPositionChange: (position: NavigationPosition) => void;
   status: AppStatus;
   rejected: OutboxRecord[];
+  minor: boolean;
+  serverProfile: ProfileResponse | null;
   onExportCache: () => Promise<void>;
+  onExportAccount: () => Promise<void>;
+  onEraseAccount: () => Promise<void>;
   onResetCache: () => Promise<void>;
   adminApi: ApiClient | null;
   onLogout: () => void;
@@ -84,7 +88,11 @@ export function ProfileScreen({
   onNavigationPositionChange,
   status,
   rejected,
+  minor,
+  serverProfile,
   onExportCache,
+  onExportAccount,
+  onEraseAccount,
   onResetCache,
   adminApi,
   onLogout,
@@ -171,6 +179,16 @@ export function ProfileScreen({
                 ·
               </span>
               <StatusMeta tone="neutral">{t("profile-local")}</StatusMeta>
+              {minor ? (
+                <>
+                  <span className="meta-separator" aria-hidden="true">
+                    ·
+                  </span>
+                  <StatusMeta tone="accent" dot>
+                    {t("profile-minor-badge")}
+                  </StatusMeta>
+                </>
+              ) : null}
               {visitor ? (
                 <>
                   <span className="meta-separator" aria-hidden="true">
@@ -235,7 +253,11 @@ export function ProfileScreen({
           onNavigationPositionChange={onNavigationPositionChange}
           status={status}
           rejected={rejected}
+          minor={minor}
+          serverProfile={serverProfile}
           onExportCache={onExportCache}
+          onExportAccount={onExportAccount}
+          onEraseAccount={onEraseAccount}
           onResetCache={onResetCache}
           isAdmin={isAdmin}
           adminApi={adminApi}
@@ -309,17 +331,22 @@ export function ProfileScreen({
                 role="group"
                 aria-label={t("profile-visibility-title")}
               >
-                {VISIBILITIES.map((candidate) => (
-                  <button
-                    key={candidate}
-                    type="button"
-                    className={`profile-visibility-option${visibility === candidate ? " active" : ""}`}
-                    aria-pressed={visibility === candidate}
-                    onClick={() => setVisibility(candidate)}
-                  >
-                    {t(`profile-visibility-${candidate}`)}
-                  </button>
-                ))}
+                {VISIBILITIES.map((candidate) => {
+                  const allowed =
+                    !minor || candidate === "self" || candidate === "team";
+                  return (
+                    <button
+                      key={candidate}
+                      type="button"
+                      className={`profile-visibility-option${visibility === candidate ? " active" : ""}`}
+                      aria-pressed={visibility === candidate}
+                      disabled={!allowed}
+                      onClick={() => setVisibility(candidate)}
+                    >
+                      {t(`profile-visibility-${candidate}`)}
+                    </button>
+                  );
+                })}
               </div>
               {privateVisitor ? (
                 <p className="profile-visibility-warning">

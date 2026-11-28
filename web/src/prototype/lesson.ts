@@ -14,6 +14,7 @@ import { isJsonObject, type JsonObject, type JsonValue } from "../types/json";
 import { ClientClock } from "../sync/uuidv7";
 import { buildItemView, type ItemView } from "./item";
 import type { PrototypeContent } from "./content";
+import type { SessionGate } from "./session";
 
 export interface LessonCore {
   coreInfo(): Promise<CoreInfo>;
@@ -104,6 +105,7 @@ export interface LessonRunnerOptions {
   clock?: ClientClock;
   budgetMs?: number;
   sessionId?: string;
+  gate?: SessionGate;
 }
 
 interface AnswerLog {
@@ -146,6 +148,7 @@ export class LessonRunner {
   readonly #clock: ClientClock;
   readonly #budgetMs: number;
   readonly #sessionId: string;
+  readonly #gate: SessionGate | undefined;
   #coreInfo: CoreInfo | null = null;
   #plan: JsonValue | null = null;
   #planJson = "";
@@ -169,6 +172,7 @@ export class LessonRunner {
     this.#clock = options.clock ?? new ClientClock();
     this.#budgetMs = options.budgetMs ?? DEFAULT_BUDGET_MS;
     this.#sessionId = options.sessionId ?? this.#clock.nextEventId();
+    this.#gate = options.gate;
   }
 
   view(): LessonView {
@@ -184,33 +188,44 @@ export class LessonRunner {
   }
 
   async start(): Promise<LessonView> {
-    this.#clock.setOffset(await this.#storage.getClockOffset());
-    this.#coreInfo = await this.#core.coreInfo();
-    let snapshot = await this.#storage.getSnapshot();
-    if (!snapshot) {
-      const folded = await this.#core.foldState(
+    this.#gate?.beginSession();
+    try {
+      this.#clock.setOffset(await this.#storage.getClockOffset());
+      this.#coreInfo = await this.#core.coreInfo();
+      let snapshot = await this.#storage.getSnapshot();
+      if (!snapshot) {
+        const folded = await this.#core.foldState(
+          this.#content.bundleJson,
+          this.#content.lexiconJson,
+          null,
+          [],
+        );
+        this.#stateJson = JSON.stringify(folded.snapshot);
+        await this.#saveSnapshot(folded, null);
+      } else {
+        this.#stateJson = snapshot.state_json;
+        this.#initialKcs = new Set(Object.keys(this.#kcsObject(this.#stateJson)));
+      }
+      this.#startedAt = this.#clock.now();
+      const plan = await this.#core.planSession(
         this.#content.bundleJson,
-        this.#content.lexiconJson,
-        null,
-        [],
+        this.#stateJson,
+        this.#startedAt,
+        this.#budgetMs,
       );
-      this.#stateJson = JSON.stringify(folded.snapshot);
-      await this.#saveSnapshot(folded, null);
-    } else {
-      this.#stateJson = snapshot.state_json;
-      this.#initialKcs = new Set(Object.keys(this.#kcsObject(this.#stateJson)));
+      this.#plan = plan.plan;
+      this.#planJson = JSON.stringify(plan.plan);
+      await this.#advance();
+      return this.view();
+    } catch (error) {
+      this.#gate?.endSession();
+      throw error;
     }
-    this.#startedAt = this.#clock.now();
-    const plan = await this.#core.planSession(
-      this.#content.bundleJson,
-      this.#stateJson,
-      this.#startedAt,
-      this.#budgetMs,
-    );
-    this.#plan = plan.plan;
-    this.#planJson = JSON.stringify(plan.plan);
-    await this.#advance();
-    return this.view();
+  }
+
+  /** Ends the update lock when the runner leaves the screen. */
+  finish(): void {
+    this.#gate?.endSession();
   }
 
   async submitPretest(response: JsonValue): Promise<LessonView> {

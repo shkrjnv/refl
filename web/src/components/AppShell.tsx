@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import type { Locale } from "../i18n";
 import { useTranslation } from "../i18n";
+import { SOURCE_CODE_URL, SOURCE_LICENSE } from "../pwa/links";
 import type { NavigationPosition } from "../prototype/layout";
 import type { SkinName, ThemeName } from "../theme/tokens";
 import { AppearanceMenu, PaletteToggle } from "./AppearanceMenu";
@@ -152,6 +153,14 @@ export function AppShell({
           </div>
         </header>
         <main className="studio-content">{children}</main>
+        <footer className="studio-footer">
+          <span>
+            refl · {SOURCE_LICENSE}
+          </span>
+          <a href={SOURCE_CODE_URL} target="_blank" rel="noreferrer">
+            {t("app-source-link")}
+          </a>
+        </footer>
       </div>
 
       <nav className="mobile-nav" aria-label={t("nav-label")}>

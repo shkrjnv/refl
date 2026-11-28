@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import type { ApiClient } from "../api/client";
+import type { ApiClient, ProfileResponse } from "../api/client";
 import {
   CrossfadeIcon,
   StudioIcon,
@@ -10,6 +10,7 @@ import { Button, Card, StatusMeta } from "../components/ui";
 import type { OutboxRecord } from "../db/storage";
 import type { Locale } from "../i18n";
 import { useTranslation } from "../i18n";
+import { SOURCE_CODE_URL, SOURCE_LICENSE } from "../pwa/links";
 import type { NavigationPosition } from "../prototype/layout";
 import type { AppStatus } from "../prototype/status";
 import {
@@ -38,7 +39,11 @@ export interface SettingsScreenProps {
   onNavigationPositionChange: (position: NavigationPosition) => void;
   status: AppStatus;
   rejected: OutboxRecord[];
+  minor: boolean;
+  serverProfile: ProfileResponse | null;
   onExportCache: () => Promise<void>;
+  onExportAccount: () => Promise<void>;
+  onEraseAccount: () => Promise<void>;
   onResetCache: () => Promise<void>;
   isAdmin: boolean;
   adminApi: ApiClient | null;
@@ -86,7 +91,11 @@ export function SettingsScreen({
   onNavigationPositionChange,
   status,
   rejected,
+  minor,
+  serverProfile,
   onExportCache,
+  onExportAccount,
+  onEraseAccount,
   onResetCache,
   isAdmin,
   adminApi,
@@ -99,6 +108,7 @@ export function SettingsScreen({
   const { t } = useTranslation();
   const [tab, setTab] = useState<SettingsTab>("account");
   const [resetArmed, setResetArmed] = useState(false);
+  const [eraseArmed, setEraseArmed] = useState(false);
   const [dataNotice, setDataNotice] = useState<string | null>(null);
   const [dataError, setDataError] = useState<string | null>(null);
   const [syncBusy, setSyncBusy] = useState(false);
@@ -154,6 +164,27 @@ export function SettingsScreen({
       setDataNotice(t("settings-exported"));
     } catch {
       setDataError(t("settings-export-failed"));
+    }
+  };
+
+  const exportAccount = async () => {
+    setDataNotice(null);
+    setDataError(null);
+    try {
+      await onExportAccount();
+      setDataNotice(t("settings-export-account-ready"));
+    } catch {
+      setDataError(t("settings-export-account-failed"));
+    }
+  };
+
+  const eraseAccount = async () => {
+    setDataNotice(null);
+    setDataError(null);
+    try {
+      await onEraseAccount();
+    } catch {
+      setDataError(t("settings-erase-failed"));
     }
   };
 
@@ -363,6 +394,71 @@ export function SettingsScreen({
             </div>
           </Card>
 
+          {minor ? (
+            <Card tone="tinted" className="settings-card">
+              <h2>{t("settings-child-title")}</h2>
+              <p className="settings-note">{t("settings-child-note")}</p>
+              <div className="settings-sync-status">
+                <StudioIcon name="profile" size={16} />
+                <strong>
+                  {serverProfile?.privacy.profile_visibility === "private"
+                    ? t("profile-visibility-self")
+                    : t("profile-visibility-team")}
+                </strong>
+                <span>{t("settings-child-chat")}</span>
+              </div>
+            </Card>
+          ) : null}
+
+          <div className="settings-two-column">
+            <Card tone="plain" className="settings-card">
+              <h2>{t("settings-export-account-title")}</h2>
+              <p className="settings-note">{t("settings-export-account-note")}</p>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => void exportAccount()}
+              >
+                {t("settings-export-account-action")}
+              </Button>
+            </Card>
+
+            <Card tone="plain" className="settings-card">
+              <h2>{t("settings-erase-title")}</h2>
+              <p className="settings-note">{t("settings-erase-note")}</p>
+              <div className="settings-options">
+                <Button
+                  type="button"
+                  variant="danger"
+                  size="sm"
+                  onClick={() => {
+                    if (!eraseArmed) {
+                      setEraseArmed(true);
+                      return;
+                    }
+                    setEraseArmed(false);
+                    void eraseAccount();
+                  }}
+                >
+                  {eraseArmed
+                    ? t("settings-erase-confirm")
+                    : t("settings-erase-action")}
+                </Button>
+                {eraseArmed ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setEraseArmed(false)}
+                  >
+                    {t("common-cancel")}
+                  </Button>
+                ) : null}
+              </div>
+            </Card>
+          </div>
+
           <div className="settings-two-column">
             <Card tone="plain" className="settings-card">
               <h2>{t("app-language")}</h2>
@@ -432,6 +528,22 @@ export function SettingsScreen({
               </Button>
             </Card>
           ) : null}
+
+          {dataNotice ? <p className="storage-status storage-granted">{dataNotice}</p> : null}
+          {dataError ? <p className="inline-alert danger" role="alert">{dataError}</p> : null}
+
+          <Card tone="plain" className="settings-card">
+            <h2>{t("settings-source-title")}</h2>
+            <p className="settings-note">{t("settings-source-note")}</p>
+            <a
+              className="settings-source-link"
+              href={SOURCE_CODE_URL}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {t("settings-source-action")} · {SOURCE_LICENSE}
+            </a>
+          </Card>
         </div>
       ) : null}
 

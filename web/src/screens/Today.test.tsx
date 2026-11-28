@@ -77,6 +77,7 @@ function bentoContent(): PrototypeContent {
     JSON.stringify(bundle),
     "bento-test",
     "bento-digest",
+    "",
   );
 }
 

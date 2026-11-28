@@ -41,6 +41,7 @@ describe("content updates", () => {
       min_core_version: "0.0.0",
       digest: await sha256Hex(bundleJson),
       bundle: parseJsonValue(bundleJson),
+      bundle_json: bundleJson,
     };
     const storage = await openStorage("content-gate-learner");
     const gate = new SessionUpdateGate();

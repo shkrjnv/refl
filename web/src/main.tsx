@@ -3,7 +3,9 @@ import { createRoot } from "react-dom/client";
 
 import { App } from "./App";
 import { I18nProvider } from "./i18n";
+import { registerServiceWorker } from "./pwa/serviceWorker";
 import { applyAppearance, initialSkin, initialTheme } from "./theme/tokens";
+import "./theme/fonts.css";
 import "./theme/tokens.css";
 import "./app.css";
 
@@ -24,8 +26,8 @@ createRoot(rootElement).render(
   </StrictMode>,
 );
 
-if (import.meta.env.PROD && "serviceWorker" in navigator) {
+if (import.meta.env.PROD) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+    registerServiceWorker().catch(() => undefined);
   });
 }

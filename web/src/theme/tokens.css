@@ -45,6 +45,7 @@
   --bg-image: radial-gradient(rgba(29, 36, 36, 0.055) 1px, transparent 1px);
   --bg-size: 18px 18px;
   --font-family: "Geologica", "Avenir Next", "Segoe UI", sans-serif;
+  --font-pixel: "Pixelify Sans", "Geologica", "Avenir Next", sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --radius-sm: 10px;
   --radius-md: 14px;

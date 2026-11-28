@@ -1,13 +1,23 @@
-const CACHE_NAME = "refl-shell-v1";
-const SHELL = ["/", "/index.html", "/manifest.webmanifest"];
+/*
+ * refl PWA shell. A new worker installs and waits: it does not take over a
+ * live lesson. The app posts SKIP_WAITING only at a session boundary, after
+ * it has activated the matching content pair (docs/13, «Обновление
+ * приложения»).
+ */
+const CACHE_NAME = "refl-shell-v2";
+const SHELL = [
+  "/",
+  "/index.html",
+  "/manifest.webmanifest",
+  "/icons/icon-192.png",
+  "/icons/icon-512.png",
+  "/fonts/Geologica-Variable.woff2",
+  "/fonts/Geologica-IPA.woff2",
+  "/fonts/PixelifySans-Variable.woff2",
+];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches
-      .open(CACHE_NAME)
-      .then((cache) => cache.addAll(SHELL))
-      .then(() => self.skipWaiting()),
-  );
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL)));
 });
 
 self.addEventListener("activate", (event) => {
@@ -20,9 +30,14 @@ self.addEventListener("activate", (event) => {
             .filter((key) => key !== CACHE_NAME)
             .map((key) => caches.delete(key)),
         ),
-      )
-      .then(() => self.clients.claim()),
+      ),
   );
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener("fetch", (event) => {
