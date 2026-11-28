@@ -306,3 +306,41 @@ export function CrossfadeIcon({
     </span>
   );
 }
+
+export interface ConfirmationCheckProps {
+  size?: number;
+  className?: string;
+}
+
+/**
+ * A check drawn by CSS stroke-dashoffset rather than a static glyph. The
+ * wrapper controls colour and layout; the path carries the draw-in animation.
+ */
+export function ConfirmationCheck({
+  size = 20,
+  className = "",
+}: ConfirmationCheckProps) {
+  return (
+    <svg
+      className={`confirmation-check ${className}`.trim()}
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path
+        className="confirmation-check-path"
+        d="m4.5 12.5 5 5L20 6.8"
+        pathLength={1}
+        strokeDasharray={1}
+        strokeDashoffset={1}
+        stroke="currentColor"
+        strokeWidth={2.4}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}

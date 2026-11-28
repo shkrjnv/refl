@@ -22,7 +22,11 @@ import { AuthBackdrop } from "../components/AuthBackdrop";
 import { PaletteToggle } from "../components/AppearanceMenu";
 import { IellaSprite, type IellaMood } from "../components/IellaSprite";
 import { LanguageMenu } from "../components/LanguageMenu";
-import { BrandLogo, StudioIcon } from "../components/StudioIcons";
+import {
+  BrandLogo,
+  ConfirmationCheck,
+  StudioIcon,
+} from "../components/StudioIcons";
 import { Button } from "../components/ui";
 import { useTranslation, type Locale } from "../i18n";
 import type { SkinName, ThemeName } from "../theme/tokens";
@@ -80,7 +84,7 @@ const TELEGRAM_QUERY_KEYS = [
   "hash",
 ] as const;
 const CODE_LENGTH = 6;
-const CONFIRMATION_HOLD_MS = 450;
+const CONFIRMATION_HOLD_MS = 550;
 const REDUCED_MOTION_CONFIRMATION_HOLD_MS = 220;
 
 export function confirmationHoldMs(): number {
@@ -479,7 +483,7 @@ export function AuthScreen({
                       role="status"
                       aria-label={t("auth-success")}
                     >
-                      <StudioIcon name="check" size={18} />
+                      <ConfirmationCheck size={18} />
                     </span>
                   ) : null}
                 </h2>

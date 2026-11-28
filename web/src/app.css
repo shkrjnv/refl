@@ -10906,8 +10906,16 @@ input:focus-visible {
   animation: auth-confirm-in 140ms ease-out both;
 }
 
-.auth-confirm-check .studio-icon {
-  stroke-width: 2.4;
+.auth-confirm-check .confirmation-check-path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: auth-confirm-draw 320ms linear forwards;
+}
+
+@keyframes auth-confirm-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
 }
 
 @keyframes auth-confirm-in {
@@ -10935,5 +10943,10 @@ input:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .auth-confirm-check {
     animation: none;
+  }
+
+  .auth-confirm-check .confirmation-check-path {
+    animation: none;
+    stroke-dashoffset: 0;
   }
 }

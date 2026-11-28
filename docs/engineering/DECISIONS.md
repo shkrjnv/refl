@@ -259,3 +259,12 @@
 - Audited the other confirmation marks: lesson correct verdicts carry an 18px check in the verdict colour, invite copying uses the active `CrossfadeIcon` check with no pulse, and manual sync swaps its button icon to the active check. Crossfade active layers are explicitly asserted at `opacity: 1`, and no `PulseConfirm` remains.
 - Coverage now includes 450ms/220ms hold selection, inline-flex/high-contrast/uncropped auth check CSS, sync and copy check states, and the lesson verdict check. All 102 web tests pass.
 - `just fmt-check`, `just lint`, `just test`, and `just web` pass; the commit is local and not pushed.
+
+## W21 — reload-safe sessions and a stroke-drawn sign-in check
+
+- AuthGate now persists a small session-owner pointer in `localStorage` (`learnerId` + sign-in method) and keeps the tokens themselves in the learner's IndexedDB `auth_session` record. Successful email and Telegram sign-ins write the session before handing control to App, so a reload can reconstruct tokens from storage.
+- On boot AuthGate enters a short `auth-refreshing` state, reopens the last learner's storage, and calls `onAuthenticated` with the stored session. Expired access tokens are deliberately left expired for the first authenticated request to refresh. Sign out and rejected sessions clear the owner; a missing session falls back to AuthScreen.
+- Refresh handling now clears persisted credentials only on a genuine `401`/`403`; network and `5xx` refresh failures retain the session so the app can stay signed in and retry later. App clears identity and the owner when the API reports an invalid session, while normal offline failures keep the workspace.
+- The 18px auth checkmark is now a real SVG path with `pathLength=1`, `stroke-dasharray=1`, and `stroke-dashoffset=1`, drawn over 320ms (linear), followed by a 550ms total hold before entering the workspace. Reduced motion skips the draw and shows the static check for 220ms. The same confirmation path runs for email OTP and Telegram returns.
+- Coverage now includes AuthGate session ownership/restore across remounts, an actual sign-in followed by a remount, storage reopen persistence, transient-vs-401 refresh behavior, and SVG dash-draw/visibility assertions. All 107 web tests pass.
+- `just fmt-check`, `just lint`, `just test`, and `just web` pass; the commit is local and not pushed.

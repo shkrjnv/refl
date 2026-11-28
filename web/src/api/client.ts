@@ -248,7 +248,12 @@ export class ApiClient {
       );
       return await this.#adoptTokens(tokens);
     } catch (error) {
-      await this.#setSession(null);
+      if (
+        error instanceof ApiError &&
+        (error.status === 401 || error.status === 403)
+      ) {
+        await this.#setSession(null);
+      }
       throw error;
     }
   }

@@ -231,4 +231,22 @@ describe("learner storage", () => {
       ),
     ).rejects.toThrow("SHA-256");
   });
+  it("keeps the auth session across a database reopen and clears on logout data", async () => {
+    const learnerId = "session-persist-learner";
+    const session = {
+      learner_id: learnerId,
+      access_token: "access",
+      refresh_token: "refresh",
+      expires_at: 1_700_000_900_000,
+    };
+    const first = await LearnerStorage.open(learnerId);
+    await first.setAuthSession(session);
+    first.close();
+
+    const reopened = await openStorage(learnerId);
+    expect(await reopened.getAuthSession()).toEqual(session);
+    await reopened.setAuthSession(null);
+    expect(await reopened.getAuthSession()).toBeNull();
+  });
+
 });

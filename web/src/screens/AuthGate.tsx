@@ -1,7 +1,14 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { AuthTokens } from "../api/client";
-import type { Locale } from "../i18n";
+import { LearnerStorage } from "../db/storage";
+import { useTranslation, type Locale } from "../i18n";
+import {
+  readSessionOwner,
+  restorePersistedSession,
+  sessionRecordFromTokens,
+  storeSessionOwner,
+} from "../sync/session";
 import type { SkinName, ThemeName } from "../theme/tokens";
 import {
   AuthScreen,
@@ -33,8 +40,68 @@ export function AuthGate({
   onThemeChange,
   onAuthenticated,
 }: AuthGateProps) {
+  const { t } = useTranslation();
   const [access, setAccess] = useState<AccessState | null>(null);
   const [pending, setPending] = useState<PendingNotice | null>(null);
+  const [restoring, setRestoring] = useState(
+    () => readSessionOwner() !== null,
+  );
+  const authenticatedRef = useRef(onAuthenticated);
+  authenticatedRef.current = onAuthenticated;
+
+  const persistAndAuthenticate = useCallback(
+    (tokens: AuthTokens, method: "email" | "telegram") => {
+      void (async () => {
+        try {
+          const storage = await LearnerStorage.open(tokens.learner_id);
+          try {
+            await storage.setAuthSession(sessionRecordFromTokens(tokens));
+            storeSessionOwner({ learnerId: tokens.learner_id, method });
+          } finally {
+            storage.close();
+          }
+        } catch {
+          // A storage failure must not block this sign-in attempt.
+        }
+        authenticatedRef.current(tokens, method);
+      })();
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!restoring) {
+      return;
+    }
+    let cancelled = false;
+    void restorePersistedSession()
+      .then((restored) => {
+        if (cancelled) {
+          return;
+        }
+        if (restored) {
+          authenticatedRef.current(restored.tokens, restored.method);
+          return;
+        }
+        setRestoring(false);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setRestoring(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [restoring]);
+
+  if (restoring) {
+    return (
+      <div className="startup-screen" role="status">
+        <p>{t("auth-refreshing")}</p>
+      </div>
+    );
+  }
 
   if (access) {
     return <PendingScreen state={access} onCheck={() => setAccess(null)} />;
@@ -57,7 +124,7 @@ export function AuthGate({
       locales={locales}
       onLocaleChange={onLocaleChange}
       onThemeChange={onThemeChange}
-      onAuthenticated={onAuthenticated}
+      onAuthenticated={persistAndAuthenticate}
       onPending={setPending}
       onAccessBlocked={setAccess}
     />

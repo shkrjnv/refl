@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import {
   ApiClient,
+  ApiError,
   inviteCodeFromUrl,
   type AuthTokens,
 } from "./api/client";
@@ -36,7 +37,12 @@ import { ProfileScreen } from "./screens/ProfileScreen";
 import { ProgressScreen } from "./screens/ProgressScreen";
 import { SummaryScreen } from "./screens/SummaryScreen";
 import { TodayScreen } from "./screens/TodayScreen";
-import { logoutAndWipe } from "./sync/session";
+import {
+  clearSessionOwner,
+  logoutAndWipe,
+  sessionRecordFromTokens,
+  storeSessionOwner,
+} from "./sync/session";
 import { SyncEngine } from "./sync/engine";
 import { ClientClock } from "./sync/uuidv7";
 import {
@@ -62,15 +68,6 @@ interface Identity {
   learnerId: string;
   label: string;
   method: "email" | "telegram";
-}
-
-function sessionFromTokens(tokens: AuthTokens) {
-  return {
-    learner_id: tokens.learner_id,
-    access_token: tokens.access_token,
-    refresh_token: tokens.refresh_token,
-    expires_at: Date.now() + tokens.expires_in * 1000,
-  };
 }
 
 export function App({ initialTheme, initialSkin }: AppProps) {
@@ -102,7 +99,7 @@ export function App({ initialTheme, initialSkin }: AppProps) {
   skinRef.current = skin;
   const appearanceDirtyRef = useRef(false);
 
-  const sessionRef = useRef<ReturnType<typeof sessionFromTokens> | null>(null);
+  const sessionRef = useRef<ReturnType<typeof sessionRecordFromTokens> | null>(null);
   const storageRef = useRef<LearnerStorage | null>(null);
   const contentRef = useRef<PrototypeContent | null>(null);
   const coreRef = useRef<CoreWorkerClient | null>(null);
@@ -114,8 +111,22 @@ export function App({ initialTheme, initialSkin }: AppProps) {
       getSession: async () => sessionRef.current,
       setSession: async (session) => {
         sessionRef.current = session;
-        if (storageRef.current && session) {
-          await storageRef.current.setAuthSession(session);
+        if (storageRef.current) {
+          await storageRef.current
+            .setAuthSession(session)
+            .catch(() => undefined);
+        }
+        if (session === null) {
+          clearSessionOwner();
+          contentRef.current = null;
+          setIdentity(null);
+          setStorage(null);
+          setContent(null);
+          setStateJson(null);
+          setRunner(null);
+          setLessonView(null);
+          setSummary(null);
+          setRoute("today");
         }
       },
     });
@@ -237,11 +248,12 @@ export function App({ initialTheme, initialSkin }: AppProps) {
   ) => {
     const learnerId = tokens.learner_id;
     setActionError(null);
-    sessionRef.current = sessionRef.current ?? sessionFromTokens(tokens);
+    sessionRef.current = sessionRef.current ?? sessionRecordFromTokens(tokens);
     const store = await LearnerStorage.open(learnerId);
     storageRef.current = store;
     setStorage(store);
     await store.setAuthSession(sessionRef.current);
+    storeSessionOwner({ learnerId, method });
     setIdentity({
       learnerId,
       label: learnerId.slice(0, 8),
@@ -274,7 +286,21 @@ export function App({ initialTheme, initialSkin }: AppProps) {
         .then(() => setIsAdmin(true))
         .catch(() => setIsAdmin(false));
       void syncNow();
-    } catch {
+    } catch (error) {
+      if (
+        error instanceof ApiError &&
+        (error.status === 401 || error.status === 403)
+      ) {
+        await store.setAuthSession(null).catch(() => undefined);
+        clearSessionOwner();
+        sessionRef.current = null;
+        storageRef.current = null;
+        setStorage(null);
+        setContent(null);
+        setIdentity(null);
+        setContentError(false);
+        return;
+      }
       setContentError(true);
     }
   };
@@ -381,6 +407,7 @@ export function App({ initialTheme, initialSkin }: AppProps) {
     storageRef.current = null;
     contentRef.current = null;
     sessionRef.current = null;
+    clearSessionOwner();
     setStorage(null);
     setContent(null);
     setIdentity(null);

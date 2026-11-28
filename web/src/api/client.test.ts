@@ -142,4 +142,71 @@ describe("API client", () => {
     expect(calls[2]?.authorization).toBe("Bearer new-access");
     expect(session?.access_token).toBe("new-access");
   });
+
+  it("keeps the session when a refresh fails transiently", async () => {
+    let session: AuthSessionRecord | null = {
+      learner_id: "learner",
+      access_token: "expired-access",
+      refresh_token: "refresh",
+      expires_at: 1_000_000,
+    };
+    const cleared: Array<AuthSessionRecord | null> = [];
+    const client = new ApiClient({
+      now: () => 2_000_000,
+      fetchImpl: async (input) => {
+        expect(requestUrl(input)).toBe("/v1/auth/refresh");
+        return jsonResponse(
+          { error: "service_unavailable", message: "try later" },
+          503,
+        );
+      },
+      getSession: async () => session,
+      setSession: async (next) => {
+        session = next;
+        cleared.push(next);
+      },
+    });
+    const request: SyncRequest = {
+      learner_id: "learner",
+      core_version: "0.0.0",
+      content_version: "content-1",
+      cursor: 0,
+      events: [],
+    };
+
+    await expect(client.sync(request)).rejects.toThrow();
+    expect(session?.refresh_token).toBe("refresh");
+    expect(cleared).toHaveLength(0);
+  });
+
+  it("clears the session only when the refresh token is rejected", async () => {
+    let session: AuthSessionRecord | null = {
+      learner_id: "learner",
+      access_token: "expired-access",
+      refresh_token: "refresh",
+      expires_at: 1_000_000,
+    };
+    const cleared: Array<AuthSessionRecord | null> = [];
+    const client = new ApiClient({
+      now: () => 2_000_000,
+      fetchImpl: async () =>
+        jsonResponse({ error: "unauthorized", message: "rejected" }, 401),
+      getSession: async () => session,
+      setSession: async (next) => {
+        session = next;
+        cleared.push(next);
+      },
+    });
+    const request: SyncRequest = {
+      learner_id: "learner",
+      core_version: "0.0.0",
+      content_version: "content-1",
+      cursor: 0,
+      events: [],
+    };
+
+    await expect(client.sync(request)).rejects.toThrow();
+    expect(session).toBeNull();
+    expect(cleared).toEqual([null]);
+  });
 });
