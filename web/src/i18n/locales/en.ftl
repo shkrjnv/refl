@@ -269,8 +269,8 @@ admin-decision-failed = Could not save the decision.
 
 app-content-error-title = The studio could not load content
 app-content-error-body = The local cache is empty and the server did not return a bundle. Check the connection and try again.
-app-content-loading = Opening the studio
-app-content-loading-body = Loading the last compatible bundle and local state.
+app-content-loading = Preparing your studio…
+app-content-loading-body = A moment while everything settles into place.
 
 profile-logout-blocked = Unsynced answers are still here. Connect to the internet and try again.
 
@@ -800,3 +800,29 @@ notes-word-count = { $count } words
 notes-char-count = { $count } characters
 notes-graph-empty = Link this note to see its neighbourhood.
 notes-graph-note = Local graph shows the notes, topics, words and books connected to this note.
+
+reader-back-library = Back to Library
+reader-settings = Reader settings
+reader-settings-title = Reading comfort
+reader-theme = Page theme
+reader-theme-paper = Crisp Paper
+reader-theme-sepia = Warm Sepia
+reader-theme-dusk = Studio Dusk
+reader-theme-midnight = Midnight Ink
+reader-size = Text size
+reader-size-s = S
+reader-size-m = M
+reader-size-l = L
+reader-size-xl = XL
+reader-line-height = Line height
+reader-measure = Measure
+reader-chapter-selector = Choose a chapter
+reader-annotations = Annotations
+reader-annotations-title = Saved in this book
+reader-annotations-empty = No highlights, bookmarks or notes in this book yet.
+reader-annotation-count = { $count } saved
+reader-annotation-note = Note
+reader-annotation-jump = Go to passage
+reader-progress = Chapter { $chapter } / { $total } · { $percent }%
+reader-settings-close = Close settings
+reader-annotations-close = Close annotations

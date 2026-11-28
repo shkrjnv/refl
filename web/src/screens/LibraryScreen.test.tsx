@@ -87,6 +87,29 @@ describe("library and reader", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "The Gift of the Magi" }),
     ).toBeTruthy();
+    expect(document.body.classList.contains("reader-focus")).toBe(true);
+    expect(
+      screen.getByText(
+        "Tap a word for its meaning. Select text to highlight, bookmark or add a note.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText("reader-selection-hint")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Reader settings" }));
+    expect(screen.getByText("Reading comfort")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Midnight Ink" }));
+    expect(
+      document.querySelector(".reader-full")?.getAttribute("data-reader-theme"),
+    ).toBe("midnight");
+    expect(localStorage.getItem("refl.reader.v1")).toContain("midnight");
+    fireEvent.click(screen.getByRole("button", { name: "Close settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Annotations" }));
+    expect(screen.getByText("Saved in this book")).toBeTruthy();
+    expect(
+      screen.getByText("No highlights, bookmarks or notes in this book yet."),
+    ).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Close annotations" }),
+    );
     const prose = document.querySelector(".reader-paper")?.textContent ?? "";
     expect(prose).toContain("ONE dollar and eighty-seven cents.");
     expect(prose).toContain("“Mr. James Dillingham Young.”");
@@ -111,6 +134,9 @@ describe("library and reader", () => {
         sentenceId: expect.stringContaining("sentence.ohenry-gift-magi."),
       },
     });
+    fireEvent.click(screen.getByRole("button", { name: "Back to Library" }));
+    expect(document.body.classList.contains("reader-focus")).toBe(false);
+    expect(screen.getByRole("heading", { name: "Library" })).toBeTruthy();
   });
 
   it("shows a personal book with its cover and removes it from the shelf", async () => {

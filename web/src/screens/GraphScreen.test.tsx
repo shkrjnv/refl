@@ -61,6 +61,8 @@ describe("knowledge graph", () => {
     const node = screen.getByRole("button", {
       name: "a or an, Learning",
     });
+    expect(node.querySelector(".graph-node-head .graph-node-title")).not.toBeNull();
+    expect(node.querySelector(".graph-node-head .graph-node-dot")).not.toBeNull();
     fireEvent.click(node);
     expect(screen.getByText("Why this number")).toBeTruthy();
     expect(screen.getByText("Answers")).toBeTruthy();

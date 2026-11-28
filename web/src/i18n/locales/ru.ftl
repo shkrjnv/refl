@@ -269,8 +269,8 @@ admin-decision-failed = Не удалось сохранить решение.
 
 app-content-error-title = Студия не смогла загрузить контент
 app-content-error-body = Локальный кэш пуст, а сервер не вернул бандл. Проверьте соединение и повторите.
-app-content-loading = Открываем студию
-app-content-loading-body = Загружаем последний совместимый бандл и локальное состояние.
+app-content-loading = Готовим вашу студию…
+app-content-loading-body = Немного времени, чтобы всё встало на свои места.
 
 profile-logout-blocked = Неотправленные ответы ещё здесь. Подключитесь к сети и повторите.
 
@@ -808,3 +808,29 @@ notes-word-count = Слов: { $count }
 notes-char-count = Символов: { $count }
 notes-graph-empty = Свяжите заметку, чтобы увидеть её окружение.
 notes-graph-note = Локальный граф показывает заметки, темы, слова и книги, связанные с этой заметкой.
+
+reader-back-library = Назад в библиотеку
+reader-settings = Настройки чтения
+reader-settings-title = Комфорт чтения
+reader-theme = Тема страницы
+reader-theme-paper = Чистая бумага
+reader-theme-sepia = Тёплая сепия
+reader-theme-dusk = Студийные сумерки
+reader-theme-midnight = Полночная тушь
+reader-size = Размер текста
+reader-size-s = S
+reader-size-m = M
+reader-size-l = L
+reader-size-xl = XL
+reader-line-height = Межстрочный интервал
+reader-measure = Ширина строки
+reader-chapter-selector = Выберите главу
+reader-annotations = Заметки на полях
+reader-annotations-title = Сохранено в этой книге
+reader-annotations-empty = В этой книге пока нет выделений, закладок и заметок.
+reader-annotation-count = Сохранено: { $count }
+reader-annotation-note = Заметка
+reader-annotation-jump = Перейти к фрагменту
+reader-progress = Глава { $chapter } / { $total } · { $percent }%
+reader-settings-close = Закрыть настройки
+reader-annotations-close = Закрыть заметки

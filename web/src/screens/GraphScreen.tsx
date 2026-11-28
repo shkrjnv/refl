@@ -1,9 +1,13 @@
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { IellaTip } from "../components/IellaTip";
 import { NotesPanel } from "../components/NotesPanel";
 import { Button, Card, StatusMeta } from "../components/ui";
-import { resolveGraphPositions } from "../prototype/graphLayout";
+import {
+  fitCardPositions,
+  resolveGraphPositions,
+  type CardSize,
+} from "../prototype/graphLayout";
 import type { Locale } from "../i18n";
 import { useTranslation } from "../i18n";
 import type { KcEntry, PrototypeContent } from "../prototype/content";
@@ -63,7 +67,7 @@ export function GraphScreen({
     () => parseRecords(stateJson),
     [stateJson],
   );
-  const now = Date.now();
+  const now = useMemo(() => Date.now(), [stateJson]);
   const progress = useMemo(
     () => kcProgress(content, learner, locale, now),
     [content, learner, locale, now],
@@ -72,11 +76,22 @@ export function GraphScreen({
   const [focused, setFocused] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [noteOpen, setNoteOpen] = useState(false);
+  const [stageSize, setStageSize] = useState({ width: 0, height: 0 });
+  const [cardSizes, setCardSizes] = useState<Record<string, CardSize>>({});
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const nodeRefs = useRef(new Map<string, HTMLButtonElement>());
 
-  const liveEntries = content.liveKcs();
-  const liveIds = new Set(liveEntries.map((entry) => entry.kc.id));
-  const edges = content.edges.filter(
-    (edge) => liveIds.has(edge.from) && liveIds.has(edge.to),
+  const liveEntries = useMemo(() => content.liveKcs(), [content]);
+  const liveIds = useMemo(
+    () => new Set(liveEntries.map((entry) => entry.kc.id)),
+    [liveEntries],
+  );
+  const edges = useMemo(
+    () =>
+      content.edges.filter(
+        (edge) => liveIds.has(edge.from) && liveIds.has(edge.to),
+      ),
+    [content.edges, liveIds],
   );
   const nodes = useMemo<Node[]>(() => {
     return liveEntries.map((entry) => {
@@ -137,7 +152,87 @@ export function GraphScreen({
       ),
     [mode, nodes, edges, content.contentVersion],
   );
-  const positions = resolved.positions;
+  const measuredSizes = useMemo(() => {
+    const sizes = new Map<string, CardSize>();
+    if (stageSize.width <= 0 || stageSize.height <= 0) {
+      return sizes;
+    }
+    for (const node of nodes) {
+      const size = cardSizes[node.entry.kc.id];
+      if (size) {
+        sizes.set(node.entry.kc.id, {
+          width: (size.width / stageSize.width) * 1000,
+          height: (size.height / stageSize.height) * 1000,
+        });
+      }
+    }
+    return sizes;
+  }, [cardSizes, nodes, stageSize]);
+  const positions = useMemo(() => {
+    if (measuredSizes.size !== nodes.length) {
+      return resolved.positions;
+    }
+    return fitCardPositions(resolved.positions, measuredSizes);
+  }, [measuredSizes, nodes.length, resolved.positions]);
+
+  useLayoutEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) {
+      return;
+    }
+    const measure = () => {
+      const rect = stage.getBoundingClientRect();
+      if (rect.width < 1 || rect.height < 1) {
+        return;
+      }
+      const nextStage = {
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      };
+      setStageSize((current) =>
+        current.width === nextStage.width && current.height === nextStage.height
+          ? current
+          : nextStage,
+      );
+      const nextSizes: Record<string, CardSize> = {};
+      for (const [id, element] of nodeRefs.current) {
+        const box = element.getBoundingClientRect();
+        if (box.width > 0 && box.height > 0) {
+          nextSizes[id] = {
+            width: Math.round(box.width),
+            height: Math.round(box.height),
+          };
+        }
+      }
+      setCardSizes((current) => {
+        const ids = Object.keys(nextSizes);
+        if (
+          ids.length === Object.keys(current).length &&
+          ids.every(
+            (id) =>
+              current[id]?.width === nextSizes[id]?.width &&
+              current[id]?.height === nextSizes[id]?.height,
+          )
+        ) {
+          return current;
+        }
+        return nextSizes;
+      });
+    };
+    measure();
+    const observer =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    observer?.observe(stage);
+    for (const element of nodeRefs.current.values()) {
+      observer?.observe(element);
+    }
+    window.addEventListener("resize", measure);
+    void document.fonts?.ready.then(measure).catch(() => undefined);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [content, locale, mode, nodes.length]);
 
   const focus = selected ?? focused;
   const neighbors = useMemo(() => {
@@ -200,7 +295,7 @@ export function GraphScreen({
         <p className="graph-note">{t("graph-fallback-note")}</p>
       ) : null}
       <div className={`graph-canvas graph-${mode}`}>
-        <div className="graph-stage">
+        <div className="graph-stage" ref={stageRef}>
           <svg
             viewBox="0 0 1000 1000"
             preserveAspectRatio="none"
@@ -250,6 +345,13 @@ export function GraphScreen({
             return (
               <button
                 key={node.entry.kc.id}
+                ref={(element) => {
+                  if (element) {
+                    nodeRefs.current.set(node.entry.kc.id, element);
+                  } else {
+                    nodeRefs.current.delete(node.entry.kc.id);
+                  }
+                }}
                 type="button"
                 className={`graph-node graph-node-${node.status}${dim ? " dim" : ""}${selected === node.entry.kc.id ? " selected" : ""}`}
                 style={{
@@ -270,8 +372,10 @@ export function GraphScreen({
                   setNoteOpen(false);
                 }}
               >
-                <span className="graph-node-dot" aria-hidden="true" />
-                <span className="graph-node-title">{title}</span>
+                <span className="graph-node-head">
+                  <span className="graph-node-title">{title}</span>
+                  <span className="graph-node-dot" aria-hidden="true" />
+                </span>
                 <span className="graph-node-status">
                   {t(`graph-status-${node.status}`)}
                 </span>

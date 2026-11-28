@@ -274,3 +274,98 @@ export function resolveGraphPositions(
   }
   return { positions: base, fallback };
 }
+
+/** Rendered card size in the same 0…1000 units as graph positions. */
+export interface CardSize {
+  width: number;
+  height: number;
+}
+
+const CARD_PADDING = 10;
+const CARD_GAP = 14;
+
+/**
+ * Fits measured card boxes inside the stage and separates overlapping cards.
+ * Positions are percentages of the stage, so widths are converted with the
+ * stage width and heights with the stage height before this call.
+ */
+export function fitCardPositions(
+  positions: ReadonlyMap<string, Point>,
+  sizes: ReadonlyMap<string, CardSize>,
+  gap = CARD_GAP,
+): Map<string, Point> {
+  const out = new Map(
+    [...positions.entries()].map(([id, point]) => [id, { ...point }]),
+  );
+  const ids = [...out.keys()].filter((id) => sizes.has(id));
+  const clampPoint = (id: string) => {
+    const point = out.get(id);
+    const size = sizes.get(id);
+    if (!point || !size) {
+      return;
+    }
+    const halfWidth = Math.min(500, size.width / 2);
+    const halfHeight = Math.min(500, size.height / 2);
+    point.x = Math.max(
+      halfWidth + CARD_PADDING,
+      Math.min(1000 - halfWidth - CARD_PADDING, point.x),
+    );
+    point.y = Math.max(
+      halfHeight + CARD_PADDING,
+      Math.min(1000 - halfHeight - CARD_PADDING, point.y),
+    );
+  };
+  for (const id of ids) {
+    clampPoint(id);
+  }
+  for (let pass = 0; pass < 80; pass += 1) {
+    let moved = false;
+    for (let i = 0; i < ids.length; i += 1) {
+      const left = out.get(ids[i] ?? "");
+      const leftSize = sizes.get(ids[i] ?? "");
+      if (!left || !leftSize) {
+        continue;
+      }
+      for (let j = i + 1; j < ids.length; j += 1) {
+        const right = out.get(ids[j] ?? "");
+        const rightSize = sizes.get(ids[j] ?? "");
+        if (!right || !rightSize) {
+          continue;
+        }
+        const requiredX = (leftSize.width + rightSize.width) / 2 + gap;
+        const requiredY = (leftSize.height + rightSize.height) / 2 + gap;
+        let dx = right.x - left.x;
+        let dy = right.y - left.y;
+        if (Math.abs(dx) >= requiredX || Math.abs(dy) >= requiredY) {
+          continue;
+        }
+        if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) {
+          const angle = ((i + 1) * 1.7 + (j + 1) * 0.9) % (Math.PI * 2);
+          dx = Math.cos(angle);
+          dy = Math.sin(angle);
+        }
+        const pushX = (requiredX - Math.abs(dx)) / 2;
+        const pushY = (requiredY - Math.abs(dy)) / 2;
+        if (!Number.isFinite(dx) || !Number.isFinite(dy)) {
+          continue;
+        }
+        if (pushX / requiredX <= pushY / requiredY) {
+          const direction = dx < 0 ? -1 : 1;
+          left.x -= direction * pushX;
+          right.x += direction * pushX;
+        } else {
+          const direction = dy < 0 ? -1 : 1;
+          left.y -= direction * pushY;
+          right.y += direction * pushY;
+        }
+        clampPoint(ids[i] ?? "");
+        clampPoint(ids[j] ?? "");
+        moved = true;
+      }
+    }
+    if (!moved) {
+      break;
+    }
+  }
+  return out;
+}

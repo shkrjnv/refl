@@ -177,7 +177,7 @@ export function NotesWorkspace({
   const graph = useMemo(
     () =>
       selectedNote
-        ? localNoteGraph(selectedNote, records, context)
+        ? localNoteGraph(selectedNote, records, context, 6)
         : { nodes: [], edges: [] },
     [context, records, selectedNote],
   );
@@ -376,8 +376,8 @@ export function NotesWorkspace({
     others.forEach((node, index) => {
       const angle = (index / Math.max(1, others.length)) * Math.PI * 2 - Math.PI / 2;
       positions.set(node.id, {
-        x: 50 + Math.cos(angle) * 36,
-        y: 50 + Math.sin(angle) * 34,
+        x: 50 + Math.cos(angle) * 33,
+        y: 50 + Math.sin(angle) * 32,
       });
     });
     return positions;

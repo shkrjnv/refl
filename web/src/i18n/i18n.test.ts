@@ -56,6 +56,23 @@ describe("Fluent locales", () => {
     expect(formatMessage(ru, en, "app-name")).toBe("refl");
   });
 
+  it("renders the reader hint and calm boot copy in every locale", () => {
+    const en = createBundle("en", enSource);
+    const ru = createBundle("ru", ruSource);
+    const uz = createBundle("uz", uzSource);
+    for (const bundle of [en, ru, uz]) {
+      expect(formatMessage(bundle, en, "reader-selection-hint")).not.toBe(
+        "reader-selection-hint",
+      );
+      expect(formatMessage(bundle, en, "app-content-loading")).not.toContain(
+        "bundle",
+      );
+      expect(formatMessage(bundle, en, "app-content-loading-body")).not.toContain(
+        "bundle",
+      );
+    }
+  });
+
   it("prefers a persisted locale and negotiates a regional browser locale", () => {
     expect(resolveLocale(["en-US"], "ru")).toBe("ru");
     expect(resolveLocale(["ru-RU"], null)).toBe("ru");

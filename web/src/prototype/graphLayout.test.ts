@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   authoredPositions,
   fallbackPositions,
+  fitCardPositions,
   hasUsableCoordinates,
   resolveGraphPositions,
 } from "./graphLayout";
@@ -76,6 +77,49 @@ describe("graph stage clearance", () => {
     { id: "e", levelRank: 1, level: "A1", domain: "grammar", x: 500, y: 0 },
   ];
 
+  it("fits measured 136 px cards at 360 and 210 px cards at 1440", () => {
+    const stages = [
+      { width: 298, height: 298, card: { width: 136, height: 90 } },
+      { width: 1000, height: 620, card: { width: 210, height: 90 } },
+    ];
+    for (const stage of stages) {
+      const sizes = new Map(
+        live.map((node) => [
+          node.id,
+          {
+            width: (stage.card.width / stage.width) * 1000,
+            height: (stage.card.height / stage.height) * 1000,
+          },
+        ]),
+      );
+      for (const mode of ["layered", "web"] as const) {
+        const base = resolveGraphPositions(live, [], "content-v1", mode).positions;
+        const fitted = fitCardPositions(base, sizes);
+        const entries = [...fitted.entries()];
+        for (const [, point] of entries) {
+          const x = (point.x / 1000) * stage.width;
+          const y = (point.y / 1000) * stage.height;
+          expect(x - stage.card.width / 2).toBeGreaterThanOrEqual(0);
+          expect(x + stage.card.width / 2).toBeLessThanOrEqual(stage.width);
+          expect(y - stage.card.height / 2).toBeGreaterThanOrEqual(0);
+          expect(y + stage.card.height / 2).toBeLessThanOrEqual(stage.height);
+        }
+        for (let i = 0; i < entries.length; i += 1) {
+          for (let j = i + 1; j < entries.length; j += 1) {
+            const left = entries[i]?.[1];
+            const right = entries[j]?.[1];
+            if (!left || !right) {
+              continue;
+            }
+            const dx = (Math.abs(left.x - right.x) / 1000) * stage.width;
+            const dy = (Math.abs(left.y - right.y) / 1000) * stage.height;
+            expect(dx >= stage.card.width || dy >= stage.card.height).toBe(true);
+          }
+        }
+      }
+    }
+  });
+
   it("keeps a 140×78 card fully inside a 310 px stage in both modes", () => {
     for (const mode of ["layered", "web"] as const) {
       const positions = resolveGraphPositions(live, [], "content-v1", mode).positions;
@@ -99,6 +143,40 @@ describe("graph stage clearance", () => {
           const dy = (Math.abs(left.y - right.y) / 1000) * 298;
           expect(dx < 140 && dy < 78).toBe(false);
         }
+      }
+    }
+  });
+});
+
+describe("measured card fitting", () => {
+  it("keeps measured boxes inside the stage and apart", () => {
+    const positions = new Map([
+      ["top", { x: 500, y: 0 }],
+      ["bottom", { x: 500, y: 1000 }],
+      ["left", { x: 0, y: 500 }],
+      ["right", { x: 1000, y: 500 }],
+    ]);
+    const sizes = new Map(
+      [...positions.keys()].map((id) => [id, { width: 400, height: 240 }]),
+    );
+    const fitted = fitCardPositions(positions, sizes);
+    for (const point of fitted.values()) {
+      expect(point.x).toBeGreaterThanOrEqual(210);
+      expect(point.x).toBeLessThanOrEqual(790);
+      expect(point.y).toBeGreaterThanOrEqual(130);
+      expect(point.y).toBeLessThanOrEqual(870);
+    }
+    const entries = [...fitted.entries()];
+    for (let i = 0; i < entries.length; i += 1) {
+      for (let j = i + 1; j < entries.length; j += 1) {
+        const left = entries[i]?.[1];
+        const right = entries[j]?.[1];
+        if (!left || !right) {
+          continue;
+        }
+        const dx = Math.abs(left.x - right.x);
+        const dy = Math.abs(left.y - right.y);
+        expect(dx >= 414 || dy >= 254).toBe(true);
       }
     }
   });

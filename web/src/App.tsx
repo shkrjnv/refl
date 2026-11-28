@@ -8,6 +8,7 @@ import {
   type ProfileResponse,
 } from "./api/client";
 import { AppShell, type AppRoute } from "./components/AppShell";
+import { BootScreen } from "./components/BootScreen";
 import {
   readCompanion,
   readSendoPreview,
@@ -909,25 +910,11 @@ export function App({ initialTheme, initialSkin }: AppProps) {
   }
 
   if (!content) {
-    return (
-      <div className="startup-screen">
-        <Card tone="plain" className="startup-card">
-          <h1>{t("app-content-loading")}</h1>
-          <p>{t("app-content-loading-body")}</p>
-        </Card>
-      </div>
-    );
+    return <BootScreen companion={companion} />;
   }
 
   if (entryState === "pending") {
-    return (
-      <div className="startup-screen">
-        <Card tone="plain" className="startup-card">
-          <h1>{t("app-content-loading")}</h1>
-          <p>{t("app-content-loading-body")}</p>
-        </Card>
-      </div>
-    );
+    return <BootScreen companion={companion} />;
   }
 
   if (entryState === "needed") {

@@ -269,8 +269,8 @@ admin-decision-failed = Qarorni saqlab bo‘lmadi.
 
 app-content-error-title = Studiya kontentni yuklay olmadi
 app-content-error-body = Mahalliy kesh bo‘sh va server bundle qaytarmadi. Aloqani tekshirib, qayta urinib ko‘ring.
-app-content-loading = Studiya ochilmoqda
-app-content-loading-body = Oxirgi mos bundle va mahalliy holat yuklanmoqda.
+app-content-loading = Studiyangiz tayyorlanmoqda…
+app-content-loading-body = Hammasi joyiga tushishi uchun bir oz kutib turing.
 
 profile-logout-blocked = Yuborilmagan javoblar hali shu yerda. Internetga ulanib, qayta urinib ko‘ring.
 
@@ -794,3 +794,29 @@ notes-word-count = { $count } soʻz
 notes-char-count = { $count } belgi
 notes-graph-empty = Atrofini koʻrish uchun eslatmani bogʻlang.
 notes-graph-note = Mahalliy grafik shu eslatmaga bogʻlangan eslatmalar, mavzular, soʻzlar va kitoblarni koʻrsatadi.
+
+reader-back-library = Kutubxonaga qaytish
+reader-settings = Oʻqish sozlamalari
+reader-settings-title = Oʻqish qulayligi
+reader-theme = Sahifa mavzusi
+reader-theme-paper = Toza qogʻoz
+reader-theme-sepia = Iliq sepiya
+reader-theme-dusk = Studiya oqshomi
+reader-theme-midnight = Yarim tun siyohi
+reader-size = Matn hajmi
+reader-size-s = S
+reader-size-m = M
+reader-size-l = L
+reader-size-xl = XL
+reader-line-height = Qator balandligi
+reader-measure = Qator kengligi
+reader-chapter-selector = Bobni tanlang
+reader-annotations = Belgilar
+reader-annotations-title = Bu kitobda saqlanganlar
+reader-annotations-empty = Bu kitobda hali belgi, xatchoʻp yoki eslatma yoʻq.
+reader-annotation-count = { $count } ta saqlangan
+reader-annotation-note = Eslatma
+reader-annotation-jump = Paragrafga oʻtish
+reader-progress = { $chapter } / { $total } bob · { $percent }%
+reader-settings-close = Sozlamalarni yopish
+reader-annotations-close = Belgilarni yopish
