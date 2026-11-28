@@ -515,6 +515,7 @@ In Russian; the index is in [docs/README.md](docs/README.md).
 | [13-sync-versions](docs/13-sync-versions.md) | sync protocol, versions, on-device storage, multiple devices, backups and deployment |
 | [14-privacy-license](docs/14-privacy-license.md) | personal data, children and consent, licenses |
 | [15-prototype](docs/15-prototype.md) | the end-to-end "Articles" prototype: scope, visual reference, "looks finished" bar, acceptance criteria |
+| [16-vocabulary-library-notes-graph](docs/16-vocabulary-library-notes-graph.md) | Batch 4: vocabulary and personal words, A1–C1 library and books, knowledge graph, offline notes and bookmarks, Sendo, new events and delivery order |
 
 ## License
 
