@@ -14217,16 +14217,26 @@ body.reader-focus .studio-content {
   z-index: 70;
   right: 12px;
   bottom: calc(92px + env(safe-area-inset-bottom));
+  left: 12px;
   display: flex;
-  width: min(300px, calc(100vw - 24px));
+  width: auto;
+  max-height: min(60dvh, 420px);
   flex-direction: column;
   gap: 2px;
+  overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--surface);
   box-shadow: var(--shadow-card);
   padding: 8px;
+  transform-origin: bottom center;
   animation: mobile-more-in 160ms ease-out;
+}
+
+.mobile-more-sheet > nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .mobile-more-title {
