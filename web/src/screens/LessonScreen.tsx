@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
+import { NotesPanel } from "../components/NotesPanel";
 import { RichText } from "../components/RichText";
 import { StudioIcon } from "../components/StudioIcons";
 import { Button, Card, ProgressBar } from "../components/ui";
@@ -10,6 +11,7 @@ import {
   type LessonView,
 } from "../prototype/lesson";
 import type { ItemView, PresentedChoice } from "../prototype/item";
+import { parseRecords, type RecordStore } from "../prototype/records";
 import type { JsonValue } from "../types/json";
 
 export interface LessonScreenProps {
@@ -18,6 +20,9 @@ export interface LessonScreenProps {
   onComplete: (summary: LessonSummary) => void;
   onExit: () => void;
   onViewChange?: (view: LessonView) => void;
+  recordsWriter?: RecordStore | null;
+  stateJson?: string;
+  onStateChange?: (stateJson: string) => void;
 }
 
 interface ChoiceInputProps {
@@ -216,6 +221,9 @@ export function LessonScreen({
   onComplete,
   onExit,
   onViewChange,
+  recordsWriter,
+  stateJson,
+  onStateChange,
 }: LessonScreenProps) {
   const { t } = useTranslation();
   const [view, setView] = useState<LessonView>(initialView);
@@ -224,6 +232,7 @@ export function LessonScreen({
   const [hintOpen, setHintOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [noteOpen, setNoteOpen] = useState(false);
   const completionRef = useRef(false);
 
   useEffect(() => {
@@ -316,12 +325,36 @@ export function LessonScreen({
           <h1>{phaseLabel}</h1>
         </div>
         <div className="lesson-head-actions">
+          {recordsWriter && item && stateJson ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setNoteOpen((open) => !open)}
+            >
+              {t("graph-note-action")}
+            </Button>
+          ) : null}
           <Button type="button" variant="ghost" size="sm" onClick={onExit}>
             <StudioIcon name="close" size={16} />
             {t("lesson-exit")}
           </Button>
         </div>
       </header>
+      {noteOpen && recordsWriter && item && stateJson && onStateChange ? (
+        <NotesPanel
+          records={parseRecords(stateJson)}
+          anchor={{
+            kind: "item",
+            id: ``,
+          }}
+          recordsWriter={recordsWriter}
+          stateJson={stateJson}
+          onStateChange={onStateChange}
+          title={t("notes-panel-title")}
+          onClose={() => setNoteOpen(false)}
+        />
+      ) : null}
       <div className="lesson-progress">
         <ProgressBar
           value={

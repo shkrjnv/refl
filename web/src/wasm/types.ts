@@ -103,6 +103,16 @@ export type PlacementStep =
     }
   | { kind: "unavailable"; placement: Placement };
 
+export interface BookCoverageResult {
+  book: string;
+  version: string;
+  coverage: {
+    known_tokens: number;
+    total_tokens: number;
+    percent: number;
+  };
+}
+
 export interface WasmCore {
   coreInfo(): string;
   checkBundleCompatibility(bundleJson: string): string;
@@ -158,6 +168,11 @@ export interface WasmCore {
     itemRefJson: string,
     slot: number,
     correct: boolean,
+    nowMs: number,
+  ): string;
+  bookCoverage(
+    bookJson: string,
+    snapshotJson: string,
     nowMs: number,
   ): string;
 }

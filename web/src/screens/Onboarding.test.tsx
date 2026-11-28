@@ -31,6 +31,9 @@ describe("Iella onboarding", () => {
           onStart={() => undefined}
           onOpenStats={() => undefined}
           tourOpen
+          companion="iella"
+          recordsWriter={null}
+          onStateChange={() => undefined}
           onTourComplete={() => {
             completed = true;
           }}
@@ -71,6 +74,9 @@ describe("Iella onboarding", () => {
           onStart={() => undefined}
           onOpenStats={() => undefined}
           tourOpen
+          companion="iella"
+          recordsWriter={null}
+          onStateChange={() => undefined}
           onTourComplete={() => undefined}
         />
       </I18nProvider>,
@@ -99,6 +105,9 @@ describe("Iella onboarding", () => {
           onStart={() => undefined}
           onOpenStats={() => undefined}
           tourOpen
+          companion="iella"
+          recordsWriter={null}
+          onStateChange={() => undefined}
           onTourComplete={() => undefined}
         />
       </I18nProvider>,

@@ -157,6 +157,9 @@ function renderToday(
         onStart={onStart}
         onOpenStats={() => undefined}
         tourOpen={false}
+        companion="iella"
+        recordsWriter={null}
+        onStateChange={() => undefined}
         onTourComplete={() => undefined}
       />
     </I18nProvider>,

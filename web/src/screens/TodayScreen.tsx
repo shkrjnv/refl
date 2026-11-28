@@ -4,7 +4,10 @@ import { HeroIllustration } from "../components/HeroIllustration";
 import { IellaTip } from "../components/IellaTip";
 import { IellaTour } from "../components/IellaTour";
 import { CrossfadeIcon, StudioIcon } from "../components/StudioIcons";
-import { IellaSprite } from "../components/IellaSprite";
+import { CompanionSprite } from "../components/CompanionSprite";
+import { NotesPanel } from "../components/NotesPanel";
+import { companionById, type CompanionId } from "../companions/registry";
+import { parseRecords, type RecordStore } from "../prototype/records";
 import { Button, Card, ProgressBar, StatusMeta } from "../components/ui";
 import type { StatusTone } from "../components/ui";
 import { useTranslation } from "../i18n";
@@ -34,6 +37,9 @@ export interface TodayScreenProps {
   onOpenStats: () => void;
   tourOpen: boolean;
   onTourComplete: () => void;
+  companion: CompanionId;
+  recordsWriter: RecordStore | null;
+  onStateChange: (stateJson: string) => void;
 }
 
 const DURATIONS = [10, 15, 25] as const;
@@ -104,7 +110,11 @@ export function TodayScreen({
   onOpenStats,
   tourOpen,
   onTourComplete,
+  companion,
+  recordsWriter,
+  onStateChange,
 }: TodayScreenProps) {
+  const companionEntry = companionById(companion);
   const { t, locale } = useTranslation();
   const [duration, setDuration] = useState<(typeof DURATIONS)[number]>(25);
   const [openRule, setOpenRule] = useState<string | null>(null);
@@ -255,16 +265,17 @@ export function TodayScreen({
           <div className="today-hero-content">
             <div className="today-hero-topline">
               <span className="today-hero-companion">
-                <IellaSprite
+                <CompanionSprite
+                  companion={companion}
                   size={44}
-                  mood="perched"
+                  mood={companion === "sendo" ? "idle" : "perched"}
                   className="today-hero-iella"
                 />
-                <span>{t("iella-name")}</span>
+                <span>{t(companionEntry.nameKey)}</span>
                 <span className="meta-separator" aria-hidden="true">
                   ·
                 </span>
-                <span>{t("iella-companion")}</span>
+                <span>{t(companionEntry.kickerKey)}</span>
               </span>
             </div>
             <div className="today-hero-copy">
@@ -569,6 +580,19 @@ export function TodayScreen({
               ))}
             </div>
           )}
+          <details className="today-private-notes">
+            <summary>{t("today-private-notes")}</summary>
+            {recordsWriter && stateJson ? (
+              <NotesPanel
+                records={parseRecords(stateJson)}
+                anchor={{ kind: "standalone" }}
+                recordsWriter={recordsWriter}
+                stateJson={stateJson}
+                onStateChange={onStateChange}
+                title={t("today-private-notes-title")}
+              />
+            ) : null}
+          </details>
           <p className="bento-note">{t("today-notes-private")}</p>
         </Card>
       </div>

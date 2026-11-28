@@ -5,12 +5,20 @@ import { useTranslation } from "../i18n";
 import { SOURCE_CODE_URL, SOURCE_LICENSE } from "../pwa/links";
 import type { NavigationPosition } from "../prototype/layout";
 import type { ThemeName } from "../theme/tokens";
-import { IellaSprite } from "./IellaSprite";
+import { CompanionSprite } from "./CompanionSprite";
+import { companionById, type CompanionId } from "../companions/registry";
 import { LanguageMenu } from "./LanguageMenu";
 import { BrandLogo, StudioIcon, type StudioIconName } from "./StudioIcons";
 import { ThemeMenu } from "./ThemeMenu";
 
-export type AppRoute = "today" | "lesson" | "stats" | "profile";
+export type AppRoute =
+  | "today"
+  | "vocabulary"
+  | "library"
+  | "graph"
+  | "lesson"
+  | "stats"
+  | "profile";
 
 export interface AppShellProps {
   active: AppRoute;
@@ -25,6 +33,7 @@ export interface AppShellProps {
   navigationPosition: NavigationPosition;
   onIellaActivate?: () => void;
   lessonAvailable?: boolean;
+  companion: CompanionId;
 }
 
 interface NavItem {
@@ -47,10 +56,15 @@ export function AppShell({
   navigationPosition,
   onIellaActivate,
   lessonAvailable = false,
+  companion,
 }: AppShellProps) {
+  const companionEntry = companionById(companion);
   const { t } = useTranslation();
   const primaryItems: NavItem[] = [
     { route: "today", label: t("nav-today"), glyph: "today" },
+    { route: "vocabulary", label: t("nav-vocabulary"), glyph: "vocabulary" },
+    { route: "library", label: t("nav-library"), glyph: "library" },
+    { route: "graph", label: t("nav-graph"), glyph: "graph" },
     {
       route: "lesson",
       label: t("nav-practice"),
@@ -95,10 +109,14 @@ export function AppShell({
         </nav>
         <div className="sidebar-spacer" />
         <div className="iella-card">
-          <IellaSprite size={36} className="iella-card-sprite" />
+          <CompanionSprite
+            companion={companion}
+            size={36}
+            className="iella-card-sprite"
+          />
           <span className="iella-card-copy">
-            <span className="iella-card-kicker">{t("iella-companion")}</span>
-            <strong>{t("iella-name")}</strong>
+            <span className="iella-card-kicker">{t(companionEntry.kickerKey)}</span>
+            <strong>{t(companionEntry.nameKey)}</strong>
           </span>
           {onIellaActivate ? (
             <button

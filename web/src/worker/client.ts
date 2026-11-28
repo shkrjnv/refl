@@ -1,6 +1,7 @@
 import { parseJsonValue, type JsonValue } from "../types/json";
 import type {
   AnswerCheckResult,
+  BookCoverageResult,
   BundleCompatibility,
   CoreInfo,
   DecodedEvent,
@@ -269,6 +270,20 @@ export class CoreWorkerClient {
       itemRefJson,
       slot,
       correct,
+      nowMs,
+    });
+  }
+
+  bookCoverage(
+    bookJson: string,
+    snapshotJson: string,
+    nowMs: number,
+  ): Promise<BookCoverageResult> {
+    return this.#call({
+      id: this.#id(),
+      method: "bookCoverage",
+      bookJson,
+      snapshotJson,
       nowMs,
     });
   }

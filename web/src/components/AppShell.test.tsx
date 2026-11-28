@@ -29,6 +29,7 @@ function renderShell(
         onThemeChange={onThemeChange}
         navigationPosition={navigationPosition}
         lessonAvailable
+        companion="iella"
       >
         <div>Route content</div>
       </AppShell>
@@ -37,7 +38,7 @@ function renderShell(
 }
 
 describe("adaptive studio shell", () => {
-  it("keeps three learning destinations in the rail and Profile on the dock", () => {
+  it("keeps the six study destinations in the rail and Profile on the dock", () => {
     const routes: AppRoute[] = [];
     const { container } = renderShell("left", (route) => routes.push(route));
 
@@ -52,11 +53,17 @@ describe("adaptive studio shell", () => {
     const mobileItems = within(mobileNav as HTMLElement).getAllByRole("button");
     expect(sideItems.map((item) => item.textContent)).toEqual([
       "Today",
+      "Vocabulary",
+      "Library",
+      "Graph",
       "Practice",
       "Progress",
     ]);
     expect(mobileItems.map((item) => item.textContent)).toEqual([
       "Today",
+      "Vocabulary",
+      "Library",
+      "Graph",
       "Practice",
       "Progress",
       "Profile",

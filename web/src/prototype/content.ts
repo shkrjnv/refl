@@ -1,4 +1,7 @@
+import type { Edge } from "../generated/core/Edge";
 import type { Explanation } from "../generated/core/Explanation";
+import type { Lexeme } from "../generated/core/Lexeme";
+import type { LexemeSense } from "../generated/core/LexemeSense";
 import type { Instruction } from "../generated/core/Instruction";
 import type { Misconception } from "../generated/core/Misconception";
 import type { Item } from "../generated/core/Item";
@@ -13,6 +16,8 @@ export interface KcEntry {
   kc: Kc;
   status: "live" | "draft";
   level_rank: number;
+  layout_x: number;
+  layout_y: number;
 }
 
 export interface ItemEntry {
@@ -41,6 +46,8 @@ function parseKcs(value: JsonValue | undefined): KcEntry[] {
           typeof entry["level_rank"] === "number"
             ? entry["level_rank"]
             : 0,
+        layout_x: typeof entry["layout_x"] === "number" ? entry["layout_x"] : 0,
+        layout_y: typeof entry["layout_y"] === "number" ? entry["layout_y"] : 0,
       },
     ];
   });
@@ -62,6 +69,19 @@ function parseItems(value: JsonValue | undefined): ItemEntry[] {
 
 function parseObjects<T>(value: JsonValue | undefined): T[] {
   return asArray(value).filter(isJsonObject) as unknown as T[];
+}
+
+function parseItemLexemes(value: JsonValue | undefined): Record<string, string[]> {
+  if (!isJsonObject(value)) {
+    return {};
+  }
+  const out: Record<string, string[]> = {};
+  for (const [item, ids] of Object.entries(value)) {
+    if (Array.isArray(ids)) {
+      out[item] = ids.filter((id): id is string => typeof id === "string");
+    }
+  }
+  return out;
 }
 
 function itemSlots(item: Item): Slot[] {
@@ -94,6 +114,9 @@ export class PrototypeContent {
   readonly misconceptions: Misconception[];
   readonly lexiconText: string;
   readonly lexiconJson: string;
+  readonly lexemes: Lexeme[];
+  readonly edges: Edge[];
+  readonly itemLexemes: Record<string, string[]>;
 
   constructor(
     bundleJson: string,
@@ -118,6 +141,9 @@ export class PrototypeContent {
     this.explanations = parseObjects<Explanation>(content["explanations"]);
     this.instructions = parseObjects<Instruction>(content["instructions"]);
     this.misconceptions = parseObjects<Misconception>(content["misconceptions"]);
+    this.lexemes = parseObjects<Lexeme>(content["lexemes"]);
+    this.edges = parseObjects<Edge>(content["edges"]);
+    this.itemLexemes = parseItemLexemes(content["item_lexemes"]);
     this.lexiconText = lexiconText;
     this.lexiconJson = JSON.stringify({ text: this.lexiconText });
   }
@@ -130,6 +156,50 @@ export class PrototypeContent {
         entry.status === "live" &&
         !entry.kc.observed_only,
     );
+  }
+
+  /** Every live KC on the knowledge map, Articles and the A1 core graph. */
+  liveKcs(): KcEntry[] {
+    return this.kcs.filter(
+      (entry) => entry.status === "live" && !entry.kc.observed_only,
+    );
+  }
+
+  /** A lexeme sense by its card id, as used by vocabulary and book tokens. */
+  sense(id: string): { lexeme: Lexeme; sense: LexemeSense } | null {
+    for (const lexeme of this.lexemes) {
+      const sense = lexeme.senses.find((candidate) => candidate.id === id);
+      if (sense) {
+        return { lexeme, sense };
+      }
+    }
+    return null;
+  }
+
+  /** The first sense whose lemma or form matches a written word. */
+  senseForForm(form: string): { lexeme: Lexeme; sense: LexemeSense } | null {
+    const word = form.toLocaleLowerCase();
+    for (const lexeme of this.lexemes) {
+      const forms = [lexeme.lemma, ...lexeme.forms].map((candidate) =>
+        candidate.toLocaleLowerCase(),
+      );
+      if (forms.includes(word) && lexeme.senses[0]) {
+        return { lexeme, sense: lexeme.senses[0] };
+      }
+    }
+    return null;
+  }
+
+  itemLexemesFor(itemId: string): string[] {
+    return this.itemLexemes[itemId] ?? [];
+  }
+
+  liveReviews(locale: Locale) {
+    const readable = (value: { review?: LangReviews } | undefined): boolean =>
+      value?.review?.[locale]?.status === "reviewed" ||
+      value?.review?.en?.status === "reviewed" ||
+      value?.review?.ru?.status === "reviewed";
+    return this.liveKcs().filter((entry) => readable(entry.kc));
   }
 
   visibleArticles(locale: Locale): KcEntry[] {
@@ -181,6 +251,32 @@ export class PrototypeContent {
 
   explanationFor(kcId: string, locale: Locale): Explanation | null {
     return this.explanationForTarget("kc", kcId, locale);
+  }
+
+  /** All reviewed depths of one target, in short → why → deep order. */
+  explanationsFor(
+    kind: "kc" | "misconception",
+    id: string,
+    locale: Locale,
+  ): Explanation[] {
+    const order = ["short", "why", "deep"] as const;
+    const language = [locale, "en", "ru", "uz"];
+    return order.flatMap((depth) => {
+      for (const lang of language) {
+        const found = this.explanations.find(
+          (entry) =>
+            entry.target.kind === kind &&
+            entry.target.id === id &&
+            entry.depth === depth &&
+            entry.lang === lang &&
+            entry.review.status === "reviewed",
+        );
+        if (found) {
+          return [found];
+        }
+      }
+      return [];
+    });
   }
 
   explanation(id: string): Explanation | null {

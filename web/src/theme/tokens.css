@@ -1119,3 +1119,25 @@
   --shadow-hero: 8px 8px 0 var(--text);
   --shadow-soft: 8px 8px 0 var(--text);
 }
+
+:root {
+  --sendo-fur: #9fb7cf;
+  --sendo-belly: #e8eef6;
+  --sendo-inner-ear: #d7a9b8;
+  --sendo-frame: #3c4b5a;
+  --sendo-glass: #f7fbff;
+  --sendo-eye: #25313d;
+  --sendo-lantern: #f0c86a;
+  --sendo-glow: #ffe6a1;
+}
+
+:root[data-theme="dark"] {
+  --sendo-fur: #7f9bb8;
+  --sendo-belly: #b9c9dc;
+  --sendo-inner-ear: #9d7484;
+  --sendo-frame: #cfdbe8;
+  --sendo-glass: #2a3542;
+  --sendo-eye: #f5f8fb;
+  --sendo-lantern: #ffd982;
+  --sendo-glow: #5a4a20;
+}

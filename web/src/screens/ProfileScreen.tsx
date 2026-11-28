@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
 
 import type { ApiClient, ProfileResponse } from "../api/client";
-import { IellaSprite } from "../components/IellaSprite";
+import { CompanionPicker } from "../components/CompanionPicker";
+import { CompanionSprite } from "../components/CompanionSprite";
+import { companionById, type CompanionId } from "../companions/registry";
 import { StudioIcon } from "../components/StudioIcons";
 import { Button, Card, ProgressBar, StatusMeta } from "../components/ui";
 import type { OutboxRecord } from "../db/storage";
@@ -51,6 +53,11 @@ export interface ProfileScreenProps {
   adminApi: ApiClient | null;
   onLogout: () => void;
   onSyncNow?: () => Promise<boolean>;
+  companion: CompanionId;
+  sendoUnlocked: boolean;
+  sendoPreview: boolean;
+  onCompanionChange: (companion: CompanionId) => void;
+  onSendoPreview: () => void;
 }
 
 const VISIBILITIES: ProfileVisibility[] = [
@@ -93,7 +100,13 @@ export function ProfileScreen({
   adminApi,
   onLogout,
   onSyncNow,
+  companion,
+  sendoUnlocked,
+  sendoPreview,
+  onCompanionChange,
+  onSendoPreview,
 }: ProfileScreenProps) {
+  const selectedCompanion = companionById(companion);
   const { t } = useTranslation();
   const [view, setView] = useState<"profile" | "settings">("profile");
   const [visibility, setVisibility] = useState<ProfileVisibility>("self");
@@ -259,12 +272,21 @@ export function ProfileScreen({
           learnerId={learnerId}
           onLogout={onLogout}
           onSyncNow={onSyncNow}
+          companion={companion}
+          sendoUnlocked={sendoUnlocked}
+          sendoPreview={sendoPreview}
+          onCompanionChange={onCompanionChange}
+          onSendoPreview={onSendoPreview}
         />
       ) : (
         <>
           {visitor ? (
             <div className="profile-preview-banner" role="status">
-              <IellaSprite size={28} mood="curious" />
+              <CompanionSprite
+                companion={companion}
+                size={28}
+                mood={companion === "sendo" ? "idle" : "curious"}
+              />
               <span>{t("profile-preview-banner")}</span>
               <StatusMeta tone="accent" dot>
                 {t(`profile-visibility-`)}
@@ -275,9 +297,13 @@ export function ProfileScreen({
           <div className="profile-public-grid">
             <Card tone="tinted" className="profile-banner-card">
               <div className="profile-banner-iella">
-                <IellaSprite size={56} mood="proud" />
+                <CompanionSprite
+                  companion={companion}
+                  size={56}
+                  mood={companion === "sendo" ? "happy" : "proud"}
+                />
                 <div>
-                  <span>{t("iella-companion")}</span>
+                  <span>{t(selectedCompanion.kickerKey)} · {t(selectedCompanion.nameKey)}</span>
                   <strong>{t("profile-iella-badge", { level: levelName })}</strong>
                 </div>
               </div>
@@ -360,6 +386,16 @@ export function ProfileScreen({
             </Card>
           ) : (
             <>
+              {!visitor ? (
+                <CompanionPicker
+                  companion={companion}
+                  sendoUnlocked={sendoUnlocked}
+                  sendoPreview={sendoPreview}
+                  onSelect={onCompanionChange}
+                  onPreviewSendo={onSendoPreview}
+                />
+              ) : null}
+
               <div className="profile-overview">
                 <Card tone="plain" className="profile-stat-card">
                   <span className="profile-stat-label">{t("stats-mastered")}</span>

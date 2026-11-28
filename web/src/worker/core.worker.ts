@@ -124,6 +124,14 @@ function callCore(core: WasmCore, request: CoreRequest): JsonValue {
           request.nowMs,
         ),
       );
+    case "bookCoverage":
+      return parseWasm(
+        core.bookCoverage(
+          request.bookJson,
+          request.snapshotJson,
+          request.nowMs,
+        ),
+      );
     case "placementAnswer":
       return parseWasm(
         core.placementAnswer(

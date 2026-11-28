@@ -72,6 +72,13 @@ export type CoreRequest =
     }
   | {
       id: number;
+      method: "bookCoverage";
+      bookJson: string;
+      snapshotJson: string;
+      nowMs: number;
+    }
+  | {
+      id: number;
       method: "placementAnswer";
       bundleJson: string;
       snapshotJson: string;
@@ -165,6 +172,12 @@ export function isCoreRequest(value: unknown): value is CoreRequest {
         typeof value["bundleJson"] === "string" &&
         typeof value["snapshotJson"] === "string" &&
         typeof value["placementJson"] === "string" &&
+        isFiniteNumber(value["nowMs"])
+      );
+    case "bookCoverage":
+      return (
+        typeof value["bookJson"] === "string" &&
+        typeof value["snapshotJson"] === "string" &&
         isFiniteNumber(value["nowMs"])
       );
     case "placementAnswer":

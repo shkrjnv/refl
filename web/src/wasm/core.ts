@@ -1,4 +1,5 @@
 import init, {
+  book_coverage,
   check_answer,
   check_bundle_compatibility,
   core_info,
@@ -28,5 +29,6 @@ export async function loadWasmCore(): Promise<WasmCore> {
     placementStart: placement_start,
     placementNext: placement_next,
     placementAnswer: placement_answer,
+    bookCoverage: book_coverage,
   };
 }

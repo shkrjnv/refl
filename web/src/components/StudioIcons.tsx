@@ -2,6 +2,11 @@ import type { ReactNode } from "react";
 
 export type StudioIconName =
   | "today"
+  | "vocabulary"
+  | "library"
+  | "graph"
+  | "bookmark"
+  | "note"
   | "practice"
   | "progress"
   | "settings"
@@ -44,6 +49,43 @@ function paths(name: StudioIconName): ReactNode {
           <path d="M7 18a5 5 0 0 1 10 0" />
           <circle cx="12" cy="9" r="3.1" />
           <path d="M12 3.2v1.7M5.8 5.4 7 6.6M18.2 5.4 17 6.6M3.4 11.5h1.7M18.9 11.5h1.7" />
+        </>
+      );
+    case "vocabulary":
+      return (
+        <>
+          <path d="M4.2 18.6 9 4.2h1.4l4.8 14.4" />
+          <path d="M6.3 13.4h6.2" />
+          <path d="M15.7 10.2c1.6-.5 3.2-.2 3.8.2v7.1c-.8-.4-2.2-.6-3.8-.1" />
+        </>
+      );
+    case "library":
+      return (
+        <>
+          <path d="M4 4.4h4.4v15H4zM10 4.4h4v15h-4z" />
+          <path d="m15.5 5.4 2.8-.8 2.2 14.4-2.8.8z" />
+        </>
+      );
+    case "graph":
+      return (
+        <>
+          <circle cx="6" cy="6" r="2.4" />
+          <circle cx="18" cy="8" r="2.4" />
+          <circle cx="10" cy="18" r="2.4" />
+          <path d="m8.2 6.6 7.6 1M7.4 8.1l1.8 7.6M16.4 10.1l-4.9 6.1" />
+        </>
+      );
+    case "bookmark":
+      return (
+        <>
+          <path d="M6 3.5h12v17l-6-3.6-6 3.6z" />
+        </>
+      );
+    case "note":
+      return (
+        <>
+          <path d="M5 3.5h11l3 3v14H5z" />
+          <path d="M16 3.5v3h3M8 11h8M8 15h8M8 7h4" />
         </>
       );
     case "practice":

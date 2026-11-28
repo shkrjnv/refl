@@ -73,6 +73,11 @@ function profileProps(): ProfileScreenProps {
     onResetCache: async () => undefined,
     adminApi: null,
     onLogout: () => undefined,
+    companion: "iella",
+    sendoUnlocked: false,
+    sendoPreview: false,
+    onCompanionChange: () => undefined,
+    onSendoPreview: () => undefined,
   };
 }
 

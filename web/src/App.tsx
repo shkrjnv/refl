@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   ApiClient,
@@ -8,6 +8,19 @@ import {
   type ProfileResponse,
 } from "./api/client";
 import { AppShell, type AppRoute } from "./components/AppShell";
+import {
+  readCompanion,
+  readSendoPreview,
+  sendoUnlocked,
+  storeCompanion,
+  storeSendoPreview,
+  type CompanionId,
+} from "./companions/registry";
+import { BOOKS } from "./prototype/books";
+import { RecordStore } from "./prototype/records";
+import { VocabularyScreen } from "./screens/VocabularyScreen";
+import { LibraryScreen } from "./screens/LibraryScreen";
+import { GraphScreen } from "./screens/GraphScreen";
 import { Button, Card } from "./components/ui";
 import {
   LearnerStorage,
@@ -139,6 +152,10 @@ export function App({ initialTheme, initialSkin }: AppProps) {
   const [activity, setActivity] = useState<ActivitySummary>(() =>
     activitySummary([], null),
   );
+  const [companion, setCompanion] = useState<CompanionId>(() => readCompanion());
+  const [sendoPreview, setSendoPreview] = useState(() => readSendoPreview());
+  const [sendoCoverage, setSendoCoverage] = useState<number | null>(null);
+  const [recordsWriter, setRecordsWriter] = useState<RecordStore | null>(null);
   const placementAvailable = useMemo(
     () =>
       content !== null &&
@@ -195,6 +212,66 @@ export function App({ initialTheme, initialSkin }: AppProps) {
       coreRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    const core = coreRef.current;
+    if (!identity || !storage || !content || !core) {
+      setRecordsWriter(null);
+      return;
+    }
+    setRecordsWriter(
+      new RecordStore({
+        storage,
+        core,
+        content,
+        learnerId: identity.learnerId,
+        clock: clockRef.current,
+      }),
+    );
+  }, [identity, storage, content]);
+
+  useEffect(() => {
+    const core = coreRef.current;
+    if (!stateJson || !core || BOOKS.length === 0) {
+      setSendoCoverage(null);
+      return;
+    }
+    let cancelled = false;
+    const book = BOOKS[0];
+    if (!book) {
+      return;
+    }
+    void core
+      .bookCoverage(book.json, stateJson, Date.now())
+      .then((result) => {
+        if (!cancelled) {
+          setSendoCoverage(
+            result.coverage.total_tokens === 0
+              ? null
+              : Math.round(result.coverage.percent * 100),
+          );
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSendoCoverage(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [stateJson]);
+
+  const bookCoverage = useCallback(
+    (bookJson: string, snapshotJson: string, nowMs: number) => {
+      const core = coreRef.current;
+      if (!core) {
+        return Promise.reject(new Error("the local core is unavailable"));
+      }
+      return core.bookCoverage(bookJson, snapshotJson, nowMs);
+    },
+    [],
+  );
 
   useEffect(() => {
     const markOnline = () => setStatus((current) => ({ ...current, online: true }));
@@ -276,6 +353,42 @@ export function App({ initialTheme, initialSkin }: AppProps) {
       pendingOutbox: outbox.filter((event) => event.status === "pending").length,
       rejectedOutbox: outbox.filter((event) => event.status === "rejected").length,
     }));
+  };
+
+  const handleStateChange = (next: string) => {
+    setStateJson(next);
+    const store = storageRef.current;
+    if (store) {
+      void refreshLocalState(store);
+    }
+  };
+
+  const sendoIsUnlocked = sendoUnlocked(sendoCoverage);
+
+  const changeCompanion = async (next: CompanionId) => {
+    if (next === "sendo" && !sendoIsUnlocked) {
+      return;
+    }
+    setCompanion(next);
+    storeCompanion(next);
+    const writer = recordsWriter;
+    if (writer && stateJson) {
+      try {
+        handleStateChange(await writer.selectCompanion(stateJson, next));
+      } catch {
+        // The local choice still applies; the event retries with the next write.
+      }
+    }
+  };
+
+  const toggleSendoPreview = () => {
+    const next = !sendoPreview;
+    setSendoPreview(next);
+    storeSendoPreview(next);
+  };
+
+  const practiceKc = () => {
+    void startLesson(15);
   };
 
   const syncNow = async (): Promise<boolean> => {
@@ -851,11 +964,48 @@ export function App({ initialTheme, initialSkin }: AppProps) {
       navigationPosition={layout.nav}
       onIellaActivate={replayTour}
       lessonAvailable={runner !== null}
+      companion={companion}
     >
       {actionError ? (
         <p className="inline-alert danger" role="alert">
           {actionError}
         </p>
+      ) : null}
+      {route === "vocabulary" ? (
+        recordsWriter && stateJson ? (
+          <VocabularyScreen
+            content={content}
+            stateJson={stateJson}
+            locale={locale}
+            recordsWriter={recordsWriter}
+            onStateChange={handleStateChange}
+          />
+        ) : null
+      ) : null}
+      {route === "library" ? (
+        recordsWriter && stateJson ? (
+          <LibraryScreen
+            content={content}
+            stateJson={stateJson}
+            locale={locale}
+            recordsWriter={recordsWriter}
+            onStateChange={handleStateChange}
+            bookCoverage={bookCoverage}
+            onPractice={practiceKc}
+          />
+        ) : null
+      ) : null}
+      {route === "graph" ? (
+        recordsWriter && stateJson ? (
+          <GraphScreen
+            content={content}
+            stateJson={stateJson}
+            locale={locale}
+            recordsWriter={recordsWriter}
+            onStateChange={handleStateChange}
+            onPractice={practiceKc}
+          />
+        ) : null
       ) : null}
       {route === "today" ? (
         <TodayScreen
@@ -869,6 +1019,9 @@ export function App({ initialTheme, initialSkin }: AppProps) {
           onOpenStats={() => setRoute("stats")}
           tourOpen={tourOpen}
           onTourComplete={() => setTourOpen(false)}
+          companion={companion}
+          recordsWriter={recordsWriter}
+          onStateChange={handleStateChange}
         />
       ) : null}
       {route === "lesson" && runner && lessonView ? (
@@ -877,6 +1030,9 @@ export function App({ initialTheme, initialSkin }: AppProps) {
           initialView={lessonView}
           onViewChange={setLessonView}
           onComplete={handleLessonComplete}
+          recordsWriter={recordsWriter}
+          stateJson={stateJson ?? undefined}
+          onStateChange={handleStateChange}
           onExit={() => {
             runner?.finish();
             coreRef.current?.updates.endSession();
@@ -936,6 +1092,11 @@ export function App({ initialTheme, initialSkin }: AppProps) {
           adminApi={api}
           onLogout={() => void handleLogout()}
           onSyncNow={() => syncNow()}
+          companion={companion}
+          sendoUnlocked={sendoIsUnlocked}
+          sendoPreview={sendoPreview}
+          onCompanionChange={(next) => void changeCompanion(next)}
+          onSendoPreview={toggleSendoPreview}
         />
       ) : null}
     </AppShell>

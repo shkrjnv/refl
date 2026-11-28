@@ -20,6 +20,8 @@ import {
   type PaletteName,
 } from "../theme/tokens";
 import { AdminAccessSection } from "./AdminAccessSection";
+import { CompanionPicker } from "../components/CompanionPicker";
+import type { CompanionId } from "../companions/registry";
 
 export type SettingsTab = "appearance" | "account" | "offline" | "admin";
 
@@ -46,6 +48,11 @@ export interface SettingsScreenProps {
   learnerId?: string;
   onLogout?: () => void;
   onSyncNow?: () => Promise<boolean>;
+  companion?: CompanionId;
+  sendoUnlocked?: boolean;
+  sendoPreview?: boolean;
+  onCompanionChange?: (companion: CompanionId) => void;
+  onSendoPreview?: () => void;
 }
 
 interface SettingsTabItem {
@@ -96,6 +103,11 @@ export function SettingsScreen({
   learnerId,
   onLogout,
   onSyncNow,
+  companion,
+  sendoUnlocked = false,
+  sendoPreview = false,
+  onCompanionChange,
+  onSendoPreview,
 }: SettingsScreenProps) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<SettingsTab>("account");
@@ -317,6 +329,18 @@ export function SettingsScreen({
               </button>
             ))}
           </div>
+
+          {companion && onCompanionChange && onSendoPreview ? (
+            <Card tone="plain" className="settings-card">
+              <CompanionPicker
+                companion={companion}
+                sendoUnlocked={sendoUnlocked}
+                sendoPreview={sendoPreview}
+                onSelect={onCompanionChange}
+                onPreviewSendo={onSendoPreview}
+              />
+            </Card>
+          ) : null}
 
           <Card tone="plain" className="settings-card">
             <h2>{t("settings-navigation-title")}</h2>
