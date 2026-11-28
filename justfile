@@ -68,6 +68,12 @@ dev:
     fi
     sqlx migrate run --source server/migrations --no-dotenv
 
+    # A fresh database has no active bundle. Build and import the current
+    # content pair before the server starts, so the first visit can fetch the
+    # exact bundle + SCOWL dictionary the client verifies and caches.
+    cargo run --locked --quiet -p content-build -- content --out target/bundle.json
+    cargo run --locked --quiet -p refl-server -- import-bundle target/bundle.json
+
     server_pid=""
     web_pid=""
     cleanup() {
@@ -231,6 +237,16 @@ missing:
 # Check content/ and write the bundle to target/bundle.json
 content:
     cargo run --locked --quiet -p content-build -- content --out target/bundle.json
+
+# Build the bundle + SCOWL dictionary and make that pair the active content.
+# Idempotent; `just dev` runs it before starting the server so a fresh database
+# can serve /v1/content/active and /v1/content/lexicon/{version}.
+seed-content:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export DATABASE_URL="${REFL_DATABASE_URL:-postgres://refl@127.0.0.1:5433/refl}"
+    cargo run --locked --quiet -p content-build -- content --out target/bundle.json
+    cargo run --locked --quiet -p refl-server -- import-bundle target/bundle.json
 
 # Regenerate the committed TS types in web/src/generated/core/
 bindings:

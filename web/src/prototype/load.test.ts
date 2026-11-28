@@ -62,14 +62,21 @@ async function pair(): Promise<{
 }
 
 describe("bundled content loading", () => {
-  it("verifies and activates the exact bundle and dictionary pair", async () => {
+  it("cold start fetches, verifies and activates the exact bundle and dictionary pair", async () => {
     const bundle = await pair();
     const storage = await openStorage("pair-learner");
     const gate = new SessionUpdateGate();
     const manager = new ContentUpdateManager(storage, gate);
+    const calls: string[] = [];
     const api = {
-      activeContent: async () => bundle.active,
-      lexicon: async () => bundle.lexicon,
+      activeContent: async () => {
+        calls.push("active");
+        return bundle.active;
+      },
+      lexicon: async (version: string) => {
+        calls.push(`lexicon:${version}`);
+        return bundle.lexicon;
+      },
     };
 
     const loaded = await loadPrototypeContent(
@@ -84,6 +91,63 @@ describe("bundled content loading", () => {
     expect((await storage.getActiveContent())?.dictionary.text).toBe(
       bundle.lexicon.text,
     );
+    expect((await storage.getActiveContent())?.bundle_digest).toBe(
+      bundle.active.digest,
+    );
+    expect(await storage.getStagedContent()).toBeNull();
+    expect(calls).toEqual(["active", `lexicon:${bundle.lexicon.version}`]);
+  });
+
+  it("uses a cached pair on the next start without a request", async () => {
+    const bundle = await pair();
+    const storage = await openStorage("cached-learner");
+    const gate = new SessionUpdateGate();
+    const manager = new ContentUpdateManager(storage, gate);
+    const api = {
+      activeContent: async () => bundle.active,
+      lexicon: async () => bundle.lexicon,
+    };
+    await loadPrototypeContent(api, storage, manager, async () => true);
+
+    let requests = 0;
+    const loaded = await loadPrototypeContent(
+      {
+        activeContent: async () => {
+          requests += 1;
+          return bundle.active;
+        },
+        lexicon: async () => {
+          requests += 1;
+          return bundle.lexicon;
+        },
+      },
+      storage,
+      manager,
+      async () => true,
+    );
+
+    expect(loaded.fromCache).toBe(true);
+    expect(loaded.content.lexiconText).toBe(bundle.lexicon.text);
+    expect(requests).toBe(0);
+  });
+
+  it("leaves no active pair when the dictionary download fails", async () => {
+    const bundle = await pair();
+    const storage = await openStorage("atomic-learner");
+    const gate = new SessionUpdateGate();
+    const manager = new ContentUpdateManager(storage, gate);
+    const api = {
+      activeContent: async () => bundle.active,
+      lexicon: async () => {
+        throw new Error("offline before the dictionary");
+      },
+    };
+
+    await expect(
+      loadPrototypeContent(api, storage, manager, async () => true),
+    ).rejects.toThrow("dictionary");
+
+    expect(await storage.getActiveContent()).toBeNull();
     expect(await storage.getStagedContent()).toBeNull();
   });
 

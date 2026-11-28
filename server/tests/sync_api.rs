@@ -402,6 +402,11 @@ async fn pull_paginates_by_server_seq(c: &Cluster) {
 
 async fn active_content(c: &Cluster) {
     let db = migrated(c, "sync_content").await;
+    let app = test_app(db.clone());
+    // Cold start: the database has migrations but no imported pair yet.
+    let (status, _) = get(app.clone(), "/v1/content/active").await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../content");
     let out = content_build::build(&content_build::Options::new(root)).unwrap();
     let bundle = out.bundle.unwrap_or_else(|| panic!("{}", out.report));
@@ -412,7 +417,6 @@ async fn active_content(c: &Cluster) {
     activate(&mut tx, &bundle.content_version.0).await.unwrap();
     tx.commit().await.unwrap();
 
-    let app = test_app(db.clone());
     let (status, response) = get(app.clone(), "/v1/content/active").await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
@@ -435,6 +439,11 @@ async fn active_content(c: &Cluster) {
         response["digest"],
         json!(sha256_hex(bundle_json.as_bytes()))
     );
+    // The served bundle names exactly the dictionary the client must fetch.
+    assert_eq!(
+        parsed["content"]["lexicon"]["version"],
+        json!(bundle.content.lexicon.version)
+    );
 
     let version = bundle.content.lexicon.version.clone();
     let (status, lexicon_response) =
@@ -444,6 +453,10 @@ async fn active_content(c: &Cluster) {
     assert_eq!(lexicon_response["sha256"], json!(version));
     assert_eq!(lexicon_response["words"], json!(lexicon.len()));
     assert_eq!(lexicon_response["text"].as_str(), Some(lexicon.as_str()));
+    assert_eq!(
+        lexicon_response["sha256"],
+        json!(sha256_hex(lexicon.as_str().as_bytes()))
+    );
     assert_eq!(
         lexicon_response["bytes"].as_u64(),
         Some(u64::try_from(lexicon.as_str().len()).unwrap())
