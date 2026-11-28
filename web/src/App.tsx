@@ -982,7 +982,7 @@ export function App({ initialTheme, initialSkin }: AppProps) {
   const activeRoute: AppRoute = route === "summary" ? "today" : route;
   // The account name comes from the server profile; until it arrives, or when
   // the learner never set one, the UI falls back to a neutral greeting.
-  const learnerLabel = serverProfile?.display_name.trim() ?? "";
+  const learnerLabel = serverProfile?.display_name?.trim() ?? "";
 
   return (
     <AppShell
