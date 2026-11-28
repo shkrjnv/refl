@@ -5,6 +5,7 @@
 //! older versions are lifted to the current one by upcasters before
 //! deserialization. Corrections are new events (`reclassified`), never edits.
 
+use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::fmt;
@@ -14,7 +15,7 @@ use serde_json::Value;
 use crate::content::ExplanationDepth;
 use crate::ids::{
     AchievementId, ContentVersion, EventId, ExplanationId, ItemRef, KcId, LearnerId, LessonId,
-    MisconceptionId, PackageKey, SessionId, UserId,
+    MisconceptionId, PackageKey, SessionId, SubjectId, UserId,
 };
 use crate::unlock::{
     AchievementTier, CosmeticSlot, Milestone, ShowcaseKeys, ShowcaseKind, UnlockKind, UnlockSource,
@@ -95,12 +96,35 @@ pub struct Event {
     pub payload: EventPayload,
 }
 
+/// Why a placement result was recorded: the learner chose to start from
+/// zero (or the check decided they should), or the check measured a level.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename_all = "snake_case"))]
+#[serde(rename_all = "snake_case")]
+pub enum PlacementSource {
+    StartFromZero,
+    Diagnostic,
+}
+
+/// The starting level per subject chosen by the entry step or the placement
+/// check (`docs/04-placement-planner.md`). The fold merges it into
+/// `Profile.start_level`, so the log is the single source of truth.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct PlacementCompletedEvent {
+    pub start_level: BTreeMap<SubjectId, Finite>,
+    pub answered: u16,
+    pub source: PlacementSource,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum EventPayload {
     Answer(AnswerEvent),
     Reclassified(ReclassifiedEvent),
+    /// The entry step or the placement check fixed a starting level.
+    PlacementCompleted(PlacementCompletedEvent),
     LessonStarted {
         lesson: LessonId,
     },
@@ -181,6 +205,7 @@ impl EventPayload {
         match self {
             Self::Answer(_) => "answer",
             Self::Reclassified(_) => "reclassified",
+            Self::PlacementCompleted(_) => "placement_completed",
             Self::LessonStarted { .. } => "lesson_started",
             Self::LessonFinished { .. } => "lesson_finished",
             Self::ExplanationViewed { .. } => "explanation_viewed",
@@ -549,6 +574,7 @@ pub struct WritingScoredEvent {
 pub const EVENT_TYPES: &[&str] = &[
     "answer",
     "reclassified",
+    "placement_completed",
     "lesson_started",
     "lesson_finished",
     "explanation_viewed",

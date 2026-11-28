@@ -23,6 +23,7 @@ pub mod kind;
 pub mod lesson;
 pub mod lexicon;
 pub mod model;
+pub mod placement;
 pub mod plan;
 pub mod projection;
 pub mod rng;

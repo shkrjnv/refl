@@ -32,7 +32,7 @@ use crate::ids::{ExplanationId, ItemRef, KcId, MisconceptionId, SubjectId};
 use crate::item::KcRole;
 use crate::projection::ItemProjection;
 use crate::subject::Subject;
-use crate::value::Timestamp;
+use crate::value::{Finite, Timestamp};
 
 pub(super) const DAY_MS: i64 = 86_400_000;
 
@@ -1021,6 +1021,24 @@ impl LearnerModel for KnowledgeModel {
                     self.mark_known(s, ctx.bundle, kc, e.client_ts);
                 }
                 // Plan changes and disputed verdicts are not the model's.
+                Applied::Skipped
+            }
+            EventPayload::PlacementCompleted(p) => {
+                // Merge per subject; a later placement for one subject keeps
+                // another. Clamp to the subject's scale when it exists.
+                for (subject_id, level) in &p.start_level {
+                    let Some(subject) = subject(ctx.bundle, subject_id) else {
+                        continue;
+                    };
+                    let max = f64::from(
+                        u16::try_from(subject.scale.levels.len())
+                            .unwrap_or(u16::MAX)
+                            .saturating_sub(1),
+                    );
+                    if let Some(level) = Finite::new(level.get().clamp(0.0, max)) {
+                        s.profile.start_level.insert(subject_id.clone(), level);
+                    }
+                }
                 Applied::Skipped
             }
             // Applied through the corrections, in the place of the answer.

@@ -6,13 +6,14 @@
 
 use refl_core::bundle::{BUNDLE_FORMAT_VERSION, Bundle};
 use refl_core::event::{CURRENT_SCHEMA_VERSION, Decoded, Response, decode_event};
-use refl_core::ids::ItemRef;
+use refl_core::ids::{ItemRef, SubjectId};
 use refl_core::kind::{CheckCtx, CheckOutcome, Compiled, ItemKind};
 use refl_core::lexicon::Lexicon;
 use refl_core::model::fold_version::FOLD_INPUTS_FORMAT;
 use refl_core::model::{
     Families, FoldCtx, KnowledgeModel, LearnerModel, Profile, State, event_id, replay,
 };
+use refl_core::placement::{self, Placement, PlacementNext};
 use refl_core::plan::{
     Answered, Budget, History, Next, Outcome, Params, Plan, Planner, ReadingSpeed,
 };
@@ -337,6 +338,146 @@ fn plan(
 #[wasm_bindgen]
 pub fn plan_session(bundle_json: &str, snapshot_json: &str, now_ms: f64, budget_ms: f64) -> String {
     export(plan(bundle_json, snapshot_json, now_ms, budget_ms))
+}
+
+fn parse_placement(json: &str) -> Result<Placement, BridgeError> {
+    serde_json::from_str(json).map_err(|error| BridgeError::json(&error, "invalid_placement"))
+}
+
+fn placement_value(
+    bundle: &Bundle,
+    state: &State,
+    placement: &Placement,
+    now: Timestamp,
+) -> Result<Value, BridgeError> {
+    let model = KnowledgeModel::default();
+    match placement::next(&model, bundle, state, placement, now) {
+        PlacementNext::Item { item, slot } => Ok(json!({
+            "kind": "item",
+            "item": to_value(&item)?,
+            "slot": slot,
+            "placement": to_value(placement)?,
+        })),
+        PlacementNext::Done(result) => Ok(json!({
+            "kind": "done",
+            "placement": to_value(placement)?,
+            "level": to_value(&result.level)?,
+            "start_level": result.start_level,
+            "answered": result.answered,
+            "source": to_value(&result.source)?,
+        })),
+        PlacementNext::Unavailable => Ok(json!({
+            "kind": "unavailable",
+            "placement": to_value(placement)?,
+        })),
+    }
+}
+
+fn placement_start_inner(
+    bundle_json: &str,
+    snapshot_json: &str,
+    subject: &str,
+    now_ms: f64,
+) -> Result<Value, BridgeError> {
+    let bundle = parse_bundle(bundle_json)?;
+    let state = parse_state(snapshot_json)?;
+    let now = timestamp(now_ms)?;
+    let subject = SubjectId::new(subject)
+        .ok_or_else(|| BridgeError::new("invalid_subject", "subject is not a valid id"))?;
+    let placement = Placement {
+        subject,
+        asked: Vec::new(),
+        correct: 0,
+    };
+    placement_value(&bundle, &state, &placement, now)
+}
+
+#[wasm_bindgen]
+pub fn placement_start(
+    bundle_json: &str,
+    snapshot_json: &str,
+    subject: &str,
+    now_ms: f64,
+) -> String {
+    export(placement_start_inner(
+        bundle_json,
+        snapshot_json,
+        subject,
+        now_ms,
+    ))
+}
+
+fn placement_next_inner(
+    bundle_json: &str,
+    snapshot_json: &str,
+    placement_json: &str,
+    now_ms: f64,
+) -> Result<Value, BridgeError> {
+    let bundle = parse_bundle(bundle_json)?;
+    let state = parse_state(snapshot_json)?;
+    let now = timestamp(now_ms)?;
+    let placement = parse_placement(placement_json)?;
+    placement_value(&bundle, &state, &placement, now)
+}
+
+#[wasm_bindgen]
+pub fn placement_next(
+    bundle_json: &str,
+    snapshot_json: &str,
+    placement_json: &str,
+    now_ms: f64,
+) -> String {
+    export(placement_next_inner(
+        bundle_json,
+        snapshot_json,
+        placement_json,
+        now_ms,
+    ))
+}
+
+fn placement_answer_inner(
+    bundle_json: &str,
+    snapshot_json: &str,
+    placement_json: &str,
+    item_ref_json: &str,
+    slot: u16,
+    correct: bool,
+    now_ms: f64,
+) -> Result<Value, BridgeError> {
+    let bundle = parse_bundle(bundle_json)?;
+    let state = parse_state(snapshot_json)?;
+    let now = timestamp(now_ms)?;
+    let mut placement = parse_placement(placement_json)?;
+    let item: ItemRef = serde_json::from_str(item_ref_json)
+        .map_err(|error| BridgeError::json(&error, "invalid_item"))?;
+    if !placement::record(&bundle, &mut placement, item, slot, correct) {
+        return Err(BridgeError::new(
+            "invalid_placement_answer",
+            "item was already asked or is not an eligible checked item",
+        ));
+    }
+    placement_value(&bundle, &state, &placement, now)
+}
+
+#[wasm_bindgen]
+pub fn placement_answer(
+    bundle_json: &str,
+    snapshot_json: &str,
+    placement_json: &str,
+    item_ref_json: &str,
+    slot: u16,
+    correct: bool,
+    now_ms: f64,
+) -> String {
+    export(placement_answer_inner(
+        bundle_json,
+        snapshot_json,
+        placement_json,
+        item_ref_json,
+        slot,
+        correct,
+        now_ms,
+    ))
 }
 
 fn next(

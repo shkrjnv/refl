@@ -252,6 +252,41 @@ async fn push_is_idempotent(c: &Cluster) {
     db.close().await;
 }
 
+async fn placement_event_round_trips(c: &Cluster) {
+    let db = migrated(c, "sync_placement").await;
+    let app = test_app(db.clone());
+    let (learner, access, _refresh) = login(&app, "placement@example.com").await;
+    let mut placement = event(event_id(1), learner, now_ms());
+    placement["payload"] = json!({
+        "type": "placement_completed",
+        "start_level": { "en": 1.0 },
+        "answered": 4,
+        "source": "diagnostic",
+    });
+    let (status, response) = post(
+        app.clone(),
+        "/v1/sync",
+        sync_body(learner, &[placement], 0),
+        Some(&access),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(response["accepted"], json!([event_id(1).to_string()]));
+    assert_eq!(response["rejected"], json!([]));
+
+    let (status, pulled) = post(app, "/v1/sync", sync_body(learner, &[], 0), Some(&access)).await;
+    assert_eq!(status, StatusCode::OK);
+    let events = pulled["events"].as_array().unwrap();
+    let stored = events
+        .iter()
+        .find(|e| e["event_id"] == json!(event_id(1).to_string()))
+        .expect("the placement event is pulled");
+    assert_eq!(stored["payload"]["type"], json!("placement_completed"));
+    assert_eq!(stored["payload"]["start_level"]["en"], json!(1.0));
+    assert_eq!(stored["payload"]["source"], json!("diagnostic"));
+    db.close().await;
+}
+
 async fn sync_requires_access_token(c: &Cluster) {
     let db = migrated(c, "sync_auth").await;
     let app = test_app(db.clone());
@@ -420,6 +455,7 @@ fn sync_api() {
         .unwrap();
     rt.block_on(async {
         push_is_idempotent(&cluster).await;
+        placement_event_round_trips(&cluster).await;
         sync_requires_access_token(&cluster).await;
         old_core_is_rejected(&cluster).await;
         batch_limit_and_future_events(&cluster).await;

@@ -1,13 +1,16 @@
 //! Serialization round trips and byte-level determinism for the log and content types.
 
+use std::collections::BTreeMap;
+
 use proptest::prelude::*;
 use refl_core::content::{
     Edge, EdgeKind, Kc, L1Prior, L1Set, LangReviews, Misconception, MisconceptionOrigin,
 };
 use refl_core::event::{
     AnswerContext, AnswerEvent, Confidence, CriterionScore, EventPayload, HalfBands, InputDevice,
-    MentorOverrideEvent, OverrideKind, OverrideReason, PlanAction, PlanCandidate, PlanFactor,
-    PlanIssuedEvent, PlanScope, ReclassifiedEvent, Response, Verdict, WritingScoredEvent,
+    MentorOverrideEvent, OverrideKind, OverrideReason, PlacementCompletedEvent, PlacementSource,
+    PlanAction, PlanCandidate, PlanFactor, PlanIssuedEvent, PlanScope, ReclassifiedEvent, Response,
+    Verdict, WritingScoredEvent,
 };
 use refl_core::ids::{
     AchievementId, ContentVersion, DomainId, EventId, ExplanationId, ItemId, ItemRef, ItemVersion,
@@ -128,6 +131,25 @@ fn timing() -> impl Strategy<
     )
 }
 
+fn placement_payload() -> impl Strategy<Value = EventPayload> {
+    (0u16..=6, any::<u16>()).prop_map(|(level, answered)| {
+        let mut start_level = BTreeMap::new();
+        start_level.insert(
+            SubjectId::new("en").unwrap(),
+            Finite::new(f64::from(level)).unwrap(),
+        );
+        EventPayload::PlacementCompleted(PlacementCompletedEvent {
+            start_level,
+            answered,
+            source: if answered == 0 {
+                PlacementSource::StartFromZero
+            } else {
+                PlacementSource::Diagnostic
+            },
+        })
+    })
+}
+
 fn payload() -> impl Strategy<Value = EventPayload> {
     let answer = (
         (item_ref(), any::<u16>(), any::<u8>(), any::<bool>()),
@@ -203,9 +225,11 @@ fn payload() -> impl Strategy<Value = EventPayload> {
                 content_version: ContentVersion(v),
             })
         });
+    let placement = placement_payload();
     prop_oneof![
         answer,
         reclassified,
+        placement,
         slug(LessonId::new).prop_map(|lesson| EventPayload::LessonStarted { lesson }),
         slug(LessonId::new).prop_map(|lesson| EventPayload::LessonFinished { lesson }),
         (slug(ExplanationId::new), any::<u32>()).prop_map(|(explanation, seconds)| {

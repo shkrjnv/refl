@@ -169,3 +169,80 @@ fn plan_session_returns_a_plan_and_issued_decision() {
     assert!(session["plan"].is_object());
     assert!(session["issued"].is_object() || session["issued"].is_null());
 }
+
+#[test]
+fn placement_check_uses_live_items_and_finishes_with_a_level() {
+    let bundle = bundle_json();
+    let folded: Value =
+        serde_json::from_str(&refl_core_wasm::fold_state(&bundle, "", None, "[]")).unwrap();
+    let state = folded["snapshot"].to_string();
+    let mut result: Value = serde_json::from_str(&refl_core_wasm::placement_start(
+        &bundle,
+        &state,
+        "en",
+        1_700_000_000_000.0,
+    ))
+    .unwrap();
+    let mut answered = 0u64;
+    while result["kind"] == json!("item") {
+        let item = result["item"].clone();
+        let slot = result["slot"].as_u64().unwrap();
+        let placement = result["placement"].to_string();
+        result = serde_json::from_str(&refl_core_wasm::placement_answer(
+            &bundle,
+            &state,
+            &placement,
+            &item.to_string(),
+            u16::try_from(slot).unwrap(),
+            true,
+            1_700_000_000_000.0,
+        ))
+        .unwrap();
+        answered += 1;
+        assert!(answered <= 10, "the check must stop at ten items");
+    }
+    assert_eq!(result["kind"], json!("done"));
+    assert!(result["start_level"].as_f64().unwrap().is_finite());
+    assert!(result["answered"].as_u64().unwrap() >= 3);
+    assert_eq!(result["source"], json!("diagnostic"));
+}
+
+#[test]
+fn placement_completed_updates_the_profile_and_matches_replay() {
+    let bundle = bundle_json();
+    let event = json!({
+        "schema_version": 2,
+        "event_id": "01930000-0000-7000-8000-000000000011",
+        "learner_id": "01930000-0000-7000-8000-0000000000aa",
+        "session_id": null,
+        "client_ts": 1_700_000_000_000_i64,
+        "server_ts": null,
+        "payload": {
+            "type": "placement_completed",
+            "start_level": { "en": 1.0 },
+            "answered": 4,
+            "source": "diagnostic",
+        },
+    });
+    let folded: Value = serde_json::from_str(&refl_core_wasm::fold_state(
+        &bundle,
+        "",
+        None,
+        &json!([event.clone()]).to_string(),
+    ))
+    .unwrap();
+    assert_eq!(
+        folded["snapshot"]["profile"]["start_level"]["en"],
+        json!(1.0)
+    );
+
+    let parsed: Bundle = serde_json::from_str(&bundle).unwrap();
+    let decoded = decode_event(&event.to_string()).unwrap();
+    let expected = replay(
+        &KnowledgeModel::default(),
+        &Profile::default(),
+        &parsed,
+        &[decoded],
+    );
+    assert_eq!(folded["snapshot"], serde_json::to_value(&expected).unwrap(),);
+}
