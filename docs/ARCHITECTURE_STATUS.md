@@ -145,8 +145,9 @@ unless `just book-relock` is run explicitly.
 - Five live Articles KCs, 27 draft A1 KCs, 18 misconceptions.
 - 13 reviewed A1–A2 starter lexemes with senses, definitions, glosses,
   examples, collocations and IPA.
-- One original A1 graded reader, `book.first-day`, compiled with stable
-  chapter/paragraph/sentence/token ids.
+- Three public-domain graded readers at A1, A2 and B1 (`book.aesop-lion-mouse`,
+  `book.aesop-north-wind-sun`, `book.ohenry-gift-magi`), compiled with stable
+  chapter/paragraph/sentence/token ids and attributed in `THIRD_PARTY.md`.
 - Every learner-facing text remains review-gated: draft KCs do not enter a
   session, and only reviewed explanations appear in the library.
 
@@ -156,7 +157,8 @@ unless `just book-relock` is run explicitly.
 | --- | --- |
 | Today | first-run entry, placement, Iella tour, level, session, activity, error notebook, private notes |
 | Vocabulary | search, FSRS status filters, senses, glosses, IPA, examples, focused review, personal words |
-| Library | live grammar reference (short/why/deep + L1 contrast), L1 traps & refutations, books, reader |
+| Library | live grammar reference (short/why/deep + L1 contrast), L1 traps & refutations, cover-first bookshelf with personal EPUB/PDF/TXT/Markdown uploads and compressed covers, clean reader |
+| Notes | full Markdown workspace with reader/editor, wiki links, outline, backlinks and a local graph; opened from Today, Library or an anchored drawer |
 | Graph | layered mobile map and web explorer, neighbourhood focus, model numbers, notes, practice |
 | Practice | lesson runner |
 | Progress | isometric CEFR chart, stats |
