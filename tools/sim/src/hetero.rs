@@ -26,16 +26,23 @@ use crate::cohort::difficulty_shift;
 use crate::{T0, TextReview, event_in, reindex, session};
 use refl_core::bundle::{Bundle, KcStatus};
 use refl_core::content::MisconceptionOrigin;
-use refl_core::event::{AnswerContext, AnswerEvent, EventPayload, InputDevice, Response, Verdict};
+use refl_core::event::{
+    AnswerContext, AnswerEvent, Decoded, EventPayload, InputDevice, Response, Verdict,
+};
 use refl_core::ids::{DomainId, FamilyId, ItemRef, KcId, MisconceptionId, SubjectId};
 use refl_core::item::{ItemStatus, KcRole};
 use refl_core::model::{
-    Families, FoldCtx, KnowledgeModel, LearnerModel, NativeLanguage, Profile, State, math::sigmoid,
+    Applied, Families, FoldCtx, KnowledgeModel, LearnerModel, NativeLanguage, Profile, State,
+    math::sigmoid,
 };
 use refl_core::placement::{self, Placement};
+use refl_core::plan::{
+    Answered, Budget, History, Next, Outcome as PlanOutcome, Params, Plan, Planner, ReadingSpeed,
+};
 use refl_core::projection::{ItemProjection, ItemVersionEntry};
 use refl_core::rng::SplitMix64;
 use refl_core::value::Timestamp;
+use refl_core::value::{Lang, Seed};
 
 const DAY_MS: i64 = 86_400_000;
 const CHECKPOINTS: [usize; 4] = [30, 60, 100, 200];
@@ -610,10 +617,9 @@ impl SimLearner {
                     *strength = (*strength + self.relapse).min(0.98);
                 }
             }
-            // S3 diagnosis includes the content's targeted remediation: after
-            // a wrong answer on a diagnosed L1 pattern, the micro-explanation
-            // is shown and the idea loses strength. S1/S2 only see correctness
-            // and do not get this remediation.
+            // The content's targeted remediation: after a wrong answer on a
+            // targeted L1 pattern the micro-explanation is shown and the idea
+            // loses strength. Which strategies receive it is `Remediation`.
             if remedy
                 && !correct
                 && let Some((mis, _)) = targeted.as_ref()
@@ -746,16 +752,145 @@ pub enum Strategy {
     Leitner,
     KcAdaptive,
     Full,
+    /// The product's own session planner from `refl-core` (`build_session`,
+    /// `next_item`, `adapt`), not a re-implementation in the simulator.
+    Product,
 }
 
 impl Strategy {
     pub const ALL: [Self; 3] = [Self::Leitner, Self::KcAdaptive, Self::Full];
+    pub const WITH_PRODUCT: [Self; 4] =
+        [Self::Leitner, Self::KcAdaptive, Self::Full, Self::Product];
 
     pub fn name(self) -> &'static str {
         match self {
             Self::Leitner => "S1 Leitner/linear",
             Self::KcAdaptive => "S2 KC-adaptive",
             Self::Full => "S3 full refl",
+            Self::Product => "S4 product planner",
+        }
+    }
+}
+
+/// Drives the real `refl-core` planner for one simulated learner: one
+/// 25-minute session at a time, lessons folded as `explanation_viewed`,
+/// every answer fed back through `adapt`.
+struct ProductPlanner<'a> {
+    planner: Planner<'a>,
+    plan: Option<Plan>,
+    history: History,
+    rng: SplitMix64,
+    extra: u64,
+}
+
+impl<'a> ProductPlanner<'a> {
+    fn new(planner: Planner<'a>, seed: u64) -> Self {
+        Self {
+            planner,
+            plan: None,
+            history: History::default(),
+            rng: SplitMix64::new(seed),
+            extra: 0,
+        }
+    }
+
+    fn seed(&mut self) -> Seed {
+        Seed::new(self.rng.next_u64() >> 11).expect("53 bits")
+    }
+
+    /// An event id tail that cannot collide with the answer tails.
+    fn tail(&mut self) -> u64 {
+        self.extra += 1;
+        (1 << 40) + self.extra
+    }
+
+    /// The next slot the planner shows at `at`; lessons on the way are
+    /// folded into `state` just before `at`.
+    #[allow(clippy::too_many_arguments)]
+    fn choose(
+        &mut self,
+        bundle: &Bundle,
+        state: &mut State,
+        model: &KnowledgeModel,
+        ctx: &FoldCtx<'_>,
+        slot_index: &BTreeMap<(ItemRef, u16), usize>,
+        at: Timestamp,
+    ) -> Option<usize> {
+        let mut fresh_sessions = 0;
+        let mut lesson_offset = 0i64;
+        for _ in 0..256 {
+            if self.plan.is_none() {
+                let seed = self.seed();
+                let session = self.planner.build_session(
+                    state,
+                    &self.history,
+                    at,
+                    Budget::TwentyFive,
+                    Lang::Ru,
+                    seed,
+                );
+                self.plan = Some(session.plan);
+                fresh_sessions += 1;
+            }
+            let seed = self.seed();
+            let plan = self.plan.clone()?;
+            match self
+                .planner
+                .next_item(state, &plan, &self.history, at, seed)
+            {
+                Next::Finished { .. } => {
+                    self.plan = None;
+                    if fresh_sessions >= 2 {
+                        return None;
+                    }
+                }
+                Next::Lesson { explanation, .. } => {
+                    let e = bundle
+                        .content
+                        .explanations
+                        .iter()
+                        .find(|e| e.id == explanation)
+                        .expect("the lesson's explanation is in the bundle");
+                    lesson_offset += 1;
+                    let tail = self.tail();
+                    let event = event_in(
+                        Some(session(1)),
+                        Timestamp(at.0 - 1_000 + lesson_offset),
+                        tail,
+                        EventPayload::ExplanationViewed {
+                            explanation: e.id.clone(),
+                            depth: e.depth,
+                            seconds: 60,
+                        },
+                    );
+                    model
+                        .apply(state, &event, ctx)
+                        .expect("the lesson is folded in order");
+                    let adapted = self.planner.adapt(state, &plan, &PlanOutcome::Lesson, at);
+                    self.plan = Some(adapted.plan);
+                }
+                Next::Item(choice) => {
+                    return slot_index.get(&(choice.item.clone(), choice.slot)).copied();
+                }
+            }
+        }
+        None
+    }
+
+    fn answered(
+        &mut self,
+        bundle: &Bundle,
+        state: &State,
+        event: &Decoded,
+        answered: &Answered,
+        at: Timestamp,
+    ) {
+        self.history.record(bundle, event);
+        if let Some(plan) = self.plan.as_ref() {
+            let adapted =
+                self.planner
+                    .adapt(state, plan, &PlanOutcome::Answer(answered.clone()), at);
+            self.plan = Some(adapted.plan);
         }
     }
 }
@@ -898,6 +1033,8 @@ impl Selector {
                 }
                 best.map(|(i, _)| i)
             }
+            // Chosen by `ProductPlanner`, never by the selector.
+            Strategy::Product => None,
         }
     }
 
@@ -1014,11 +1151,44 @@ impl Selector {
     }
 }
 
+/// Who gets the content's micro-explanation after a wrong answer on a
+/// targeted L1 pattern.
+///
+/// The micro-explanation is content, not planning: the client shows it after
+/// such an answer whatever chose the item. `AllStrategies` is therefore the
+/// fair comparison of planners. `FullOnly` reproduces the first v2 report,
+/// where only S3 received it and the misconception gap was largely built in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Remediation {
+    AllStrategies,
+    FullOnly,
+}
+
+impl Remediation {
+    #[must_use]
+    pub fn applies_to(self, strategy: Strategy) -> bool {
+        match self {
+            Self::AllStrategies => true,
+            Self::FullOnly => strategy == Strategy::Full,
+        }
+    }
+
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::AllStrategies => "all strategies",
+            Self::FullOnly => "S3 only (v2 as first published)",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct RunSpec {
     pub learners: usize,
     pub steps: usize,
     pub seed: u64,
+    pub remediation: Remediation,
+    pub strategies: &'static [Strategy],
 }
 
 #[derive(Debug, Clone)]
@@ -1088,8 +1258,10 @@ pub fn run(bundle: &Bundle, label: &str, spec: RunSpec) -> BundleRun {
         .map(|(i, s)| ((s.item.clone(), s.slot), i))
         .collect();
 
+    let params = Params::default();
+    let reading_speed = ReadingSpeed::default();
     let mut strategies = Vec::new();
-    for strategy in Strategy::ALL {
+    for &strategy in spec.strategies {
         let mut outcomes = Vec::new();
         let mut placement_outcomes = Vec::new();
         for learner_index in 0..spec.learners {
@@ -1105,6 +1277,12 @@ pub fn run(bundle: &Bundle, label: &str, spec: RunSpec) -> BundleRun {
                 .collect();
             let mut learner = base.clone();
             let mut selector = Selector::new(strategy, bundle, &specs, base.l1, spec.seed);
+            let mut product = (strategy == Strategy::Product).then(|| {
+                ProductPlanner::new(
+                    Planner::new(&model, bundle, &params, &reading_speed),
+                    spec.seed ^ (learner_index as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15),
+                )
+            });
             let mut state = model.init(&profile);
             let mut mastery_step = BTreeMap::new();
             let active_initial = learner.active_count();
@@ -1113,21 +1291,38 @@ pub fn run(bundle: &Bundle, label: &str, spec: RunSpec) -> BundleRun {
             let mut at = T0;
             for step in 0..spec.steps {
                 at = learner.next_time(step);
-                let Some(index) = selector.choose(bundle, &state, &model, &specs, step, at) else {
+                let chosen = match product.as_mut() {
+                    Some(product) => {
+                        product.choose(bundle, &mut state, &model, &ctx, &slot_index, at)
+                    }
+                    None => selector.choose(bundle, &state, &model, &specs, step, at),
+                };
+                let Some(index) = chosen else {
                     break;
                 };
                 let slot = &specs[index];
-                let (answer, correct, _, remediated) =
-                    learner.answer(bundle, slot, at, false, strategy == Strategy::Full);
+                let (answer, correct, _, remediated) = learner.answer(
+                    bundle,
+                    slot,
+                    at,
+                    false,
+                    spec.remediation.applies_to(strategy),
+                );
+                let answer_copy = product.is_some().then(|| answer.clone());
                 let event = event_in(
                     Some(session(1)),
                     at,
                     u64::try_from(step).unwrap_or(0),
                     EventPayload::Answer(answer),
                 );
-                model
+                let applied = model
                     .apply(&mut state, &event, &ctx)
                     .expect("events are folded in order");
+                if let (Some(product), Some(answer), Applied::Answer(outcome)) =
+                    (product.as_mut(), answer_copy.as_ref(), &applied)
+                {
+                    product.answered(bundle, &state, &event, &Answered::new(answer, outcome), at);
+                }
                 if remediated {
                     let follow_at = Timestamp(at.0 + 1);
                     let (follow, _, _) = learner.remediation_follow_up(bundle, slot, follow_at);

@@ -4,7 +4,11 @@
 //!
 #![allow(clippy::cast_precision_loss)]
 
-//! `v2 [LIVE_BUNDLE] [FULL_BUNDLE] [LEARNERS] [SEED]`
+//! `v2 [LIVE_BUNDLE] [FULL_BUNDLE] [LEARNERS] [SEED] [all|s3-only]`
+//!
+//! The fifth argument says who gets the micro-explanation after a wrong
+//! answer on a targeted pattern (`Remediation`). `all` is the default and the
+//! fair comparison; `s3-only` reproduces the first published v2 report.
 
 use std::fmt::Write as _;
 use std::process::ExitCode;
@@ -12,7 +16,8 @@ use std::process::ExitCode;
 use refl_core::bundle::{Bundle, KcStatus};
 use refl_sim::DAY_MS;
 use refl_sim::hetero::{
-    BOOTSTRAP_RESAMPLES, BundleRun, Outcome, RunSpec, bootstrap_mean, promote, run,
+    BOOTSTRAP_RESAMPLES, BundleRun, Outcome, Remediation, RunSpec, Strategy, bootstrap_mean,
+    promote, run,
 };
 
 fn load(path: &str) -> Result<Bundle, String> {
@@ -134,11 +139,17 @@ fn kc_line(bundle: &Bundle, run: &BundleRun, kc: &refl_core::ids::KcId) -> Strin
             )
         })
         .collect();
+    let labels: Vec<&str> = run
+        .strategies
+        .iter()
+        .map(|r| r.strategy.name().split(' ').next().unwrap_or("?"))
+        .collect();
     format!(
-        "{}: bank {}/{} slots/families; S1/S2/S3 reach%/median-step {}; edges: {}",
+        "{}: bank {}/{} slots/families; {} reach%/median-step {}; edges: {}",
         kc.as_str(),
         run.bank.get(kc).copied().unwrap_or((0, 0)).0,
         run.bank.get(kc).copied().unwrap_or((0, 0)).1,
+        labels.join("/"),
         cells.join(", "),
         if edges.is_empty() {
             "none".into()
@@ -215,6 +226,14 @@ fn main() -> ExitCode {
         .unwrap_or_else(|| "target/bundle.json".to_owned());
     let learners: usize = arg(3, 1_000);
     let seed: u64 = arg(4, 1);
+    let remediation = match std::env::args().nth(5).as_deref() {
+        None | Some("all") => Remediation::AllStrategies,
+        Some("s3-only") => Remediation::FullOnly,
+        Some(other) => {
+            eprintln!("unknown remediation mode {other}; use all or s3-only");
+            return ExitCode::FAILURE;
+        }
+    };
 
     let Ok(live) = load(&live_path) else {
         eprintln!("cannot load {live_path}");
@@ -253,11 +272,22 @@ fn main() -> ExitCode {
             .count()
     );
     let _ = writeln!(out, "day_ms={DAY_MS}; mastery={MASTERY_LABEL}");
+    let _ = writeln!(
+        out,
+        "micro-explanation remediation: {}",
+        remediation.label()
+    );
     for steps in [200, 600] {
         let spec = RunSpec {
             learners,
             steps,
             seed,
+            remediation,
+            strategies: if remediation == Remediation::FullOnly {
+                &Strategy::ALL
+            } else {
+                &Strategy::WITH_PRODUCT
+            },
         };
         report_bundle(
             &mut out,
@@ -265,12 +295,20 @@ fn main() -> ExitCode {
             seed.wrapping_add(steps as u64),
             &live,
         );
+        // The product planner is left out on the draft fixture: its KCs have
+        // two items each, below the planner's block of four with an input
+        // step (docs/04), so every session would end at once. The live gate
+        // requires ten items per KC, so the product never meets such a KC.
+        let full_spec = RunSpec {
+            strategies: &Strategy::ALL,
+            ..spec
+        };
         report_bundle(
             &mut out,
             &run(
                 &full,
                 "full 32-KC A1 projection (draft content promoted)",
-                spec,
+                full_spec,
             ),
             seed.wrapping_add(steps as u64).wrapping_add(1),
             &full,

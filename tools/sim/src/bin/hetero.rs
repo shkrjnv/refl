@@ -9,7 +9,7 @@
 use std::process::ExitCode;
 
 use refl_core::bundle::{Bundle, KcStatus};
-use refl_sim::hetero::{RunSpec, promote, run};
+use refl_sim::hetero::{Remediation, RunSpec, Strategy, promote, run};
 
 fn arg<T: std::str::FromStr>(index: usize, default: T) -> T {
     std::env::args()
@@ -33,6 +33,11 @@ fn main() -> ExitCode {
     let learners: usize = arg(3, 1_000);
     let steps: usize = arg(4, 200);
     let seed: u64 = arg(5, 1);
+    let remediation = if std::env::args().nth(6).as_deref() == Some("s3-only") {
+        Remediation::FullOnly
+    } else {
+        Remediation::AllStrategies
+    };
 
     let live = match load(&live_path) {
         Ok(bundle) => bundle,
@@ -67,6 +72,8 @@ fn main() -> ExitCode {
         learners,
         steps,
         seed,
+        remediation,
+        strategies: &Strategy::ALL,
     };
     let live_report = run(&live, "live Articles sub-graph", spec);
     print!("{}", live_report.report());
