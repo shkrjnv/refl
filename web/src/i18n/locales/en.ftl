@@ -827,7 +827,6 @@ reader-size-l = L
 reader-size-xl = XL
 reader-line-height = Line height
 reader-measure = Measure
-reader-chapter-selector = Choose a chapter
 reader-annotations = Annotations
 reader-annotations-title = Saved in this book
 reader-annotations-empty = No highlights, bookmarks or notes in this book yet.
@@ -837,3 +836,18 @@ reader-annotation-jump = Go to passage
 reader-progress = Chapter { $chapter } / { $total } · { $percent }%
 reader-settings-close = Close settings
 reader-annotations-close = Close annotations
+reader-layout = Reading mode
+reader-layout-paged = Pages
+reader-layout-scroll = Scroll
+reader-toc = Contents
+reader-toc-title = Chapters and sections
+reader-toc-count = { $count ->
+    [one] 1 chapter
+   *[other] { $count } chapters
+}
+reader-toc-close = Close contents
+reader-page = Page { $page } of { $total }
+reader-chapter-position = Chapter { $chapter } of { $total }
+reader-page-prev = Previous page
+reader-page-next = Next page
+reader-next-chapter = Next chapter

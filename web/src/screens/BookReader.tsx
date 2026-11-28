@@ -1,9 +1,11 @@
 import {
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
 
 import { NotesPanel } from "../components/NotesPanel";
@@ -27,6 +29,7 @@ import {
   type RecordStore,
 } from "../prototype/records";
 import {
+  READER_LAYOUTS,
   READER_LINE_HEIGHTS,
   READER_MEASURES,
   READER_SIZES,
@@ -34,8 +37,10 @@ import {
   readReaderSettings,
   readerStyle,
   writeReaderSettings,
+  type ReaderLayout,
   type ReaderSettings,
 } from "../prototype/readerSettings";
+import { chapterSections, type ReaderSection } from "../prototype/readerToc";
 import {
   selectionSpans,
   sentenceParts,
@@ -82,6 +87,31 @@ interface BookSentenceLocation {
   chapterTitle: string;
 }
 
+/** Column geometry for paged reading, in CSS pixels. */
+interface PageGeometry {
+  columnWidth: number;
+  gap: number;
+  /** Visible width of one page (or a two-page spread). */
+  width: number;
+  height: number;
+  columns: 1 | 2;
+}
+
+const SWIPE_DISTANCE = 48;
+const SPREAD_GUTTER = 64;
+const PAGE_GUTTER = 48;
+
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  return (
+    target.isContentEditable ||
+    ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) ||
+    target.closest("[role='dialog']") !== null
+  );
+}
+
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.max(minimum, Math.min(maximum, value));
 }
@@ -115,9 +145,27 @@ export function BookReader({
   const [annotationsOpen, setAnnotationsOpen] = useState(false);
   const [progress, setProgress] = useState(0);
   const [jumpSentence, setJumpSentence] = useState<string | null>(null);
+  const [tocOpen, setTocOpen] = useState(false);
+  const [geometry, setGeometry] = useState<PageGeometry | null>(null);
+  const [page, setPage] = useState(0);
+  const [pageCount, setPageCount] = useState(1);
+  const [fontsVersion, setFontsVersion] = useState(0);
   const articleRef = useRef<HTMLElement | null>(null);
   const scrollRef = useRef<HTMLElement | null>(null);
-  const chapter = book.book.chapters[chapterIndex];
+  const pagedRef = useRef<HTMLElement | null>(null);
+  const pagesRef = useRef<HTMLDivElement | null>(null);
+  const probeRef = useRef<HTMLDivElement | null>(null);
+  const pendingPage = useRef<"start" | "end" | null>(null);
+  const pageRatio = useRef(0);
+  const swipe = useRef<{ x: number; y: number } | null>(null);
+  const paged = settings.layout === "paged";
+  const chapters = book.book.chapters;
+  const chapter = chapters[chapterIndex];
+  const sections = useMemo(
+    () => chapters.map((entry) => chapterSections(entry)),
+    [chapters],
+  );
+  const stride = geometry ? geometry.width + geometry.gap : 0;
   const marks = activeMarks(records, book.meta.id);
   const annotationMarks = useMemo(() => {
     const chapterOrder = new Map(
@@ -204,7 +252,7 @@ export function BookReader({
 
   useEffect(() => {
     const scroll = scrollRef.current;
-    if (!scroll) {
+    if (!scroll || paged) {
       return;
     }
     const update = () => {
@@ -224,7 +272,110 @@ export function BookReader({
       scroll.removeEventListener("scroll", update);
       observer?.disconnect();
     };
-  }, [chapterIndex, settings]);
+  }, [chapterIndex, settings, paged]);
+
+  // Paged geometry: one page per column (two on a wide screen), sized from
+  // the free space and the chosen measure. The probe resolves `--reader-measure`
+  // (in `ch` of the reading font) to pixels.
+  useLayoutEffect(() => {
+    const container = pagedRef.current;
+    if (!paged || !container) {
+      setGeometry(null);
+      return;
+    }
+    const update = () => {
+      const style = getComputedStyle(container);
+      const availableWidth =
+        container.clientWidth -
+        parseFloat(style.paddingLeft || "0") -
+        parseFloat(style.paddingRight || "0");
+      const availableHeight =
+        container.clientHeight -
+        parseFloat(style.paddingTop || "0") -
+        parseFloat(style.paddingBottom || "0");
+      if (availableWidth < 1 || availableHeight < 1) {
+        setGeometry(null);
+        return;
+      }
+      const measure = probeRef.current?.getBoundingClientRect().width || availableWidth;
+      const columns: 1 | 2 =
+        availableWidth >= measure * 2 + SPREAD_GUTTER ? 2 : 1;
+      const gap = columns === 2 ? SPREAD_GUTTER : PAGE_GUTTER;
+      const columnWidth = Math.floor(
+        columns === 2
+          ? Math.min(measure, (availableWidth - gap) / 2)
+          : Math.min(measure, availableWidth),
+      );
+      const next: PageGeometry = {
+        columnWidth,
+        gap,
+        width: columns * columnWidth + (columns - 1) * gap,
+        height: Math.floor(availableHeight),
+        columns,
+      };
+      setGeometry((current) =>
+        current &&
+        current.columnWidth === next.columnWidth &&
+        current.width === next.width &&
+        current.height === next.height &&
+        current.columns === next.columns
+          ? current
+          : next,
+      );
+    };
+    update();
+    const observer =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
+    observer?.observe(container);
+    return () => observer?.disconnect();
+  }, [paged, settings.measure, settings.size, fontsVersion]);
+
+  // Page count follows layout: the columns overflow sideways inside the
+  // fixed-height viewport, so its scroll width is the number of columns.
+  useLayoutEffect(() => {
+    const pages = pagesRef.current;
+    if (!paged || !pages || !geometry) {
+      setPageCount(1);
+      return;
+    }
+    const columns = Math.max(
+      1,
+      Math.round((pages.scrollWidth + geometry.gap) / (geometry.columnWidth + geometry.gap)),
+    );
+    const count = Math.max(1, Math.ceil(columns / geometry.columns));
+    setPageCount(count);
+    const pending = pendingPage.current;
+    pendingPage.current = null;
+    setPage(
+      pending === "end"
+        ? count - 1
+        : pending === "start"
+          ? 0
+          : Math.min(count - 1, Math.round(pageRatio.current * (count - 1))),
+    );
+  }, [paged, geometry, chapterIndex, settings.lineHeight, settings.size, fontsVersion]);
+
+  useEffect(() => {
+    pageRatio.current = pageCount > 1 ? page / (pageCount - 1) : 0;
+    const pages = pagesRef.current;
+    if (paged && pages && stride > 0) {
+      pages.scrollLeft = page * stride;
+    }
+  }, [page, pageCount, paged, stride]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void document.fonts?.ready
+      .then(() => {
+        if (!cancelled) {
+          setFontsVersion((value) => value + 1);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const scroll = scrollRef.current;
@@ -243,30 +394,139 @@ export function BookReader({
       return;
     }
     const frame = requestAnimationFrame(() => {
-      const node = scrollRef.current?.querySelector<HTMLElement>(
+      const root = paged ? pagesRef.current : scrollRef.current;
+      const node = root?.querySelector<HTMLElement>(
         `[data-sentence-id="${jumpSentence}"]`,
       );
-      if (typeof node?.scrollIntoView === "function") {
+      if (paged) {
+        if (node) {
+          setPage(pageOf(node));
+        }
+      } else if (typeof node?.scrollIntoView === "function") {
         node.scrollIntoView({ behavior: "smooth", block: "center" });
       }
       setJumpSentence(null);
     });
     return () => cancelAnimationFrame(frame);
-  }, [jumpSentence, chapterIndex]);
+    // `pageCount` re-runs the jump once a new chapter has been paginated.
+  }, [jumpSentence, chapterIndex, paged, pageCount]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") {
+      if (event.key === "Escape") {
+        setSettingsOpen(false);
+        setAnnotationsOpen(false);
+        setTocOpen(false);
+        setWord(null);
+        setSelectionBar(null);
         return;
       }
-      setSettingsOpen(false);
-      setAnnotationsOpen(false);
-      setWord(null);
-      setSelectionBar(null);
+      if (
+        !paged ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        isTypingTarget(event.target)
+      ) {
+        return;
+      }
+      if (event.key === "ArrowRight" || event.key === "PageDown") {
+        event.preventDefault();
+        turnRef.current(1);
+      } else if (event.key === "ArrowLeft" || event.key === "PageUp") {
+        event.preventDefault();
+        turnRef.current(-1);
+      }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [paged]);
+
+  /** Page index that shows an element inside the paged viewport. */
+  function pageOf(element: HTMLElement): number {
+    const pages = pagesRef.current;
+    if (!pages || stride <= 0) {
+      return 0;
+    }
+    const left =
+      element.getBoundingClientRect().left -
+      pages.getBoundingClientRect().left +
+      pages.scrollLeft;
+    return clamp(Math.floor(left / stride), 0, pageCount - 1);
+  }
+
+  const dismissFloating = () => {
+    setWord(null);
+    setSelectionBar(null);
+    window.getSelection()?.removeAllRanges();
+  };
+
+  const turn = (direction: 1 | -1) => {
+    dismissFloating();
+    if (direction === 1) {
+      if (page < pageCount - 1) {
+        setPage(page + 1);
+      } else if (chapterIndex < chapters.length - 1) {
+        pendingPage.current = "start";
+        setChapterIndex(chapterIndex + 1);
+      }
+    } else if (page > 0) {
+      setPage(page - 1);
+    } else if (chapterIndex > 0) {
+      pendingPage.current = "end";
+      setChapterIndex(chapterIndex - 1);
+    }
+  };
+  const turnRef = useRef(turn);
+  turnRef.current = turn;
+
+  const canTurnBack = page > 0 || chapterIndex > 0;
+  const canTurnForward = page < pageCount - 1 || chapterIndex < chapters.length - 1;
+
+  const swipeStart = (event: ReactPointerEvent<HTMLElement>) => {
+    swipe.current =
+      event.pointerType === "mouse" ? null : { x: event.clientX, y: event.clientY };
+  };
+
+  const swipeEnd = (event: ReactPointerEvent<HTMLElement>) => {
+    const start = swipe.current;
+    swipe.current = null;
+    if (!start) {
+      return;
+    }
+    const dx = event.clientX - start.x;
+    const dy = event.clientY - start.y;
+    const selection = window.getSelection();
+    if (
+      Math.abs(dx) < SWIPE_DISTANCE ||
+      Math.abs(dx) < Math.abs(dy) * 1.5 ||
+      (selection && !selection.isCollapsed)
+    ) {
+      return;
+    }
+    turn(dx < 0 ? 1 : -1);
+  };
+
+  const openChapter = (index: number, sentenceId?: string) => {
+    setTocOpen(false);
+    dismissFloating();
+    if (index !== chapterIndex) {
+      pendingPage.current = "start";
+      setChapterIndex(index);
+    } else if (!sentenceId) {
+      setPage(0);
+      scrollRef.current?.scrollTo?.({ top: 0 });
+    }
+    if (sentenceId) {
+      setJumpSentence(sentenceId);
+    }
+  };
+
+  const changeLayout = (layout: ReaderLayout) => {
+    dismissFloating();
+    pageRatio.current = 0;
+    updateSetting("layout", layout);
+  };
 
   const tapToken = (
     event: React.MouseEvent<HTMLElement> | React.KeyboardEvent<HTMLElement>,
@@ -463,8 +723,7 @@ export function BookReader({
     );
     setAnnotationsOpen(false);
     setSettingsOpen(false);
-    setChapterIndex(index >= 0 ? index : 0);
-    setJumpSentence(mark.sentence_id);
+    openChapter(index >= 0 ? index : 0, mark.sentence_id);
   };
 
   const updateSetting = <Key extends keyof ReaderSettings>(
@@ -482,10 +741,117 @@ export function BookReader({
 
   const kindLabel = (mark: BookMarkView) => t(markKindKey(mark));
 
+  const chapterBody = (
+    <>
+      <div className="reader-chapter-head">
+        <span className="reader-chapter-index">
+          {chapterIndex + 1} / {book.book.chapters.length}
+        </span>
+        <h2>{chapter ? localizedText(chapter.title, locale) : ""}</h2>
+        <p className="reader-hint">{t("reader-selection-hint")}</p>
+      </div>
+      {error ? (
+        <p className="reader-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+      {chapter ? (
+        <article
+          className="reader-paper"
+          ref={articleRef}
+          onMouseUp={captureSelection}
+          onTouchEnd={captureSelection}
+          onKeyUp={captureSelection}
+        >
+          {chapter.paragraphs.map((paragraph) => {
+            const sentences = paragraph.sentences;
+            return (
+              <p key={paragraph.id} className="reader-paragraph">
+                {sentences.map((sentence, sentenceIndex) => {
+                  const sentenceMarks = marks.filter(
+                    (mark) => mark.sentence_id === sentence.id,
+                  );
+                  return (
+                    <span
+                      key={sentence.id}
+                      className="reader-sentence"
+                      data-sentence-id={sentence.id}
+                    >
+                      {sentenceParts(sentence).map((part, partIndex) => {
+                        if (part.kind === "text") {
+                          return (
+                            <span
+                              key={`text-${partIndex}`}
+                              className="reader-punct"
+                            >
+                              {part.text}
+                            </span>
+                          );
+                        }
+                        const token = sentence.tokens[part.tokenIndex];
+                        if (!token) {
+                          return part.text;
+                        }
+                        const highlighted = sentenceMarks.some(
+                          (mark) =>
+                            mark.kind === "highlight" &&
+                            part.tokenIndex >= mark.start_token &&
+                            part.tokenIndex <= mark.end_token,
+                        );
+                        return (
+                          <span
+                            key={token.id}
+                            role="button"
+                            tabIndex={0}
+                            className={`reader-token${highlighted ? " highlighted" : ""}`}
+                            data-token-index={part.tokenIndex}
+                            data-sentence-id={sentence.id}
+                            onClick={(event) =>
+                              tapToken(
+                                event,
+                                token,
+                                chapter.id,
+                                paragraph.id,
+                                sentence,
+                              )
+                            }
+                            onKeyDown={(event) => {
+                              if (
+                                event.key === "Enter" ||
+                                event.key === " "
+                              ) {
+                                event.preventDefault();
+                                tapToken(
+                                  event,
+                                  token,
+                                  chapter.id,
+                                  paragraph.id,
+                                  sentence,
+                                );
+                              }
+                            }}
+                          >
+                            {part.text}
+                          </span>
+                        );
+                      })}
+                      {sentenceIndex < sentences.length - 1 ? " " : null}
+                    </span>
+                  );
+                })}
+              </p>
+            );
+          })}
+        </article>
+      ) : null}
+    </>
+  );
+
   return (
     <div
       className="reader-full"
       data-reader-theme={settings.theme}
+      data-reader-layout={settings.layout}
       style={readerVars}
     >
       <header className="reader-topbar">
@@ -503,20 +869,37 @@ export function BookReader({
           <h1 id="reader-title">{localizedText(book.meta.title, locale)}</h1>
         </div>
         <div className="reader-topbar-actions">
-          <label className="reader-chapter-select">
-            <span className="sr-only">{t("reader-chapter-selector")}</span>
-            <select
-              value={chapterIndex}
-              aria-label={t("reader-chapter-selector")}
-              onChange={(event) => setChapterIndex(Number(event.currentTarget.value))}
-            >
-              {book.book.chapters.map((entry, index) => (
-                <option key={entry.id} value={index}>
-                  {localizedText(entry.title, locale)}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div
+            className="reader-layout-toggle"
+            role="group"
+            aria-label={t("reader-layout")}
+          >
+            {READER_LAYOUTS.map((layout) => (
+              <button
+                key={layout}
+                type="button"
+                className={settings.layout === layout ? "active" : ""}
+                aria-pressed={settings.layout === layout}
+                onClick={() => changeLayout(layout)}
+              >
+                {t(`reader-layout-${layout}`)}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="reader-icon-button"
+            aria-label={t("reader-toc")}
+            title={t("reader-toc")}
+            aria-expanded={tocOpen}
+            onClick={() => {
+              setTocOpen((open) => !open);
+              setSettingsOpen(false);
+              setAnnotationsOpen(false);
+            }}
+          >
+            <StudioIcon name="list" size={18} />
+          </button>
           <button
             type="button"
             className="reader-icon-button"
@@ -526,6 +909,7 @@ export function BookReader({
             onClick={() => {
               setSettingsOpen((open) => !open);
               setAnnotationsOpen(false);
+              setTocOpen(false);
             }}
           >
             <StudioIcon name="settings" size={18} />
@@ -539,6 +923,7 @@ export function BookReader({
             onClick={() => {
               setAnnotationsOpen((open) => !open);
               setSettingsOpen(false);
+              setTocOpen(false);
             }}
           >
             <StudioIcon name="bookmark" size={18} />
@@ -549,124 +934,188 @@ export function BookReader({
         </div>
       </header>
 
-      <main className="reader-scroll" ref={scrollRef}>
-        <div className="reader-reading">
-          <div className="reader-chapter-head">
-            <span className="reader-chapter-index">
-              {chapterIndex + 1} / {book.book.chapters.length}
-            </span>
-            <h2>{chapter ? localizedText(chapter.title, locale) : ""}</h2>
-            <p className="reader-hint">{t("reader-selection-hint")}</p>
-          </div>
-          {error ? (
-            <p className="reader-error" role="alert">
-              {error}
-            </p>
-          ) : null}
-          {chapter ? (
-            <article
-              className="reader-paper"
-              ref={articleRef}
-              onMouseUp={captureSelection}
-              onTouchEnd={captureSelection}
-              onKeyUp={captureSelection}
+      {paged ? (
+        <main
+          className="reader-paged"
+          ref={pagedRef}
+          onPointerDown={swipeStart}
+          onPointerUp={swipeEnd}
+          onPointerCancel={() => {
+            swipe.current = null;
+          }}
+        >
+          <div className="reader-measure-probe" ref={probeRef} aria-hidden="true" />
+          <div
+            className="reader-pages"
+            ref={pagesRef}
+            style={
+              geometry
+                ? { width: `${geometry.width}px`, height: `${geometry.height}px` }
+                : undefined
+            }
+            onFocus={(event) => {
+              // Keyboard focus may land on a token on another page.
+              if (event.target instanceof HTMLElement && event.target !== event.currentTarget) {
+                const target = pageOf(event.target);
+                if (target !== page) {
+                  setPage(target);
+                }
+              }
+            }}
+          >
+            <div
+              className="reader-columns"
+              style={
+                geometry
+                  ? {
+                      width: `${geometry.width}px`,
+                      height: `${geometry.height}px`,
+                      columnWidth: `${geometry.columnWidth}px`,
+                      columnGap: `${geometry.gap}px`,
+                    }
+                  : undefined
+              }
             >
-              {chapter.paragraphs.map((paragraph) => {
-                const sentences = paragraph.sentences;
-                return (
-                  <p key={paragraph.id} className="reader-paragraph">
-                    {sentences.map((sentence, sentenceIndex) => {
-                      const sentenceMarks = marks.filter(
-                        (mark) => mark.sentence_id === sentence.id,
-                      );
-                      return (
-                        <span
-                          key={sentence.id}
-                          className="reader-sentence"
-                          data-sentence-id={sentence.id}
-                        >
-                          {sentenceParts(sentence).map((part, partIndex) => {
-                            if (part.kind === "text") {
-                              return (
-                                <span
-                                  key={`text-${partIndex}`}
-                                  className="reader-punct"
-                                >
-                                  {part.text}
-                                </span>
-                              );
-                            }
-                            const token = sentence.tokens[part.tokenIndex];
-                            if (!token) {
-                              return part.text;
-                            }
-                            const highlighted = sentenceMarks.some(
-                              (mark) =>
-                                mark.kind === "highlight" &&
-                                part.tokenIndex >= mark.start_token &&
-                                part.tokenIndex <= mark.end_token,
-                            );
-                            return (
-                              <span
-                                key={token.id}
-                                role="button"
-                                tabIndex={0}
-                                className={`reader-token${highlighted ? " highlighted" : ""}`}
-                                data-token-index={part.tokenIndex}
-                                data-sentence-id={sentence.id}
-                                onClick={(event) =>
-                                  tapToken(
-                                    event,
-                                    token,
-                                    chapter.id,
-                                    paragraph.id,
-                                    sentence,
-                                  )
-                                }
-                                onKeyDown={(event) => {
-                                  if (
-                                    event.key === "Enter" ||
-                                    event.key === " "
-                                  ) {
-                                    event.preventDefault();
-                                    tapToken(
-                                      event,
-                                      token,
-                                      chapter.id,
-                                      paragraph.id,
-                                      sentence,
-                                    );
-                                  }
-                                }}
-                              >
-                                {part.text}
-                              </span>
-                            );
-                          })}
-                          {sentenceIndex < sentences.length - 1 ? " " : null}
-                        </span>
-                      );
-                    })}
-                  </p>
-                );
-              })}
-            </article>
-          ) : null}
-        </div>
-      </main>
+              {chapterBody}
+            </div>
+          </div>
+        </main>
+      ) : (
+        <main className="reader-scroll" ref={scrollRef}>
+          <div className="reader-reading">
+            {chapterBody}
+            {chapterIndex < chapters.length - 1 ? (
+              <button
+                type="button"
+                className="reader-next-chapter"
+                onClick={() => openChapter(chapterIndex + 1)}
+              >
+                <span>{t("reader-next-chapter")}</span>
+                <strong>
+                  {localizedText(chapters[chapterIndex + 1]?.title ?? {}, locale)}
+                </strong>
+              </button>
+            ) : null}
+          </div>
+        </main>
+      )}
 
       <footer className="reader-footer">
+        {paged ? (
+          <button
+            type="button"
+            className="reader-turn reader-turn-prev"
+            aria-label={t("reader-page-prev")}
+            title={t("reader-page-prev")}
+            disabled={!canTurnBack}
+            onClick={() => turn(-1)}
+          >
+            <StudioIcon name="arrow-left" size={18} />
+          </button>
+        ) : null}
         <div className="reader-progress-line" aria-hidden="true">
-          <span style={{ width: `${progress}%` }} />
+          <span
+            style={{
+              width: `${paged ? Math.round(((page + 1) / pageCount) * 100) : progress}%`,
+            }}
+          />
         </div>
-        <span>
-          {t("reader-progress", {
-            chapter: chapterIndex + 1,
-            total: book.book.chapters.length,
-            percent: progress,
-          })}
-        </span>
+        {paged ? (
+          <span className="reader-page-status" aria-live="polite">
+            <strong>{t("reader-page", { page: page + 1, total: pageCount })}</strong>
+            <span>
+              {t("reader-chapter-position", {
+                chapter: chapterIndex + 1,
+                total: chapters.length,
+              })}
+            </span>
+          </span>
+        ) : (
+          <span>
+            {t("reader-progress", {
+              chapter: chapterIndex + 1,
+              total: chapters.length,
+              percent: progress,
+            })}
+          </span>
+        )}
+        {paged ? (
+          <button
+            type="button"
+            className="reader-turn reader-turn-next"
+            aria-label={t("reader-page-next")}
+            title={t("reader-page-next")}
+            disabled={!canTurnForward}
+            onClick={() => turn(1)}
+          >
+            <StudioIcon name="arrow-right" size={18} />
+          </button>
+        ) : null}
       </footer>
+
+      {tocOpen ? (
+        <>
+          <button
+            type="button"
+            className="reader-scrim"
+            aria-hidden="true"
+            tabIndex={-1}
+            onClick={() => setTocOpen(false)}
+          />
+          <nav className="reader-toc" role="dialog" aria-label={t("reader-toc")}>
+            <header>
+              <div>
+                <span className="reader-topbar-level">
+                  {t("reader-toc-count", { count: chapters.length })}
+                </span>
+                <h2>{t("reader-toc-title")}</h2>
+              </div>
+              <button
+                type="button"
+                className="reader-icon-button"
+                aria-label={t("reader-toc-close")}
+                onClick={() => setTocOpen(false)}
+              >
+                <StudioIcon name="close" size={16} />
+              </button>
+            </header>
+            <ol className="reader-toc-list">
+              {chapters.map((entry, index) => (
+                <li key={entry.id}>
+                  <button
+                    type="button"
+                    className={`reader-toc-chapter${index === chapterIndex ? " active" : ""}`}
+                    aria-current={index === chapterIndex ? "true" : undefined}
+                    onClick={() => openChapter(index)}
+                  >
+                    <span className="reader-toc-number">{index + 1}</span>
+                    <span className="reader-toc-title">
+                      {localizedText(entry.title, locale)}
+                    </span>
+                  </button>
+                  {(sections[index] ?? []).length > 0 ? (
+                    <ol className="reader-toc-sections">
+                      {(sections[index] ?? []).map((section: ReaderSection) => (
+                        <li key={section.id}>
+                          <button
+                            type="button"
+                            onClick={() => openChapter(index, section.firstSentenceId)}
+                          >
+                            <span className="reader-toc-number">
+                              {index + 1}.{section.index + 1}
+                            </span>
+                            <span className="reader-toc-title">{section.label}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : null}
+                </li>
+              ))}
+            </ol>
+          </nav>
+        </>
+      ) : null}
 
       {settingsOpen ? (
         <>

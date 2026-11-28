@@ -139,6 +139,47 @@ describe("library and reader", () => {
     expect(screen.getByRole("heading", { name: "Library" })).toBeTruthy();
   });
 
+  it("pages or scrolls the reader and jumps through the contents", () => {
+    localStorage.removeItem("refl.reader.v1");
+    renderLibrary();
+    const gift = screen
+      .getByRole("heading", { name: "The Gift of the Magi" })
+      .closest(".book-card");
+    fireEvent.click(
+      within(gift as HTMLElement).getByRole("button", { name: "Open book" }),
+    );
+    const pages = screen.getByRole("button", { name: "Pages" });
+    expect(pages.getAttribute("aria-pressed")).toBe("true");
+    expect(document.querySelector(".reader-pages .reader-columns .reader-paper")).not.toBeNull();
+    expect(screen.getByText("Page 1 of 1")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Previous page" })).toHaveProperty("disabled", true);
+    // A single-page, single-chapter book has nowhere to turn to.
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(screen.getByText("Page 1 of 1")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Scroll" }));
+    expect(localStorage.getItem("refl.reader.v1")).toContain('"layout":"scroll"');
+    expect(document.querySelector(".reader-scroll .reader-paper")).not.toBeNull();
+    expect(screen.queryByText("Page 1 of 1")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Next page" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Contents" }));
+    const toc = screen.getByRole("dialog", { name: "Contents" });
+    expect(within(toc).getByText("Chapters and sections")).toBeTruthy();
+    expect(within(toc).getByText("1 chapter")).toBeTruthy();
+    const sections = within(toc)
+      .getAllByRole("button")
+      .filter((button) => /^1\.\d/.test(button.textContent ?? ""));
+    expect(sections.length).toBeGreaterThan(1);
+    expect(sections[0]?.textContent).toContain("ONE dollar and eighty-seven cents.");
+    fireEvent.click(sections[1] as HTMLElement);
+    expect(screen.queryByRole("dialog", { name: "Contents" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Pages" }));
+    expect(localStorage.getItem("refl.reader.v1")).toContain('"layout":"paged"');
+    fireEvent.click(screen.getByRole("button", { name: "Back to Library" }));
+  });
+
   it("shows a personal book with its cover and removes it from the shelf", async () => {
     const storage = await LearnerStorage.open(`library-${crypto.randomUUID()}`);
     const book = {

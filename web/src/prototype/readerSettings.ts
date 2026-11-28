@@ -2,12 +2,15 @@ export type ReaderTheme = "paper" | "sepia" | "dusk" | "midnight";
 export type ReaderSize = "s" | "m" | "l" | "xl";
 export type ReaderLineHeight = "1.5" | "1.7" | "1.9";
 export type ReaderMeasure = "55" | "65" | "75";
+/** Paged turns pages horizontally; scroll reads one continuous column. */
+export type ReaderLayout = "paged" | "scroll";
 
 export interface ReaderSettings {
   theme: ReaderTheme;
   size: ReaderSize;
   lineHeight: ReaderLineHeight;
   measure: ReaderMeasure;
+  layout: ReaderLayout;
 }
 
 export const READER_THEMES: readonly ReaderTheme[] = [
@@ -23,12 +26,14 @@ export const READER_LINE_HEIGHTS: readonly ReaderLineHeight[] = [
   "1.9",
 ];
 export const READER_MEASURES: readonly ReaderMeasure[] = ["55", "65", "75"];
+export const READER_LAYOUTS: readonly ReaderLayout[] = ["paged", "scroll"];
 
 export const DEFAULT_READER_SETTINGS: ReaderSettings = {
   theme: "paper",
   size: "m",
   lineHeight: "1.7",
   measure: "65",
+  layout: "paged",
 };
 
 const STORAGE_KEY = "refl.reader.v1";
@@ -61,6 +66,12 @@ function isMeasure(value: unknown): value is ReaderMeasure {
   );
 }
 
+function isLayout(value: unknown): value is ReaderLayout {
+  return (
+    typeof value === "string" && READER_LAYOUTS.includes(value as ReaderLayout)
+  );
+}
+
 export function parseReaderSettings(raw: string | null): ReaderSettings {
   if (!raw) {
     return DEFAULT_READER_SETTINGS;
@@ -80,6 +91,9 @@ export function parseReaderSettings(raw: string | null): ReaderSettings {
       measure: isMeasure(value["measure"])
         ? value["measure"]
         : DEFAULT_READER_SETTINGS.measure,
+      layout: isLayout(value["layout"])
+        ? value["layout"]
+        : DEFAULT_READER_SETTINGS.layout,
     };
   } catch {
     return DEFAULT_READER_SETTINGS;

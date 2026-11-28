@@ -835,7 +835,6 @@ reader-size-l = L
 reader-size-xl = XL
 reader-line-height = Межстрочный интервал
 reader-measure = Ширина строки
-reader-chapter-selector = Выберите главу
 reader-annotations = Заметки на полях
 reader-annotations-title = Сохранено в этой книге
 reader-annotations-empty = В этой книге пока нет выделений, закладок и заметок.
@@ -845,3 +844,19 @@ reader-annotation-jump = Перейти к фрагменту
 reader-progress = Глава { $chapter } / { $total } · { $percent }%
 reader-settings-close = Закрыть настройки
 reader-annotations-close = Закрыть заметки
+reader-layout = Режим чтения
+reader-layout-paged = Страницы
+reader-layout-scroll = Лента
+reader-toc = Оглавление
+reader-toc-title = Главы и разделы
+reader-toc-count = { $count ->
+    [one] { $count } глава
+    [few] { $count } главы
+   *[many] { $count } глав
+}
+reader-toc-close = Закрыть оглавление
+reader-page = Страница { $page } из { $total }
+reader-chapter-position = Глава { $chapter } из { $total }
+reader-page-prev = Предыдущая страница
+reader-page-next = Следующая страница
+reader-next-chapter = Следующая глава
