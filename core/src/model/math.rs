@@ -59,32 +59,49 @@ pub struct Evidence {
 /// `score_k = (y − p) p'_k / (p(1−p))`, `I_k = p'_k² / (p(1−p))`.
 /// A degenerate `p(1−p)` (all mass at 0 or 1) carries no evidence.
 pub fn evidence(g: f64, s: f64, y: bool, terms: &[KcTerm]) -> Vec<Evidence> {
+    let mut out = Vec::with_capacity(terms.len());
+    evidence_each(g, s, y, terms, |_, e| out.push(e));
+    out
+}
+
+/// [`evidence`] without the vector: `each(k, evidence_k)` in KC order, with
+/// the same arithmetic, so the fold can skip the allocation.
+pub fn evidence_each(
+    g: f64,
+    s: f64,
+    y: bool,
+    terms: &[KcTerm],
+    mut each: impl FnMut(usize, Evidence),
+) {
     let p = predict(g, s, terms);
     let denom = p * (1.0 - p);
     let y = if y { 1.0 } else { 0.0 };
-    terms
-        .iter()
-        .enumerate()
-        .map(|(k, t)| {
-            if denom <= 0.0 {
-                return Evidence {
+    for (k, t) in terms.iter().enumerate() {
+        if denom <= 0.0 {
+            each(
+                k,
+                Evidence {
                     score: 0.0,
                     info: 0.0,
-                };
-            }
-            let others: f64 = terms
-                .iter()
-                .enumerate()
-                .filter(|&(j, _)| j != k)
-                .map(|(_, o)| o.p_star)
-                .product();
-            let dp = (1.0 - g - s) * t.slope * t.p_star * (1.0 - t.p_star) * others;
+                },
+            );
+            continue;
+        }
+        let others: f64 = terms
+            .iter()
+            .enumerate()
+            .filter(|&(j, _)| j != k)
+            .map(|(_, o)| o.p_star)
+            .product();
+        let dp = (1.0 - g - s) * t.slope * t.p_star * (1.0 - t.p_star) * others;
+        each(
+            k,
             Evidence {
                 score: (y - p) * dp / denom,
                 info: dp * dp / denom,
-            }
-        })
-        .collect()
+            },
+        );
+    }
 }
 
 /// Posterior of one KC after evidence with weight `w`:

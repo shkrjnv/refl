@@ -4,6 +4,8 @@
 
 #![allow(clippy::many_single_char_names)] // names follow the FSRS formulas
 
+use core::sync::atomic::{AtomicU64, Ordering};
+
 use serde::{Deserialize, Serialize};
 
 use crate::value::Timestamp;
@@ -49,10 +51,28 @@ pub struct Card {
     pub last_review: Timestamp,
 }
 
+/// `F = 0.9^(−1/w₂₀) − 1` for the default w₂₀, computed once. Every thread
+/// computes the same bits, so a race only repeats the computation.
+static DEFAULT_FACTOR_BITS: AtomicU64 = AtomicU64::new(0);
+
+fn factor(decay: f64) -> f64 {
+    let compute = || libm::pow(0.9, 1.0 / decay) - 1.0;
+    if decay.to_bits() != (-DEFAULT_WEIGHTS[20]).to_bits() {
+        return compute();
+    }
+    let cached = DEFAULT_FACTOR_BITS.load(Ordering::Relaxed);
+    if cached != 0 {
+        return f64::from_bits(cached);
+    }
+    let value = compute();
+    DEFAULT_FACTOR_BITS.store(value.to_bits(), Ordering::Relaxed);
+    value
+}
+
 /// `R(t) = (1 + F t / S)^(−w₂₀)`, `F = 0.9^(−1/w₂₀) − 1`; t in days.
 pub fn retrievability(w: &[f64; 21], elapsed_days: f64, stability: f64) -> f64 {
     let decay = -w[20];
-    let factor = libm::pow(0.9, 1.0 / decay) - 1.0;
+    let factor = factor(decay);
     libm::pow(
         1.0 + factor * elapsed_days.max(0.0) / stability.max(STABILITY_MIN),
         decay,
