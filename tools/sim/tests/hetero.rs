@@ -51,6 +51,7 @@ fn live_cohort_is_deterministic_and_refl_beats_the_baseline() {
         steps: 200,
         seed: 1,
         remediation: Remediation::FullOnly,
+        strategies: &Strategy::ALL,
     };
     let first = run(&bundle, "live smoke", spec);
     assert_eq!(first.strategies.len(), 3);
@@ -101,6 +102,7 @@ fn full_heterogeneous_cohort() {
         steps: 200,
         seed: 1,
         remediation: Remediation::FullOnly,
+        strategies: &Strategy::ALL,
     };
     let live_report = run(&live, "live Articles sub-graph", spec);
     let full_report = run(

@@ -16,7 +16,8 @@ use std::process::ExitCode;
 use refl_core::bundle::{Bundle, KcStatus};
 use refl_sim::DAY_MS;
 use refl_sim::hetero::{
-    BOOTSTRAP_RESAMPLES, BundleRun, Outcome, Remediation, RunSpec, bootstrap_mean, promote, run,
+    BOOTSTRAP_RESAMPLES, BundleRun, Outcome, Remediation, RunSpec, Strategy, bootstrap_mean,
+    promote, run,
 };
 
 fn load(path: &str) -> Result<Bundle, String> {
@@ -138,11 +139,17 @@ fn kc_line(bundle: &Bundle, run: &BundleRun, kc: &refl_core::ids::KcId) -> Strin
             )
         })
         .collect();
+    let labels: Vec<&str> = run
+        .strategies
+        .iter()
+        .map(|r| r.strategy.name().split(' ').next().unwrap_or("?"))
+        .collect();
     format!(
-        "{}: bank {}/{} slots/families; S1/S2/S3 reach%/median-step {}; edges: {}",
+        "{}: bank {}/{} slots/families; {} reach%/median-step {}; edges: {}",
         kc.as_str(),
         run.bank.get(kc).copied().unwrap_or((0, 0)).0,
         run.bank.get(kc).copied().unwrap_or((0, 0)).1,
+        labels.join("/"),
         cells.join(", "),
         if edges.is_empty() {
             "none".into()
@@ -276,6 +283,11 @@ fn main() -> ExitCode {
             steps,
             seed,
             remediation,
+            strategies: if remediation == Remediation::FullOnly {
+                &Strategy::ALL
+            } else {
+                &Strategy::WITH_PRODUCT
+            },
         };
         report_bundle(
             &mut out,
@@ -283,12 +295,20 @@ fn main() -> ExitCode {
             seed.wrapping_add(steps as u64),
             &live,
         );
+        // The product planner is left out on the draft fixture: its KCs have
+        // two items each, below the planner's block of four with an input
+        // step (docs/04), so every session would end at once. The live gate
+        // requires ten items per KC, so the product never meets such a KC.
+        let full_spec = RunSpec {
+            strategies: &Strategy::ALL,
+            ..spec
+        };
         report_bundle(
             &mut out,
             &run(
                 &full,
                 "full 32-KC A1 projection (draft content promoted)",
-                spec,
+                full_spec,
             ),
             seed.wrapping_add(steps as u64).wrapping_add(1),
             &full,

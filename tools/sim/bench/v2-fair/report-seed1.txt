@@ -1,5 +1,5 @@
 simulator v2
-revision: c220d3a-dirty
+revision: 13d6f97-dirty
 seed=1 learners=1000 horizon=600 steps (~30 days at 20 steps/day) + stress=200
 bootstrap: learner-cluster, SplitMix64, B=2000; 80% and 95% percentiles
 live=content/bench/v3/bundle.json (5 live KCs); full=target/bundle.json (32 learning KCs)
@@ -26,7 +26,13 @@ level MAE:    0.290 [80% 0.279-0.302; 95% 0.273-0.309; n=1000]
 mis reduction: 0.946 [80% 0.940-0.953; 95% 0.936-0.957; n=750]
 reached KC-step mean: 68.6 over 2263 reached KCs
 
-en.gram.article.a-an-sound: bank 21/8 slots/families; S1/S2/S3 reach%/median-step 67%/106, 62%/93, 52%/98; edges: Requires en.gram.article.a-an-sound->en.gram.article.first-mention
+-- S4 product planner --
+target reach: 0.659 [80% 0.644-0.673; 95% 0.636-0.681; n=833]
+level MAE:    0.694 [80% 0.677-0.710; 95% 0.669-0.717; n=1000]
+mis reduction: 0.954 [80% 0.949-0.960; 95% 0.946-0.963; n=750]
+reached KC-step mean: 89.1 over 2744 reached KCs
+
+en.gram.article.a-an-sound: bank 21/8 slots/families; S1/S2/S3/S4 reach%/median-step 67%/106, 62%/93, 52%/98, 33%/168; edges: Requires en.gram.article.a-an-sound->en.gram.article.first-mention
 
 == full 32-KC A1 projection (draft content promoted): 1000 learners x 200 steps (target KCs 32) ==
 
@@ -70,7 +76,13 @@ level MAE:    0.201 [80% 0.190-0.212; 95% 0.184-0.218; n=1000]
 mis reduction: 0.946 [80% 0.940-0.953; 95% 0.936-0.957; n=750]
 reached KC-step mean: 148.8 over 3040 reached KCs
 
-en.gram.article.a-an-sound: bank 21/8 slots/families; S1/S2/S3 reach%/median-step 93%/111, 92%/116, 72%/120; edges: Requires en.gram.article.a-an-sound->en.gram.article.first-mention
+-- S4 product planner --
+target reach: 0.963 [80% 0.955-0.971; 95% 0.951-0.975; n=833]
+level MAE:    0.287 [80% 0.281-0.294; 95% 0.278-0.297; n=1000]
+mis reduction: 0.954 [80% 0.949-0.960; 95% 0.946-0.962; n=750]
+reached KC-step mean: 165.3 over 4010 reached KCs
+
+en.gram.article.a-an-sound: bank 21/8 slots/families; S1/S2/S3/S4 reach%/median-step 93%/111, 92%/116, 72%/120, 95%/268; edges: Requires en.gram.article.a-an-sound->en.gram.article.first-mention
 
 == full 32-KC A1 projection (draft content promoted): 1000 learners x 600 steps (target KCs 32) ==
 

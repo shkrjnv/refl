@@ -9,7 +9,7 @@
 use std::process::ExitCode;
 
 use refl_core::bundle::{Bundle, KcStatus};
-use refl_sim::hetero::{Remediation, RunSpec, promote, run};
+use refl_sim::hetero::{Remediation, RunSpec, Strategy, promote, run};
 
 fn arg<T: std::str::FromStr>(index: usize, default: T) -> T {
     std::env::args()
@@ -73,6 +73,7 @@ fn main() -> ExitCode {
         steps,
         seed,
         remediation,
+        strategies: &Strategy::ALL,
     };
     let live_report = run(&live, "live Articles sub-graph", spec);
     print!("{}", live_report.report());
