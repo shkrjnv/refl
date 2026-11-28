@@ -15,15 +15,15 @@ export type CoreRequest =
   | {
       id: number;
       method: "foldState";
-      bundleJson: string;
-      lexiconJson: string;
+      bundleJson?: string;
+      lexiconJson?: string;
       snapshotJson: string | null;
       events: JsonValue[];
     }
   | {
       id: number;
       method: "planSession";
-      bundleJson: string;
+      bundleJson?: string;
       snapshotJson: string;
       nowMs: number;
       budgetMs: number;
@@ -31,7 +31,7 @@ export type CoreRequest =
   | {
       id: number;
       method: "nextItem";
-      bundleJson: string;
+      bundleJson?: string;
       snapshotJson: string;
       planJson: string;
       nowMs: number;
@@ -39,7 +39,7 @@ export type CoreRequest =
   | {
       id: number;
       method: "replanSession";
-      bundleJson: string;
+      bundleJson?: string;
       snapshotJson: string;
       planJson: string;
       outcome: JsonValue;
@@ -48,8 +48,8 @@ export type CoreRequest =
   | {
       id: number;
       method: "checkAnswer";
-      bundleJson: string;
-      lexiconJson: string;
+      bundleJson?: string;
+      lexiconJson?: string;
       itemRef: JsonValue;
       response: JsonValue;
       elapsedMs: number;
@@ -57,7 +57,7 @@ export type CoreRequest =
   | {
       id: number;
       method: "placementStart";
-      bundleJson: string;
+      bundleJson?: string;
       snapshotJson: string;
       subject: string;
       nowMs: number;
@@ -65,7 +65,7 @@ export type CoreRequest =
   | {
       id: number;
       method: "placementNext";
-      bundleJson: string;
+      bundleJson?: string;
       snapshotJson: string;
       placementJson: string;
       nowMs: number;
@@ -80,7 +80,7 @@ export type CoreRequest =
   | {
       id: number;
       method: "placementAnswer";
-      bundleJson: string;
+      bundleJson?: string;
       snapshotJson: string;
       placementJson: string;
       itemRefJson: string;
@@ -101,6 +101,26 @@ export type CoreResponse =
 function isFiniteNumber(value: JsonValue | undefined): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
+
+function optionalString(value: JsonValue | undefined): boolean {
+  return value === undefined || typeof value === "string";
+}
+
+/**
+ * Methods answered from the worker's cached content. The client sends the
+ * bundle and lexicon text only when they change; requests in between omit
+ * them and the worker reuses the parsed content.
+ */
+export const CONTENT_METHODS: ReadonlySet<CoreRequest["method"]> = new Set([
+  "foldState",
+  "planSession",
+  "nextItem",
+  "replanSession",
+  "checkAnswer",
+  "placementStart",
+  "placementNext",
+  "placementAnswer",
+]);
 
 export function isCoreRequest(value: unknown): value is CoreRequest {
   if (!isJsonObject(value)) {
@@ -123,8 +143,8 @@ export function isCoreRequest(value: unknown): value is CoreRequest {
       return isJsonValue(value["event"]);
     case "foldState":
       return (
-        typeof value["bundleJson"] === "string" &&
-        typeof value["lexiconJson"] === "string" &&
+        optionalString(value["bundleJson"]) &&
+        optionalString(value["lexiconJson"]) &&
         (value["snapshotJson"] === null ||
           typeof value["snapshotJson"] === "string") &&
         Array.isArray(value["events"]) &&
@@ -132,21 +152,21 @@ export function isCoreRequest(value: unknown): value is CoreRequest {
       );
     case "planSession":
       return (
-        typeof value["bundleJson"] === "string" &&
+        optionalString(value["bundleJson"]) &&
         typeof value["snapshotJson"] === "string" &&
         isFiniteNumber(value["nowMs"]) &&
         isFiniteNumber(value["budgetMs"])
       );
     case "nextItem":
       return (
-        typeof value["bundleJson"] === "string" &&
+        optionalString(value["bundleJson"]) &&
         typeof value["snapshotJson"] === "string" &&
         typeof value["planJson"] === "string" &&
         isFiniteNumber(value["nowMs"])
       );
     case "replanSession":
       return (
-        typeof value["bundleJson"] === "string" &&
+        optionalString(value["bundleJson"]) &&
         typeof value["snapshotJson"] === "string" &&
         typeof value["planJson"] === "string" &&
         isJsonValue(value["outcome"]) &&
@@ -154,22 +174,22 @@ export function isCoreRequest(value: unknown): value is CoreRequest {
       );
     case "checkAnswer":
       return (
-        typeof value["bundleJson"] === "string" &&
-        typeof value["lexiconJson"] === "string" &&
+        optionalString(value["bundleJson"]) &&
+        optionalString(value["lexiconJson"]) &&
         isJsonValue(value["itemRef"]) &&
         isJsonValue(value["response"]) &&
         isFiniteNumber(value["elapsedMs"])
       );
     case "placementStart":
       return (
-        typeof value["bundleJson"] === "string" &&
+        optionalString(value["bundleJson"]) &&
         typeof value["snapshotJson"] === "string" &&
         typeof value["subject"] === "string" &&
         isFiniteNumber(value["nowMs"])
       );
     case "placementNext":
       return (
-        typeof value["bundleJson"] === "string" &&
+        optionalString(value["bundleJson"]) &&
         typeof value["snapshotJson"] === "string" &&
         typeof value["placementJson"] === "string" &&
         isFiniteNumber(value["nowMs"])
@@ -182,7 +202,7 @@ export function isCoreRequest(value: unknown): value is CoreRequest {
       );
     case "placementAnswer":
       return (
-        typeof value["bundleJson"] === "string" &&
+        optionalString(value["bundleJson"]) &&
         typeof value["snapshotJson"] === "string" &&
         typeof value["placementJson"] === "string" &&
         typeof value["itemRefJson"] === "string" &&

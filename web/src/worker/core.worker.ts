@@ -1,6 +1,6 @@
 import { isJsonObject, isJsonValue, type JsonValue } from "../types/json";
 import { loadWasmCore } from "../wasm/core";
-import type { WasmCore } from "../wasm/types";
+import type { WasmContext, WasmCore } from "../wasm/types";
 import {
   isCoreRequest,
   type CoreRequest,
@@ -51,6 +51,56 @@ function parseWasm(text: string): JsonValue {
   return value;
 }
 
+/**
+ * The parsed bundle and lexicon live here between calls. The client sends
+ * their text only when it changes; every other request reuses the context.
+ */
+class ContentCache {
+  #bundle: string | null = null;
+  #lexicon: string | null = null;
+  #context: WasmContext | null = null;
+  #error: CoreCallError | null = null;
+
+  context(core: WasmCore, bundleJson?: string, lexiconJson?: string): WasmContext {
+    let changed = false;
+    if (bundleJson !== undefined && bundleJson !== this.#bundle) {
+      this.#bundle = bundleJson;
+      changed = true;
+    }
+    if (lexiconJson !== undefined && lexiconJson !== this.#lexicon) {
+      this.#lexicon = lexiconJson;
+      changed = true;
+    }
+    if (this.#bundle === null) {
+      throw new CoreCallError("no_content", "the worker has no content bundle yet");
+    }
+    if (changed || (this.#context === null && this.#error === null)) {
+      this.#context?.free();
+      this.#context = null;
+      this.#error = null;
+      try {
+        this.#context = core.createContext(this.#bundle, this.#lexicon);
+      } catch (error) {
+        const text = typeof error === "string" ? error : String(error);
+        const split = text.indexOf(": ");
+        this.#error =
+          split > 0
+            ? new CoreCallError(text.slice(0, split), text.slice(split + 2))
+            : new CoreCallError("invalid_bundle", text);
+      }
+    }
+    if (this.#error !== null) {
+      throw this.#error;
+    }
+    if (this.#context === null) {
+      throw new CoreCallError("no_content", "the worker has no content bundle yet");
+    }
+    return this.#context;
+  }
+}
+
+const content = new ContentCache();
+
 function callCore(core: WasmCore, request: CoreRequest): JsonValue {
   switch (request.method) {
     case "coreInfo":
@@ -61,88 +111,71 @@ function callCore(core: WasmCore, request: CoreRequest): JsonValue {
       return parseWasm(core.decodeEvent(JSON.stringify(request.event)));
     case "foldState":
       return parseWasm(
-        core.foldState(
-          request.bundleJson,
-          request.lexiconJson,
-          request.snapshotJson,
-          JSON.stringify(request.events),
-        ),
+        content
+          .context(core, request.bundleJson, request.lexiconJson)
+          .foldState(request.snapshotJson, JSON.stringify(request.events)),
       );
     case "planSession":
       return parseWasm(
-        core.planSession(
-          request.bundleJson,
-          request.snapshotJson,
-          request.nowMs,
-          request.budgetMs,
-        ),
+        content
+          .context(core, request.bundleJson)
+          .planSession(request.snapshotJson, request.nowMs, request.budgetMs),
       );
     case "nextItem":
       return parseWasm(
-        core.nextItem(
-          request.bundleJson,
-          request.snapshotJson,
-          request.planJson,
-          request.nowMs,
-        ),
+        content
+          .context(core, request.bundleJson)
+          .nextItem(request.snapshotJson, request.planJson, request.nowMs),
       );
     case "replanSession":
       return parseWasm(
-        core.replanSession(
-          request.bundleJson,
-          request.snapshotJson,
-          request.planJson,
-          JSON.stringify(request.outcome),
-          request.nowMs,
-        ),
+        content
+          .context(core, request.bundleJson)
+          .replanSession(
+            request.snapshotJson,
+            request.planJson,
+            JSON.stringify(request.outcome),
+            request.nowMs,
+          ),
       );
     case "checkAnswer":
       return parseWasm(
-        core.checkAnswer(
-          request.bundleJson,
-          request.lexiconJson,
-          JSON.stringify(request.itemRef),
-          JSON.stringify(request.response),
-          request.elapsedMs,
-        ),
+        content
+          .context(core, request.bundleJson, request.lexiconJson)
+          .checkAnswer(
+            JSON.stringify(request.itemRef),
+            JSON.stringify(request.response),
+            request.elapsedMs,
+          ),
       );
     case "placementStart":
       return parseWasm(
-        core.placementStart(
-          request.bundleJson,
-          request.snapshotJson,
-          request.subject,
-          request.nowMs,
-        ),
+        content
+          .context(core, request.bundleJson)
+          .placementStart(request.snapshotJson, request.subject, request.nowMs),
       );
     case "placementNext":
       return parseWasm(
-        core.placementNext(
-          request.bundleJson,
-          request.snapshotJson,
-          request.placementJson,
-          request.nowMs,
-        ),
-      );
-    case "bookCoverage":
-      return parseWasm(
-        core.bookCoverage(
-          request.bookJson,
-          request.snapshotJson,
-          request.nowMs,
-        ),
+        content
+          .context(core, request.bundleJson)
+          .placementNext(request.snapshotJson, request.placementJson, request.nowMs),
       );
     case "placementAnswer":
       return parseWasm(
-        core.placementAnswer(
-          request.bundleJson,
-          request.snapshotJson,
-          request.placementJson,
-          request.itemRefJson,
-          request.slot,
-          request.correct,
-          request.nowMs,
-        ),
+        content
+          .context(core, request.bundleJson)
+          .placementAnswer(
+            request.snapshotJson,
+            request.placementJson,
+            request.itemRefJson,
+            request.slot,
+            request.correct,
+            request.nowMs,
+          ),
+      );
+    case "bookCoverage":
+      return parseWasm(
+        core.bookCoverage(request.bookJson, request.snapshotJson, request.nowMs),
       );
   }
 }

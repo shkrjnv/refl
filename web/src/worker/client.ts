@@ -12,6 +12,7 @@ import type {
   ReplanSessionResult,
 } from "../wasm/types";
 import {
+  CONTENT_METHODS,
   isCoreResponse,
   type CoreRequest,
   type CoreResponse,
@@ -85,6 +86,9 @@ export class CoreWorkerClient {
   readonly #worker: Worker;
   readonly #pending = new Map<number, PendingCall>();
   #nextId = 1;
+  /** Content text the worker already holds; identical text is not re-sent. */
+  #sentBundle: string | null = null;
+  #sentLexicon: string | null = null;
   readonly updates = new SessionUpdateGate();
 
   constructor(options: CoreWorkerClientOptions = {}) {
@@ -294,7 +298,35 @@ export class CoreWorkerClient {
     return id;
   }
 
-  #call<T>(request: CoreRequest): Promise<T> {
+  /**
+   * Drop the bundle and lexicon text from a request when the worker already
+   * holds the same text. Copying ~1.6 MB into the worker on every answer was
+   * the main-thread cost of the bridge.
+   */
+  #compact(request: CoreRequest): CoreRequest {
+    if (!CONTENT_METHODS.has(request.method)) {
+      return request;
+    }
+    const compact: Record<string, unknown> = { ...request };
+    if ("bundleJson" in request && request.bundleJson !== undefined) {
+      if (request.bundleJson === this.#sentBundle) {
+        delete compact["bundleJson"];
+      } else {
+        this.#sentBundle = request.bundleJson;
+      }
+    }
+    if ("lexiconJson" in request && request.lexiconJson !== undefined) {
+      if (request.lexiconJson === this.#sentLexicon) {
+        delete compact["lexiconJson"];
+      } else {
+        this.#sentLexicon = request.lexiconJson;
+      }
+    }
+    return compact as CoreRequest;
+  }
+
+  #call<T>(original: CoreRequest): Promise<T> {
+    const request = this.#compact(original);
     return new Promise<T>((resolve, reject) => {
       this.#pending.set(request.id, {
         resolve: (value) => resolve(value as T),
@@ -304,6 +336,9 @@ export class CoreWorkerClient {
         this.#worker.postMessage(request);
       } catch (error) {
         this.#pending.delete(request.id);
+        // The worker may not have received the content: send it next time.
+        this.#sentBundle = null;
+        this.#sentLexicon = null;
         reject(error);
       }
     });
