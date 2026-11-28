@@ -632,7 +632,7 @@ fn build_chapter(
             let sentence_number = s + 1;
             let sentence_id =
                 format!("sentence.{book}.{number}.{paragraph_number}.{sentence_number}");
-            let words: Vec<String> = content_build::words(sentence).collect();
+            let words: Vec<&str> = content_build::word_spans(sentence).collect();
             if words.is_empty() {
                 errors.push(format!("{sentence_id}: sentence has no word tokens"));
                 continue;
@@ -640,12 +640,13 @@ fn build_chapter(
             let mut tokens = Vec::with_capacity(words.len());
             for (t, word) in words.iter().enumerate() {
                 let token_number = t + 1;
-                let (lexeme_id, sense_ids, kc_ids, lemma) = index.link(word);
+                let lookup = word.to_ascii_lowercase();
+                let (lexeme_id, sense_ids, kc_ids, lemma) = index.link(&lookup);
                 tokens.push(BookToken {
                     id: format!(
                         "token.{book}.{number}.{paragraph_number}.{sentence_number}.{token_number}"
                     ),
-                    text: word.clone(),
+                    text: (*word).to_owned(),
                     lemma,
                     lexeme_id,
                     sense_ids,
@@ -772,6 +773,10 @@ mod tests {
         };
         let book = compile_book(&source, Path::new("."), &index()).unwrap();
         assert_eq!(book.chapters[0].paragraphs[0].sentences.len(), 2);
+        let sentence = &book.chapters[0].paragraphs[0].sentences[0];
+        assert_eq!(sentence.tokens[0].text, "A");
+        assert_eq!(sentence.tokens[1].text, "cat");
+        assert_eq!(sentence.tokens[1].lemma, "cat");
         assert_eq!(
             book.chapters[0].paragraphs[0].sentences[0].tokens[1].id,
             "token.test.1.1.1.2"

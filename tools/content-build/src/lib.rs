@@ -494,12 +494,16 @@ fn check_lexemes(content: &load::Content, ids: &check::Ids, diags: &mut Vec<repo
     }
 }
 
-/// The word tokenizer shared with `book-build`: ASCII letters, apostrophes
-/// and hyphens, lowercased. Punctuation and digits separate words.
-pub fn words(text: &str) -> impl Iterator<Item = String> + '_ {
+/// Word boundaries shared with `book-build`: ASCII letters, apostrophes and
+/// hyphens; punctuation and digits separate words. Spans keep their case.
+pub fn word_spans(text: &str) -> impl Iterator<Item = &str> + '_ {
     text.split(|c: char| !(c.is_ascii_alphabetic() || c == '\'' || c == '-'))
         .filter(|word| !word.is_empty())
-        .map(str::to_ascii_lowercase)
+}
+
+/// [`word_spans`], lowercased for matching against the lexical bank.
+pub fn words(text: &str) -> impl Iterator<Item = String> + '_ {
+    word_spans(text).map(str::to_ascii_lowercase)
 }
 
 /// Current item id → lexical senses in its stimulus and reference answers.
