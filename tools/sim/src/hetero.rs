@@ -610,10 +610,9 @@ impl SimLearner {
                     *strength = (*strength + self.relapse).min(0.98);
                 }
             }
-            // S3 diagnosis includes the content's targeted remediation: after
-            // a wrong answer on a diagnosed L1 pattern, the micro-explanation
-            // is shown and the idea loses strength. S1/S2 only see correctness
-            // and do not get this remediation.
+            // The content's targeted remediation: after a wrong answer on a
+            // targeted L1 pattern the micro-explanation is shown and the idea
+            // loses strength. Which strategies receive it is `Remediation`.
             if remedy
                 && !correct
                 && let Some((mis, _)) = targeted.as_ref()
@@ -1014,11 +1013,43 @@ impl Selector {
     }
 }
 
+/// Who gets the content's micro-explanation after a wrong answer on a
+/// targeted L1 pattern.
+///
+/// The micro-explanation is content, not planning: the client shows it after
+/// such an answer whatever chose the item. `AllStrategies` is therefore the
+/// fair comparison of planners. `FullOnly` reproduces the first v2 report,
+/// where only S3 received it and the misconception gap was largely built in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Remediation {
+    AllStrategies,
+    FullOnly,
+}
+
+impl Remediation {
+    #[must_use]
+    pub fn applies_to(self, strategy: Strategy) -> bool {
+        match self {
+            Self::AllStrategies => true,
+            Self::FullOnly => strategy == Strategy::Full,
+        }
+    }
+
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::AllStrategies => "all strategies",
+            Self::FullOnly => "S3 only (v2 as first published)",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct RunSpec {
     pub learners: usize,
     pub steps: usize,
     pub seed: u64,
+    pub remediation: Remediation,
 }
 
 #[derive(Debug, Clone)]
@@ -1117,8 +1148,13 @@ pub fn run(bundle: &Bundle, label: &str, spec: RunSpec) -> BundleRun {
                     break;
                 };
                 let slot = &specs[index];
-                let (answer, correct, _, remediated) =
-                    learner.answer(bundle, slot, at, false, strategy == Strategy::Full);
+                let (answer, correct, _, remediated) = learner.answer(
+                    bundle,
+                    slot,
+                    at,
+                    false,
+                    spec.remediation.applies_to(strategy),
+                );
                 let event = event_in(
                     Some(session(1)),
                     at,

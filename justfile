@@ -189,8 +189,20 @@ v2 learners="1000" seed="1": content
     tmp="$(mktemp)"
     trap 'rm -f "$tmp"' EXIT
     cargo run --locked --release --quiet -p refl-sim --bin v2 -- \
-        content/bench/v3/bundle.json target/bundle.json {{learners}} {{seed}} > "$tmp"
+        content/bench/v3/bundle.json target/bundle.json {{learners}} {{seed}} s3-only > "$tmp"
     mv "$tmp" tools/sim/bench/v2/report-seed{{seed}}.txt
+    trap - EXIT
+
+# Simulator v2 with the micro-explanation given to every strategy (the fair comparison)
+v2-fair learners="1000" seed="1": content
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p tools/sim/bench/v2-fair
+    tmp="$(mktemp)"
+    trap 'rm -f "$tmp"' EXIT
+    cargo run --locked --release --quiet -p refl-sim --bin v2 -- \
+        content/bench/v3/bundle.json target/bundle.json {{learners}} {{seed}} all > "$tmp"
+    mv "$tmp" tools/sim/bench/v2-fair/report-seed{{seed}}.txt
     trap - EXIT
 
 # W24: 1,000 learners x 200 steps on the live and full 32-KC bundles (writes the report)

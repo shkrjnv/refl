@@ -6,7 +6,7 @@
 use std::path::Path;
 
 use refl_core::bundle::Bundle;
-use refl_sim::hetero::{BundleRun, RunSpec, Strategy, bootstrap_mean, promote, run};
+use refl_sim::hetero::{BundleRun, Remediation, RunSpec, Strategy, bootstrap_mean, promote, run};
 
 fn load(path: &Path) -> Bundle {
     let text = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
@@ -50,6 +50,7 @@ fn live_cohort_is_deterministic_and_refl_beats_the_baseline() {
         learners: 12,
         steps: 200,
         seed: 1,
+        remediation: Remediation::FullOnly,
     };
     let first = run(&bundle, "live smoke", spec);
     assert_eq!(first.strategies.len(), 3);
@@ -99,6 +100,7 @@ fn full_heterogeneous_cohort() {
         learners: 1_000,
         steps: 200,
         seed: 1,
+        remediation: Remediation::FullOnly,
     };
     let live_report = run(&live, "live Articles sub-graph", spec);
     let full_report = run(

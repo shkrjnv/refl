@@ -4,7 +4,11 @@
 //!
 #![allow(clippy::cast_precision_loss)]
 
-//! `v2 [LIVE_BUNDLE] [FULL_BUNDLE] [LEARNERS] [SEED]`
+//! `v2 [LIVE_BUNDLE] [FULL_BUNDLE] [LEARNERS] [SEED] [all|s3-only]`
+//!
+//! The fifth argument says who gets the micro-explanation after a wrong
+//! answer on a targeted pattern (`Remediation`). `all` is the default and the
+//! fair comparison; `s3-only` reproduces the first published v2 report.
 
 use std::fmt::Write as _;
 use std::process::ExitCode;
@@ -12,7 +16,7 @@ use std::process::ExitCode;
 use refl_core::bundle::{Bundle, KcStatus};
 use refl_sim::DAY_MS;
 use refl_sim::hetero::{
-    BOOTSTRAP_RESAMPLES, BundleRun, Outcome, RunSpec, bootstrap_mean, promote, run,
+    BOOTSTRAP_RESAMPLES, BundleRun, Outcome, Remediation, RunSpec, bootstrap_mean, promote, run,
 };
 
 fn load(path: &str) -> Result<Bundle, String> {
@@ -215,6 +219,14 @@ fn main() -> ExitCode {
         .unwrap_or_else(|| "target/bundle.json".to_owned());
     let learners: usize = arg(3, 1_000);
     let seed: u64 = arg(4, 1);
+    let remediation = match std::env::args().nth(5).as_deref() {
+        None | Some("all") => Remediation::AllStrategies,
+        Some("s3-only") => Remediation::FullOnly,
+        Some(other) => {
+            eprintln!("unknown remediation mode {other}; use all or s3-only");
+            return ExitCode::FAILURE;
+        }
+    };
 
     let Ok(live) = load(&live_path) else {
         eprintln!("cannot load {live_path}");
@@ -253,11 +265,17 @@ fn main() -> ExitCode {
             .count()
     );
     let _ = writeln!(out, "day_ms={DAY_MS}; mastery={MASTERY_LABEL}");
+    let _ = writeln!(
+        out,
+        "micro-explanation remediation: {}",
+        remediation.label()
+    );
     for steps in [200, 600] {
         let spec = RunSpec {
             learners,
             steps,
             seed,
+            remediation,
         };
         report_bundle(
             &mut out,
