@@ -51,7 +51,9 @@ export function CompanionPicker({
                 />
               </div>
               <div className="companion-copy">
-                <span className="bento-kicker">{t(entry.kickerKey)}</span>
+                <span className="bento-kicker">
+                  {selected ? t("companion-yours") : t(entry.roleKey)}
+                </span>
                 <h3>{t(entry.nameKey)}</h3>
                 <p>{t(entry.descriptionKey)}</p>
                 <StatusMeta tone={unlocked ? "success" : "neutral"}>
