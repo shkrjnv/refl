@@ -115,6 +115,9 @@ describe("placement runner", () => {
     expect(started.phase).toBe("item");
     const done = await runner.submit({ kind: "text", value: "a" });
     expect(done.phase).toBe("result");
+    if (done.phase === "result") {
+      expect(done.result.ceiling).toBe(true);
+    }
     expect(core.checkAnswer).toHaveBeenCalledTimes(1);
     expect(core.placementAnswer).toHaveBeenCalledTimes(1);
 

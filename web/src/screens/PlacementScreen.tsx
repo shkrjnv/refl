@@ -161,6 +161,11 @@ export function PlacementScreen({
           <p className="access-note">
             {t("placement-done-range", { range })}
           </p>
+          {result.ceiling ? (
+            <p className="access-note">
+              {t("placement-done-ceiling", { level: start })}
+            </p>
+          ) : null}
           <div className="access-actions">
             <Button type="button" variant="primary" block onClick={onComplete}>
               {t("placement-done-action")}

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 
 import { HeroIllustration } from "../components/HeroIllustration";
+import { IellaTip } from "../components/IellaTip";
 import { IellaTour } from "../components/IellaTour";
 import { CrossfadeIcon, StudioIcon } from "../components/StudioIcons";
 import { IellaSprite } from "../components/IellaSprite";
@@ -572,6 +573,7 @@ export function TodayScreen({
         </Card>
       </div>
 
+      {!tourOpen ? <IellaTip section="notes" /> : null}
       <IellaTour open={tourOpen} onComplete={onTourComplete} />
     </div>
   );

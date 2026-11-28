@@ -53,6 +53,7 @@ describe("placement screen", () => {
         startLevel: 1,
         answered: 1,
         source: "diagnostic",
+        ceiling: false,
       },
     };
     const { runner, onComplete } = renderScreen(async () => result);
@@ -68,5 +69,29 @@ describe("placement screen", () => {
     expect(screen.getByText("Likely range: Pre-A1–A1.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Start learning" }));
     expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports A2 and the content ceiling after a clean placement", async () => {
+    const result: PlacementView = {
+      phase: "result",
+      result: {
+        level: { point: 2, low: 1, high: 2 },
+        startLevel: 2,
+        answered: 10,
+        source: "diagnostic",
+        ceiling: true,
+      },
+    };
+    const { runner } = renderScreen(async () => result);
+    fireEvent.change(screen.getByLabelText("answer"), {
+      target: { value: "a" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Check" }));
+    await waitFor(() => expect(runner.submit).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText("Start at A2.")).toBeTruthy();
+    expect(screen.getByText("Likely range: A1–A2.")).toBeTruthy();
+    expect(
+      screen.getByText(/A2 is the top of the current content/),
+    ).toBeTruthy();
   });
 });

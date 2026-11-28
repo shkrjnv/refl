@@ -29,6 +29,8 @@ export interface PlacementResultView {
   startLevel: number;
   answered: number;
   source: "start_from_zero" | "diagnostic";
+  /** The start level is the highest live level this content can measure. */
+  ceiling: boolean;
 }
 
 export type PlacementView =
@@ -309,6 +311,9 @@ export class PlacementRunner {
     );
     completeEntryChoice(this.#options.learnerId, "diagnostic");
     clearProgress();
+    const liveCeiling = this.#content.kcs
+      .filter((entry) => entry.status === "live" && entry.kc.subject === "en")
+      .reduce((highest, entry) => Math.max(highest, entry.level_rank), 0);
     this.#view = {
       phase: "result",
       result: {
@@ -316,6 +321,10 @@ export class PlacementRunner {
         startLevel: step.start_level,
         answered: step.answered,
         source: step.source,
+        ceiling:
+          step.source === "diagnostic" &&
+          liveCeiling > 0 &&
+          step.start_level >= liveCeiling,
       },
     };
     return this.#view;

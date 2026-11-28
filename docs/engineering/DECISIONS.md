@@ -1,5 +1,15 @@
 # Engineering decisions
 
+## W28 — seamless Iella spotlight, five-stop tour, and an assessed placement ceiling
+
+- The tour no longer paints four fixed shade rectangles and a box-shadow highlight. It renders one fixed SVG mask with a rounded hole and a matching SVG stroke, so the cutout and border use exactly the same coordinates and cannot leave horizontal seams or a vertical mismatch. Backdrop blur was removed from the tour.
+- Target bounds are tracked with `ResizeObserver` on the target, `resize`/`scroll` listeners, `transitionend`/`animationend`, and a short `requestAnimationFrame` settle loop after scrolling and entrance motion. The card size is measured the same way, so feedback and copy changes reposition the card cleanly. `prefers-reduced-motion` still switches scrolling to `auto` and disables the card/mask entrance animation.
+- The first-run tour now has five stops: arrival, an interactive `a`/`an` try-step with feedback, today's route, level badge, and the start button. The try step is deliberately not logged as a learning answer.
+- Added the one-time contextual `IellaTip` primitive and all four localized messages for Vocabulary, Library, Graph, and Notes. It uses `refl.tip.<section>` storage, marks itself seen on first mount, and is mounted on the Today Notes surface; the Vocabulary/Library/Graph screens are Batch 4 and will mount the same component with their section key.
+- Placement now uses `KnowledgeModel::level_assessed` for its result: live KCs with at least one direct observation, not untouched priors, and never draft KCs. A clean run of at least four answers reports the highest live level in the domain as `point`/`high` with the lower band one level below; the UI adds “A2 is the top of the current content” when it reaches that ceiling. The full `KnowledgeModel::level` remains the statistics/planner view over all live KCs.
+- Added `tools/sim/tests/placement_live.rs`: the real bundle's adaptive and forced 10/10 runs now assert `point = 2.0`, band `A1–A2`, and `start_level = 2.0`; a separate test proves draft KCs do not change the level.
+- Verification: `just fmt-check`, `just lint`, `just test`, `just wasm-hash`, and `just web` pass; web tests are **38 files / 157 tests**. Native and WASM hashes remain `ff400f505425…` / `e078735dcd0e…`. The commit is local and not pushed.
+
 ## W27 — tight brand lockup, compact palette menu, and working Telegram auth/notifications
 
 - The brand lockup gap is 7 px in both the auth header and the shell. The `refl` wordmark is Geologica 600 with `-0.02em` tracking and grayscale/antialiased font smoothing; the previous 800 variable-axis weight is gone and Pixelify Sans is no longer used for the wordmark.
