@@ -356,6 +356,69 @@ fn lesson_event(learner: Uuid) -> Value {
     })
 }
 
+/// One note, one personal word and one book mark: private records that must
+/// appear in the export and disappear on erase.
+fn private_records(learner: Uuid) -> Vec<Value> {
+    let note = "01930000-0000-7000-8000-000000000002";
+    let word = "01930000-0000-7000-8000-000000000003";
+    vec![
+        json!({
+            "schema_version": 2,
+            "event_id": note,
+            "learner_id": learner,
+            "session_id": null,
+            "client_ts": 1_700_000_001_000_i64,
+            "server_ts": null,
+            "payload": {
+                "type": "note_saved",
+                "note_id": note,
+                "anchor": { "kind": "standalone" },
+                "body": "mira keeps her first book",
+            },
+        }),
+        json!({
+            "schema_version": 2,
+            "event_id": word,
+            "learner_id": learner,
+            "session_id": null,
+            "client_ts": 1_700_000_002_000_i64,
+            "server_ts": null,
+            "payload": {
+                "type": "custom_lexeme_created",
+                "custom_id": word,
+                "source": "own",
+                "lemma": "mira",
+                "definition_en": "a name",
+                "gloss_uz": "ism",
+                "gloss_ru": "имя",
+                "examples": [],
+                "collocations": [],
+            },
+        }),
+        json!({
+            "schema_version": 2,
+            "event_id": "01930000-0000-7000-8000-000000000004",
+            "learner_id": learner,
+            "session_id": null,
+            "client_ts": 1_700_000_003_000_i64,
+            "server_ts": null,
+            "payload": {
+                "type": "book_mark_created",
+                "mark_id": "01930000-0000-7000-8000-000000000005",
+                "book_id": "book.first-day",
+                "book_version": "a".repeat(64),
+                "kind": "bookmark",
+                "chapter_id": "chapter.first-day.1",
+                "paragraph_id": "para.first-day.1.1",
+                "sentence_id": "sentence.first-day.1.1.1",
+                "start_token": 0,
+                "end_token": 2,
+                "quote_hash": "b".repeat(64),
+            },
+        }),
+    ]
+}
+
 async fn export_and_erase_account(c: &Cluster) {
     let db = migrated(c, "auth_export_erase").await;
     let app = test_app(db.clone(), true);
@@ -363,7 +426,9 @@ async fn export_and_erase_account(c: &Cluster) {
     let (learner, access, _refresh) = login(&app, email).await;
 
     let mut sync = sync_body(learner);
-    sync["events"] = json!([lesson_event(learner)]);
+    let mut events = vec![lesson_event(learner)];
+    events.extend(private_records(learner));
+    sync["events"] = json!(events);
     let (status, _) = post(app.clone(), "/v1/sync", sync, Some(&access)).await;
     assert_eq!(status, StatusCode::OK);
 
@@ -378,10 +443,25 @@ async fn export_and_erase_account(c: &Cluster) {
     assert_eq!(export["format"], json!("refl-export-v1"));
     assert_eq!(export["profile"]["learner_id"], json!(learner.to_string()));
     assert_eq!(export["login_methods"][0]["identifier"], json!(email));
-    assert_eq!(export["events"].as_array().unwrap().len(), 1);
+    assert_eq!(export["events"].as_array().unwrap().len(), 4);
+    let types: Vec<&str> = export["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|event| event["payload"]["type"].as_str().unwrap())
+        .collect();
     assert_eq!(
-        export["events"][0]["payload"]["type"],
-        json!("lesson_started")
+        types,
+        [
+            "lesson_started",
+            "note_saved",
+            "custom_lexeme_created",
+            "book_mark_created"
+        ]
+    );
+    assert_eq!(
+        export["events"][1]["payload"]["body"],
+        json!("mira keeps her first book")
     );
     assert!(export.get("auth_sessions").is_none());
 

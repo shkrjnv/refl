@@ -150,7 +150,7 @@ async fn push_batch(
             Err(error) => {
                 rejected.push(RejectedEvent {
                     event_id,
-                    reason: format!("invalid_event: {error}"),
+                    reason: error.reason(),
                 });
                 continue;
             }
@@ -165,7 +165,7 @@ async fn push_batch(
             }
             Err(InsertError::Invalid(error)) => rejected.push(RejectedEvent {
                 event_id,
-                reason: format!("invalid_event: {error}"),
+                reason: error.reason(),
             }),
             Err(InsertError::Unknown) => rejected.push(RejectedEvent {
                 event_id,

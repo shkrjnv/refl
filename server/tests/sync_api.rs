@@ -287,6 +287,105 @@ async fn placement_event_round_trips(c: &Cluster) {
     db.close().await;
 }
 
+async fn private_records_round_trip_and_size_limit(c: &Cluster) {
+    let db = migrated(c, "sync_batch4").await;
+    let app = test_app(db.clone());
+    let (learner, access, _refresh) = login(&app, "records@example.com").await;
+    let now = now_ms();
+    let note = event_id(1).to_string();
+    let too_long_note = event_id(2).to_string();
+    let word = event_id(3).to_string();
+    let too_long_word = event_id(4).to_string();
+    let mark = event_id(5).to_string();
+
+    let mut valid_note = event(event_id(1), learner, now);
+    valid_note["payload"] = json!({
+        "type": "note_saved",
+        "note_id": note,
+        "anchor": { "kind": "standalone" },
+        "body": "a private note",
+    });
+    let mut oversized_note = event(event_id(2), learner, now);
+    oversized_note["payload"] = json!({
+        "type": "note_saved",
+        "note_id": too_long_note,
+        "anchor": { "kind": "standalone" },
+        "body": "x".repeat(4_097),
+    });
+    let mut custom = event(event_id(3), learner, now);
+    custom["payload"] = json!({
+        "type": "custom_lexeme_created",
+        "custom_id": word,
+        "source": "own",
+        "lemma": "mira",
+        "definition_en": "a name",
+        "gloss_uz": "ism",
+        "gloss_ru": "имя",
+    });
+    let mut oversized_custom = event(event_id(4), learner, now);
+    oversized_custom["payload"] = json!({
+        "type": "custom_lexeme_created",
+        "custom_id": too_long_word,
+        "source": "own",
+        "lemma": "mira",
+        "definition_en": "x".repeat(5_000),
+        "gloss_uz": "",
+        "gloss_ru": "",
+    });
+    let mut bookmark = event(event_id(5), learner, now);
+    bookmark["payload"] = json!({
+        "type": "book_mark_created",
+        "mark_id": mark,
+        "book_id": "book.first-day",
+        "book_version": "a".repeat(64),
+        "kind": "bookmark",
+        "chapter_id": "chapter.first-day.1",
+        "paragraph_id": "para.first-day.1.1",
+        "sentence_id": "sentence.first-day.1.1.1",
+        "start_token": 0,
+        "end_token": 1,
+        "quote_hash": "b".repeat(64),
+    });
+
+    let (status, response) = post(
+        app.clone(),
+        "/v1/sync",
+        sync_body(
+            learner,
+            &[
+                valid_note,
+                oversized_note,
+                custom,
+                oversized_custom,
+                bookmark,
+            ],
+            0,
+        ),
+        Some(&access),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(response["accepted"].as_array().unwrap().len(), 3);
+    let rejected = response["rejected"].as_array().unwrap();
+    assert_eq!(rejected.len(), 2);
+    assert_eq!(rejected[0]["reason"], json!("note_too_large"));
+    assert_eq!(rejected[1]["reason"], json!("custom_lexeme_too_large"));
+
+    let (status, pulled) = post(app, "/v1/sync", sync_body(learner, &[], 0), Some(&access)).await;
+    assert_eq!(status, StatusCode::OK);
+    let events = pulled["events"].as_array().unwrap();
+    let types: Vec<&str> = events
+        .iter()
+        .map(|e| e["payload"]["type"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        types,
+        ["note_saved", "custom_lexeme_created", "book_mark_created"]
+    );
+    assert_eq!(events[0]["payload"]["body"], json!("a private note"));
+    db.close().await;
+}
+
 async fn sync_requires_access_token(c: &Cluster) {
     let db = migrated(c, "sync_auth").await;
     let app = test_app(db.clone());
@@ -500,6 +599,7 @@ fn sync_api() {
     rt.block_on(async {
         push_is_idempotent(&cluster).await;
         placement_event_round_trips(&cluster).await;
+        private_records_round_trip_and_size_limit(&cluster).await;
         sync_requires_access_token(&cluster).await;
         old_core_is_rejected(&cluster).await;
         batch_limit_and_future_events(&cluster).await;
