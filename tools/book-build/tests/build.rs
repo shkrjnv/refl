@@ -1,4 +1,4 @@
-//! End to end: the real content and the starter reader compile to stable
+//! End to end: the real content and the fixture readers compile to stable
 //! bytes, their tokens link to the lexical bank, and a missing license record
 //! stops the build (`docs/16-vocabulary-library-notes-graph.md`, §2).
 
@@ -31,7 +31,7 @@ fn content_bundle(dir: &Path, tag: &str) -> PathBuf {
 
 fn options(bundle: &Path, tag: &str) -> Options {
     let root = repo();
-    let mut opts = Options::new(root.join("content/books"));
+    let mut opts = Options::new(root.join("tools/book-build/tests/fixtures/books"));
     opts.bundle = bundle.to_path_buf();
     opts.third_party = root.join("THIRD_PARTY.md");
     opts.content_license = root.join("content/LICENSE");
@@ -155,6 +155,7 @@ fn a_book_without_a_license_record_fails() {
 fn committed_web_assets_and_lock_are_current() {
     let bundle_path = content_bundle(&repo().join("content"), "web");
     let mut opts = options(&bundle_path, "web");
+    opts.books = repo().join("content/books");
     opts.lock = repo().join("content/book-versions.lock");
     let output = build(&opts).unwrap();
     assert!(output.diagnostics.is_empty(), "{:?}", output.diagnostics);

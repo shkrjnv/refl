@@ -26,11 +26,7 @@ export interface LoadedBook {
   coverUrl: string | null;
 }
 
-const BUILT_IN_COVERS: Record<string, string> = {
-  "book.aesop-lion-mouse": "/covers/aesop-lion-mouse.svg",
-  "book.aesop-north-wind-sun": "/covers/aesop-north-wind-sun.svg",
-  "book.ohenry-gift-magi": "/covers/ohenry-gift-magi.svg",
-};
+const BUILT_IN_COVERS: Record<string, string> = {};
 
 const catalog = catalogSource as BookCatalog;
 
