@@ -223,6 +223,6 @@ content:
 bindings:
     UPDATE_TS_BINDINGS=1 cargo test --locked -p refl-core --all-features --test ts_bindings
 
-# Full hermetic CI, the same as on every commit
-ci:
-    nix flake check
+# Full local CI: Rust/WASM, content, native = WASM hashes, and the web client
+# (unit/component tests plus the production build). Run inside `nix develop`.
+ci: fmt-check lint test wasm wasm-hash content web
