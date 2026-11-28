@@ -163,6 +163,7 @@ pub fn build_with_content(opts: &Options) -> std::io::Result<(Output, load::Cont
         diagnostics: diags,
         ..Report::default()
     };
+    report.lexemes = content.lexemes.len();
     let status = status::compute(&content, &mut report);
     if report.has_errors() {
         return Ok((Output::rejected(report), content));
