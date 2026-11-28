@@ -14209,6 +14209,16 @@ body.reader-focus .studio-content {
   text-overflow: clip;
 }
 
+/* On a wide bottom dock the popover floats over the page. A light theme
+   scrim keeps it visually above the content; the dock stays bright. */
+.more-scrim {
+  position: fixed;
+  z-index: 59;
+  inset: 0;
+  background: color-mix(in srgb, var(--auth-scrim) 26%, transparent);
+  animation: more-scrim-in 160ms ease-out;
+}
+
 .mobile-more-sheet {
   position: fixed;
   z-index: 70;
@@ -14284,6 +14294,24 @@ body.reader-focus .mobile-dock {
   from {
     transform: translateY(8px);
     opacity: 0;
+  }
+}
+
+@keyframes more-scrim-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (max-width: 820px) {
+  .more-scrim {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .more-scrim {
+    animation: none;
   }
 }
 
