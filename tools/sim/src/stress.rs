@@ -337,6 +337,8 @@ pub fn plan_selection(bundle: &Bundle, state: &State, iterations: usize) -> Late
         budget: Budget::Ten,
         started: Timestamp(T0.0),
         seed: Seed::new(1).expect("small"),
+        history: History::default(),
+        return_check: false,
         learn: Vec::new(),
         candidates: vec![kc.clone()],
         deferred_today: Vec::new(),

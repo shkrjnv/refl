@@ -67,6 +67,8 @@ fn base_plan(bundle: &Bundle, now: Timestamp, budget: Budget) -> Result<Plan, St
         budget,
         started: now,
         seed: Seed::new(61).ok_or_else(|| "seed".to_string())?,
+        history: History::default(),
+        return_check: false,
         learn: vec![Learn {
             kc: kc_id(5),
             contrasts: Vec::new(),

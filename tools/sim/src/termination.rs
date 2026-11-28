@@ -4,7 +4,7 @@
 
 use refl_core::model::{KnowledgeModel, Profile, State};
 use refl_core::plan::{
-    Adapted, Budget, Done, Learn, Outcome, Params, Phase, Plan, PlannedReview, Planner,
+    Adapted, Budget, Done, History, Learn, Outcome, Params, Phase, Plan, PlannedReview, Planner,
     ReadingSpeed, Rule, Step,
 };
 use refl_core::value::{Lang, Seed, Timestamp};
@@ -26,6 +26,8 @@ fn learning_plan(now: Timestamp, run: usize, reviews: Vec<PlannedReview>) -> Pla
         budget: Budget::TwentyFive,
         started: now,
         seed: Seed::new(71).expect("seed"),
+        history: History::default(),
+        return_check: false,
         learn: vec![Learn {
             kc: k0.clone(),
             contrasts: Vec::new(),

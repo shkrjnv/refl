@@ -156,6 +156,16 @@ stress-wasm events="100000" seed="7":
     test "$native_bytes" = "$wasm_bytes"
     echo "cross-target hash and snapshot bytes match"
 
+# Simulator v2: 1,000 learners, 600-step (~30-day) horizon plus the 200-step
+# stress run, cluster bootstrap B=2000, with commit metadata in the report.
+v2 learners="1000" seed="1": content
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p tools/sim/bench/v2
+    cargo run --locked --release --quiet -p refl-sim --bin v2 -- \
+        content/bench/v3/bundle.json target/bundle.json {{learners}} {{seed}} \
+        | tee tools/sim/bench/v2/report-seed{{seed}}.txt
+
 # W24: 1,000 learners x 200 steps on the live and full 32-KC bundles (writes the report)
 hetero learners="1000" steps="200" seed="1": content
     #!/usr/bin/env bash

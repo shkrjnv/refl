@@ -520,7 +520,7 @@ impl SimLearner {
         at: Timestamp,
         placement: bool,
         remedy: bool,
-    ) -> (AnswerEvent, bool, Option<MisconceptionId>) {
+    ) -> (AnswerEvent, bool, Option<MisconceptionId>, bool) {
         let Some(projection) = bundle.projection(&spec.item) else {
             panic!("the simulated item is in the bundle");
         };
@@ -539,6 +539,7 @@ impl SimLearner {
             .map(|kc| sigmoid(1.3 * (self.skill(kc, at) - difficulty)))
             .product();
         let targeted = self.targeted(spec);
+        let mut remediated = false;
         let mis_penalty = targeted.as_ref().map_or(0.0, |(_, s)| *s);
         let mut p = g + (1.0 - g - self.slip) * skill * readiness;
         p *= 1.0 - 0.20 * mis_penalty;
@@ -619,6 +620,7 @@ impl SimLearner {
                 && let Some(strength) = self.active.get_mut(mis)
             {
                 *strength = (*strength - 0.20).max(0.0);
+                remediated = true;
             }
         }
         let latency = if rapid {
@@ -663,8 +665,26 @@ impl SimLearner {
             hints: 0,
             attempt: 1,
         };
+        (event, correct, misconception, remediated)
+    }
+
+    /// The logged observation after a micro-explanation: the learner gets a
+    /// small true post-remediation practice gain, then answers the same slot
+    /// again. The follow-up event makes that gain visible to the core model
+    /// instead of leaving it only in the simulator's hidden state.
+    fn remediation_follow_up(
+        &mut self,
+        bundle: &Bundle,
+        spec: &SlotSpec,
+        at: Timestamp,
+    ) -> (AnswerEvent, bool, Option<MisconceptionId>) {
+        for kc in &spec.primary {
+            self.practise(kc, at, 0.35);
+        }
+        let (event, correct, misconception, _) = self.answer(bundle, spec, at, false, false);
         (event, correct, misconception)
     }
+
     fn next_time(&mut self, step: usize) -> Timestamp {
         let mut ms = 60_000 + i64::try_from(self.time_rng.next_u64() % 30_000).unwrap_or(0);
         if step > 0 && step.is_multiple_of(20) {
@@ -1097,7 +1117,7 @@ pub fn run(bundle: &Bundle, label: &str, spec: RunSpec) -> BundleRun {
                     break;
                 };
                 let slot = &specs[index];
-                let (answer, correct, _) =
+                let (answer, correct, _, remediated) =
                     learner.answer(bundle, slot, at, false, strategy == Strategy::Full);
                 let event = event_in(
                     Some(session(1)),
@@ -1108,6 +1128,19 @@ pub fn run(bundle: &Bundle, label: &str, spec: RunSpec) -> BundleRun {
                 model
                     .apply(&mut state, &event, &ctx)
                     .expect("events are folded in order");
+                if remediated {
+                    let follow_at = Timestamp(at.0 + 1);
+                    let (follow, _, _) = learner.remediation_follow_up(bundle, slot, follow_at);
+                    let follow = event_in(
+                        Some(session(1)),
+                        follow_at,
+                        u64::try_from(step * 2 + 1).unwrap_or(u64::MAX),
+                        EventPayload::Answer(follow),
+                    );
+                    model
+                        .apply(&mut state, &follow, &ctx)
+                        .expect("the remediation follow-up is in order");
+                }
                 selector.record(slot, index, correct, step);
                 for kc in &to_learn {
                     if !mastery_step.contains_key(kc)
@@ -1154,7 +1187,7 @@ pub fn run(bundle: &Bundle, label: &str, spec: RunSpec) -> BundleRun {
                 let Some(&index) = slot_index.get(&(item.clone(), slot)) else {
                     break;
                 };
-                let (answer, correct, _) =
+                let (answer, correct, _, _) =
                     placement_learner.answer(bundle, &specs[index], T0, true, false);
                 let event = event_in(
                     Some(session(90)),
@@ -1215,6 +1248,59 @@ fn quantile(mut values: Vec<f64>, q: f64) -> Option<f64> {
     values.sort_by(f64::total_cmp);
     let rank = (q * values.len() as f64).ceil() as usize;
     Some(values[rank.saturating_sub(1).min(values.len() - 1)])
+}
+
+/// A deterministic learner-cluster bootstrap (`docs/11-quality.md`,
+/// «Статистика пилота»): resample whole learners with replacement, B=2000,
+/// `SplitMix64` with the report's seed. Intervals are suppressed below six
+/// learners.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BootstrapMean {
+    pub point: f64,
+    pub low80: Option<f64>,
+    pub high80: Option<f64>,
+    pub low95: Option<f64>,
+    pub high95: Option<f64>,
+    pub learners: usize,
+    pub resamples: usize,
+}
+
+pub const BOOTSTRAP_RESAMPLES: usize = 2_000;
+
+#[allow(clippy::cast_precision_loss)] // learner counts are small
+pub fn bootstrap_mean(values: &[f64], seed: u64, resamples: usize) -> Option<BootstrapMean> {
+    if values.is_empty() {
+        return None;
+    }
+    let point = values.iter().sum::<f64>() / values.len() as f64;
+    let intervals = (values.len() >= 6 && resamples > 0).then(|| {
+        let mut rng = SplitMix64::new(seed);
+        let mut means = Vec::with_capacity(resamples);
+        for _ in 0..resamples {
+            let mut sum = 0.0;
+            for _ in 0..values.len() {
+                let index = usize::try_from(rng.next_u64() % values.len() as u64)
+                    .expect("index below length");
+                sum += values[index];
+            }
+            means.push(sum / values.len() as f64);
+        }
+        means.sort_by(f64::total_cmp);
+        let q = |q: f64| -> f64 {
+            let rank = (q * means.len() as f64).ceil() as usize;
+            means[rank.saturating_sub(1).min(means.len() - 1)]
+        };
+        (q(0.10), q(0.90), q(0.025), q(0.975))
+    });
+    Some(BootstrapMean {
+        point,
+        low80: intervals.map(|i| i.0),
+        high80: intervals.map(|i| i.1),
+        low95: intervals.map(|i| i.2),
+        high95: intervals.map(|i| i.3),
+        learners: values.len(),
+        resamples,
+    })
 }
 
 fn steps_of(outcomes: &[Outcome]) -> Vec<f64> {

@@ -76,6 +76,8 @@ fn context(phase: Phase) -> AnswerContext {
         Phase::Review => AnswerContext::Review,
         Phase::Lesson | Phase::Block => AnswerContext::Lesson,
         Phase::Interleaved | Phase::Prerequisite | Phase::Final => AnswerContext::Practice,
+        Phase::Audit => AnswerContext::Audit,
+        Phase::ReturnCheck => AnswerContext::ReturnCheck,
     }
 }
 

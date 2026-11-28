@@ -277,6 +277,8 @@ fn empty_plan(now: Timestamp, budget: Budget) -> Plan {
         budget,
         started: now,
         seed: Seed::new(0).unwrap(),
+        history: History::default(),
+        return_check: false,
         learn: Vec::new(),
         candidates: Vec::new(),
         deferred_today: Vec::new(),
@@ -2726,4 +2728,45 @@ fn prerequisite_scenarios_expose_rule3_for_native_parity() {
         b.end,
         refl_sim::prereq::expected_b_end().map(|end| end.code().to_string())
     );
+}
+
+#[test]
+fn return_check_is_scheduled_first_after_a_break() {
+    let b = synthetic_bundle(BundleSpec {
+        kcs: 1,
+        items_per_kc: 8,
+    });
+    let now = Timestamp(refl_sim::T0.0 + 20 * DAY_MS);
+    let mut s = mastered_state(&b, Timestamp(refl_sim::T0.0 + DAY_MS));
+    s.last_answer.insert(
+        refl_core::ids::SubjectId::new(SUBJECT).unwrap(),
+        Timestamp(now.0 - 15 * DAY_MS),
+    );
+    s.mastered_at
+        .insert(kc_id(0), Timestamp(now.0 - 15 * DAY_MS));
+    let model = KnowledgeModel::default();
+    let params = Params::default();
+    let speed = ReadingSpeed::default();
+    let p = planner(&model, &b, &params);
+    let session = p.build_session(
+        &s,
+        &History::default(),
+        now,
+        Budget::TwentyFive,
+        Lang::Ru,
+        Seed::new(4).unwrap(),
+    );
+    assert!(session.plan.return_check);
+    assert_eq!(
+        session.plan.steps.first().map(|step| step.phase),
+        Some(Phase::ReturnCheck)
+    );
+    assert!(
+        session
+            .plan
+            .steps
+            .iter()
+            .any(|step| step.phase == Phase::ReturnCheck)
+    );
+    let _ = speed;
 }

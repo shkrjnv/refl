@@ -474,6 +474,7 @@ fn mastery_statuses_and_the_return_check() {
     let s = fold(&b, &events);
     let k: &KcState = &s.kcs[&kc_id(0)];
     assert!(k.ever_mastered);
+    assert!(s.mastered_at.contains_key(&kc_id(0)));
     assert!(k.production.len() == 2 && k.tau > 0.0);
     let last = at(29, 0);
     let progress = model.progress(&s, &b, &kc_id(0), last);

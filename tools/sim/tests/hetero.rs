@@ -6,7 +6,7 @@
 use std::path::Path;
 
 use refl_core::bundle::Bundle;
-use refl_sim::hetero::{BundleRun, RunSpec, Strategy, promote, run};
+use refl_sim::hetero::{BundleRun, RunSpec, Strategy, bootstrap_mean, promote, run};
 
 fn load(path: &Path) -> Bundle {
     let text = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
@@ -118,4 +118,18 @@ fn full_heterogeneous_cohort() {
         s3_full > s1_full,
         "S3 {s3_full} did not beat S1 {s1_full} on the full bundle"
     );
+}
+
+#[test]
+fn cluster_bootstrap_is_deterministic_and_suppresses_tiny_samples() {
+    let values = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8];
+    let first = bootstrap_mean(&values, 17, 200).expect("values");
+    let second = bootstrap_mean(&values, 17, 200).expect("values");
+    assert_eq!(first, second);
+    assert_eq!(first.learners, 8);
+    assert_eq!(first.resamples, 200);
+    assert!(first.low80.unwrap() <= first.point);
+    assert!(first.high80.unwrap() >= first.point);
+    let tiny = bootstrap_mean(&values[..5], 17, 200).expect("values");
+    assert!(tiny.low80.is_none());
 }
