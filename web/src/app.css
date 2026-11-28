@@ -11727,6 +11727,68 @@ input:focus-visible {
   font-weight: 600;
 }
 
+/* The topic drawer under the map: its own padding and rhythm, so the title,
+   the facts and the actions never touch the card's edge. */
+.graph-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 4px;
+  padding: 20px 22px;
+}
+
+.graph-drawer-head > div {
+  min-width: 0;
+}
+
+.graph-drawer-head .eyebrow {
+  margin: 0 0 6px;
+}
+
+.graph-drawer-head .status-meta,
+.graph-drawer-head > :last-child {
+  flex-shrink: 0;
+}
+
+.graph-drawer h2 {
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.graph-facts > div {
+  min-width: 0;
+  gap: 4px;
+}
+
+.graph-facts strong {
+  overflow-wrap: anywhere;
+}
+
+.graph-why p {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.graph-actions {
+  padding-top: 2px;
+}
+
+@media (max-width: 520px) {
+  .graph-drawer {
+    gap: 14px;
+    padding: 16px;
+  }
+
+  .graph-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .graph-actions > * {
+    flex: 1 1 auto;
+  }
+}
+
 .companion-picker {
   display: flex;
   flex-direction: column;

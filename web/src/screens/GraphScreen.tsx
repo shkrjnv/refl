@@ -564,7 +564,12 @@ export function GraphScreen({
                         edge.kind === "requires" ? "url(#graph-arrow)" : undefined
                       }
                     />
-                    {edge.kind === "contrasts" ? (
+                    {/* The legend names dotted edges; the label shows only on
+                        the selected topic's own contrasts, so neighbouring
+                        labels never run together. */}
+                    {edge.kind === "contrasts" &&
+                    selected !== null &&
+                    (edge.from === selected || edge.to === selected) ? (
                       <text
                         x={edgeLabels.get(`${edge.from}|${edge.to}`)?.x ?? geometry.mid.x}
                         y={edgeLabels.get(`${edge.from}|${edge.to}`)?.y ?? geometry.mid.y}
@@ -705,7 +710,9 @@ export function GraphScreen({
             <div>
               <span>{t("graph-fact-stability")}</span>
               <strong>
-                {(selectedState?.card?.stability ?? 0).toFixed(1)}d
+                {selectedState?.card
+                  ? `${selectedState.card.stability.toFixed(1)}d`
+                  : "—"}
               </strong>
             </div>
             <div>
