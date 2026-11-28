@@ -62,6 +62,9 @@ async fn serve() -> Result<(), Box<dyn Error>> {
         Ok(value) if !value.trim().is_empty() => Some(value.trim().parse::<i64>()?),
         _ => None,
     };
+    // A private Telegram chat id equals the user id; use it when the operator
+    // configured only ADMIN_TELEGRAM_ID.
+    let admin_telegram_chat_id = admin_telegram_chat_id.or(admin_telegram_id);
     let min_core_version = match env::var("MIN_CORE_VERSION") {
         Ok(value) => value,
         Err(_) => DEFAULT_MIN_CORE_VERSION.into(),
@@ -79,8 +82,20 @@ async fn serve() -> Result<(), Box<dyn Error>> {
         Some(gateway) => gateway.clone(),
         None => Arc::new(NoopTelegramGateway),
     };
-    if let (Some(gateway), Some(chat_id)) = (&http_gateway, admin_telegram_chat_id) {
-        telegram_bot::spawn(pool.clone(), Arc::clone(gateway), chat_id);
+    match (&http_gateway, admin_telegram_chat_id) {
+        (Some(gateway), Some(chat_id)) => {
+            telegram_bot::spawn(pool.clone(), Arc::clone(gateway), chat_id);
+            eprintln!("refl: Telegram bot enabled; approval chat {chat_id}");
+        }
+        (Some(_), None) => eprintln!(
+            "refl: TELEGRAM_BOT_TOKEN is set but ADMIN_TELEGRAM_CHAT_ID is missing; approval notifications are disabled"
+        ),
+        (None, Some(_)) => eprintln!(
+            "refl: ADMIN_TELEGRAM_CHAT_ID is set but TELEGRAM_BOT_TOKEN is missing; Telegram login and notifications are disabled"
+        ),
+        (None, None) => eprintln!(
+            "refl: Telegram is disabled; set TELEGRAM_BOT_TOKEN and ADMIN_TELEGRAM_CHAT_ID"
+        ),
     }
     let app = router(AppState {
         pool,

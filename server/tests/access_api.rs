@@ -12,6 +12,7 @@ use axum::http::{Request, StatusCode, header};
 use refl_server::MIGRATOR;
 use refl_server::access::{MockTelegramGateway, RegistrationMode};
 use refl_server::routes::{AppState, Config, router};
+use refl_server::telegram_bot;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
@@ -309,6 +310,50 @@ fn telegram_body(id: i64, auth_date: i64, invite_code: Option<&str>) -> Value {
     body
 }
 
+fn web_app_init_data(id: i64, auth_date: i64) -> String {
+    let user = json!({
+        "id": id,
+        "first_name": "Web",
+        "last_name": "App",
+        "username": "webapp",
+    })
+    .to_string();
+    let mut fields = vec![
+        ("auth_date".to_owned(), auth_date.to_string()),
+        ("query_id".to_owned(), "AAH-test".to_owned()),
+        (
+            "signature".to_owned(),
+            "independent-ed25519-signature".to_owned(),
+        ),
+        ("user".to_owned(), user),
+    ];
+    fields.sort_by(|left, right| left.0.cmp(&right.0));
+    let data_check = fields
+        .iter()
+        .filter(|(key, _)| key != "signature")
+        .map(|(key, value)| format!("{key}={value}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let secret = hmac_sha256(b"WebAppData", BOT_TOKEN.as_bytes());
+    let hash = hex(&hmac_sha256(&secret, data_check.as_bytes()));
+    let mut serializer = form_urlencoded::Serializer::new(String::new());
+    for (key, value) in &fields {
+        serializer.append_pair(key, value);
+    }
+    serializer.append_pair("hash", &hash);
+    serializer.finish()
+}
+
+fn web_app_body(init_data: &str, auth_date: i64) -> Value {
+    json!({
+        "id": 999_999,
+        "first_name": "Ignored",
+        "auth_date": auth_date,
+        "hash": "0".repeat(64),
+        "init_data": init_data,
+    })
+}
+
 async fn telegram_hmac_and_freshness(c: &Cluster) {
     let db = migrated(c, "access_hmac").await;
     let gateway = Arc::new(MockTelegramGateway::default());
@@ -344,6 +389,131 @@ async fn telegram_hmac_and_freshness(c: &Cluster) {
     )
     .await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
+    db.close().await;
+}
+
+async fn telegram_not_configured(c: &Cluster) {
+    let db = migrated(c, "access_telegram_missing").await;
+    let gateway = Arc::new(MockTelegramGateway::default());
+    let app = test_app(db.clone(), RegistrationMode::Open, None, gateway);
+    let (status, body) = post(
+        app,
+        "/v1/auth/telegram",
+        telegram_body(30_001, now_seconds(), None),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(body["error"], json!("service_unavailable"));
+    db.close().await;
+}
+
+async fn telegram_web_app_init_data(c: &Cluster) {
+    let db = migrated(c, "access_webapp").await;
+    let gateway = Arc::new(MockTelegramGateway::default());
+    let app = test_app(db.clone(), RegistrationMode::Open, Some(BOT_TOKEN), gateway);
+    let now = now_seconds();
+
+    // The claimed fields are deliberately wrong: only the verified initData
+    // identity may be used.
+    let (status, body) = post(
+        app.clone(),
+        "/v1/auth/telegram",
+        web_app_body(&web_app_init_data(20_001, now), now),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let learner_id = Uuid::parse_str(body["learner_id"].as_str().unwrap()).unwrap();
+    let identifier: String = sqlx::query_scalar(
+        "SELECT identifier FROM login_methods \
+         WHERE user_id = $1 AND kind = 'telegram'",
+    )
+    .bind(learner_id)
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(identifier, "20001");
+
+    let mut tampered = web_app_init_data(20_002, now);
+    tampered = tampered.replace(&format!("auth_date={now}"), "auth_date=1");
+    let (status, _) = post(
+        app.clone(),
+        "/v1/auth/telegram",
+        web_app_body(&tampered, now),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+
+    let (status, _) = post(
+        app,
+        "/v1/auth/telegram",
+        web_app_body(&web_app_init_data(20_003, now - 86_401), now),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    db.close().await;
+}
+
+async fn bot_approval_callback_activates_and_notifies(c: &Cluster) {
+    let db = migrated(c, "access_bot_callback").await;
+    let gateway = Arc::new(MockTelegramGateway::default());
+    let pending_id = Uuid::from_u128(0x0193_0000_0000_4000_8000_0000_0000_0020);
+    let telegram_chat = 55_020_i64;
+    sqlx::query(
+        "INSERT INTO users \
+         (id, public_code, display_name, interface_lang, access_status) \
+         VALUES ($1, $2, 'Pending', 'en', 'pending')",
+    )
+    .bind(pending_id)
+    .bind(code_for(pending_id))
+    .execute(&db)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO login_methods (id, user_id, kind, identifier, verified_at) \
+         VALUES ($1, $2, 'telegram', $3, now())",
+    )
+    .bind(Uuid::new_v4())
+    .bind(pending_id)
+    .bind(telegram_chat.to_string())
+    .execute(&db)
+    .await
+    .unwrap();
+
+    let update = json!({
+        "update_id": 1,
+        "callback_query": {
+            "id": "callback-1",
+            "data": format!("approve:{pending_id}"),
+            "message": {
+                "message_id": 42,
+                "chat": { "id": ADMIN_CHAT }
+            }
+        }
+    });
+    telegram_bot::handle_update(&db, gateway.as_ref(), ADMIN_CHAT, &update).await;
+
+    let status: String = sqlx::query_scalar("SELECT access_status FROM users WHERE id = $1")
+        .bind(pending_id)
+        .fetch_one(&db)
+        .await
+        .unwrap();
+    assert_eq!(status, "active");
+    assert!(
+        gateway
+            .callbacks()
+            .iter()
+            .any(|answer| { answer.callback_id == "callback-1" && answer.text == "Approved" })
+    );
+    assert!(gateway.cleared_keyboards().contains(&(ADMIN_CHAT, 42)));
+    assert!(
+        gateway.messages().iter().any(|message| {
+            message.chat_id == telegram_chat && message.text == "Access approved."
+        })
+    );
     db.close().await;
 }
 
@@ -384,6 +554,7 @@ async fn closed_pending_approval_and_rejection(c: &Cluster) {
         .into_iter()
         .find(|message| message.chat_id == ADMIN_CHAT)
         .expect("approval request");
+    assert!(approval.text.contains("Test User"));
     let labels: Vec<&str> = approval
         .buttons
         .iter()
@@ -628,6 +799,9 @@ fn access_api() {
         .unwrap();
     rt.block_on(async {
         telegram_hmac_and_freshness(&cluster).await;
+        telegram_not_configured(&cluster).await;
+        telegram_web_app_init_data(&cluster).await;
+        bot_approval_callback_activates_and_notifies(&cluster).await;
         closed_pending_approval_and_rejection(&cluster).await;
         pending_rejection(&cluster).await;
         single_use_invite(&cluster).await;

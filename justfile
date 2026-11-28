@@ -40,6 +40,24 @@ dev:
         set +a
     fi
 
+    # Telegram needs the server token and, on the client, either the Login
+    # Widget username or the numeric bot id. The id is the token prefix, so a
+    # token alone is enough for the OAuth fallback.
+    if [ -z "${VITE_TELEGRAM_BOT_ID:-}" ] && [[ "${TELEGRAM_BOT_TOKEN:-}" =~ ^([0-9]+): ]]; then
+        export VITE_TELEGRAM_BOT_ID="${BASH_REMATCH[1]}"
+    fi
+    if [ -z "${VITE_TELEGRAM_BOT_USERNAME:-}" ] && [ -n "${TELEGRAM_BOT_USERNAME:-}" ]; then
+        export VITE_TELEGRAM_BOT_USERNAME="${TELEGRAM_BOT_USERNAME}"
+    fi
+    if [ -z "${ADMIN_TELEGRAM_CHAT_ID:-}" ] && [ -n "${ADMIN_TELEGRAM_ID:-}" ]; then
+        export ADMIN_TELEGRAM_CHAT_ID="${ADMIN_TELEGRAM_ID}"
+    fi
+    if [ -z "${TELEGRAM_BOT_TOKEN:-}" ]; then
+        echo "refl dev: Telegram is disabled; set TELEGRAM_BOT_TOKEN, TELEGRAM_BOT_USERNAME and ADMIN_TELEGRAM_CHAT_ID in .env.local." >&2
+    elif [ -z "${ADMIN_TELEGRAM_CHAT_ID:-}" ]; then
+        echo "refl dev: TELEGRAM_BOT_TOKEN is set but ADMIN_TELEGRAM_CHAT_ID is missing; approval notifications and bot commands are disabled." >&2
+    fi
+
     if [ ! -f .pgdata/PG_VERSION ]; then
         initdb -D .pgdata --username=refl --auth-local=trust --auth-host=trust --encoding=UTF8 >/dev/null
     fi

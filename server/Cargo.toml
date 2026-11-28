@@ -7,6 +7,7 @@ publish.workspace = true
 
 [dependencies]
 axum = "0.8"
+form_urlencoded = "1"
 refl-core = { path = "../core", features = ["std"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 serde = "1"

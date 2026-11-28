@@ -23,17 +23,22 @@ async fn run(pool: PgPool, gateway: Arc<HttpTelegramGateway>, admin_chat_id: i64
                     if let Some(id) = update.get("update_id").and_then(Value::as_i64) {
                         offset = id.saturating_add(1);
                     }
-                    handle_update(&pool, &gateway, admin_chat_id, update).await;
+                    handle_update(&pool, gateway.as_ref(), admin_chat_id, update).await;
                 }
             }
-            Err(_) => tokio::time::sleep(Duration::from_secs(5)).await,
+            Err(error) => {
+                eprintln!("telegram: getUpdates failed: {error}");
+                tokio::time::sleep(Duration::from_secs(5)).await;
+            }
         }
     }
 }
 
-async fn handle_update(
+/// Process one Telegram update. Exposed so integration tests can drive the
+/// approval callback with the same code the long-polling worker uses.
+pub async fn handle_update(
     pool: &PgPool,
-    gateway: &HttpTelegramGateway,
+    gateway: &dyn TelegramGateway,
     admin_chat_id: i64,
     update: &Value,
 ) {
@@ -60,7 +65,7 @@ async fn handle_update(
     }
 }
 
-async fn handle_callback(pool: &PgPool, gateway: &HttpTelegramGateway, callback: &Value) {
+async fn handle_callback(pool: &PgPool, gateway: &dyn TelegramGateway, callback: &Value) {
     let callback_id = callback
         .get("id")
         .and_then(Value::as_str)
@@ -80,9 +85,13 @@ async fn handle_callback(pool: &PgPool, gateway: &HttpTelegramGateway, callback:
         "reject" => (AccessStatus::Rejected, "Rejected"),
         _ => return,
     };
-    let decided = access::decide_user(pool, user_id, status, gateway)
-        .await
-        .is_ok();
+    let decided = match access::decide_user(pool, user_id, status, gateway).await {
+        Ok(()) => true,
+        Err(error) => {
+            eprintln!("telegram: approval callback failed: {error:?}");
+            false
+        }
+    };
     let text = if decided { answer } else { "Failed" };
     let _ = gateway.answer_callback(callback_id, text).await;
 
@@ -102,7 +111,7 @@ async fn handle_callback(pool: &PgPool, gateway: &HttpTelegramGateway, callback:
 
 async fn handle_message(
     pool: &PgPool,
-    gateway: &HttpTelegramGateway,
+    gateway: &dyn TelegramGateway,
     admin_chat_id: i64,
     message: &Value,
 ) {

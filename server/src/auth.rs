@@ -136,6 +136,10 @@ pub struct TelegramLogin {
     pub photo_url: Option<String>,
     pub auth_date: i64,
     pub hash: String,
+    /// Raw Telegram Mini App `initData`; when present, it is verified with the
+    /// `WebApp` secret and the client-visible identity fields are ignored.
+    #[serde(default)]
+    pub init_data: Option<String>,
     #[serde(default)]
     pub invite_code: Option<String>,
 }
@@ -578,9 +582,105 @@ fn unix_seconds() -> Result<i64, AppError> {
     i64::try_from(elapsed.as_secs()).map_err(AppError::internal)
 }
 
-fn telegram_display_name(login: &TelegramLogin) -> String {
-    let mut name = login.first_name.trim().to_owned();
-    if let Some(last_name) = login.last_name.as_deref().map(str::trim)
+#[derive(Debug, Clone)]
+struct TelegramIdentity {
+    id: i64,
+    first_name: String,
+    last_name: Option<String>,
+    username: Option<String>,
+    auth_date: i64,
+}
+
+fn identity_from_login(login: &TelegramLogin) -> TelegramIdentity {
+    TelegramIdentity {
+        id: login.id,
+        first_name: login.first_name.clone(),
+        last_name: login.last_name.clone(),
+        username: login.username.clone(),
+        auth_date: login.auth_date,
+    }
+}
+
+fn optional_telegram_text(value: Option<&serde_json::Value>) -> Option<String> {
+    value
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
+        .map(str::to_owned)
+}
+
+/// Verify a Telegram Mini App `initData` string. The `WebApp` HMAC secret is
+/// `HMAC-SHA256("WebAppData", bot_token)`, not the Login Widget's
+/// `SHA-256(bot_token)` secret; mixing them rejects every Mini App sign-in.
+fn verified_web_app_identity(init_data: &str, token: &str) -> Result<TelegramIdentity, AppError> {
+    if init_data.len() > 8_192 {
+        return Err(AppError::BadRequest(
+            "telegram init data is too large".into(),
+        ));
+    }
+    let pairs: Vec<(String, String)> = form_urlencoded::parse(init_data.as_bytes())
+        .map(|(key, value)| (key.into_owned(), value.into_owned()))
+        .collect();
+    let hash = pairs
+        .iter()
+        .find(|(key, _)| key == "hash")
+        .map(|(_, value)| value.as_str())
+        .filter(|value| value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        .ok_or(AppError::Unauthorized)?;
+    let mut fields: Vec<&(String, String)> = pairs
+        .iter()
+        .filter(|(key, _)| key != "hash" && key != "signature")
+        .collect();
+    fields.sort_by(|left, right| left.0.cmp(&right.0));
+    let data_check = fields
+        .iter()
+        .map(|(key, value)| format!("{key}={value}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let secret = hmac_sha256(b"WebAppData", token.as_bytes());
+    let expected = hex(&hmac_sha256(&secret, data_check.as_bytes()));
+    if !expected.eq_ignore_ascii_case(hash) {
+        return Err(AppError::Unauthorized);
+    }
+    let field = |name: &str| {
+        pairs
+            .iter()
+            .find(|(key, _)| key == name)
+            .map(|(_, value)| value.as_str())
+    };
+    let auth_date = field("auth_date")
+        .and_then(|value| value.parse::<i64>().ok())
+        .ok_or(AppError::Unauthorized)?;
+    let user: serde_json::Value =
+        serde_json::from_str(field("user").ok_or(AppError::Unauthorized)?)
+            .map_err(|_| AppError::Unauthorized)?;
+    if !user.is_object() {
+        return Err(AppError::Unauthorized);
+    }
+    let id = user
+        .get("id")
+        .and_then(serde_json::Value::as_i64)
+        .filter(|id| *id > 0)
+        .ok_or(AppError::Unauthorized)?;
+    let first_name = user
+        .get("first_name")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .ok_or(AppError::Unauthorized)?
+        .to_owned();
+    Ok(TelegramIdentity {
+        id,
+        first_name,
+        last_name: optional_telegram_text(user.get("last_name")),
+        username: optional_telegram_text(user.get("username")),
+        auth_date,
+    })
+}
+
+fn telegram_name(first_name: &str, last_name: Option<&str>, username: Option<&str>) -> String {
+    let mut name = first_name.trim().to_owned();
+    if let Some(last_name) = last_name.map(str::trim)
         && !last_name.is_empty()
     {
         if !name.is_empty() {
@@ -591,11 +691,18 @@ fn telegram_display_name(login: &TelegramLogin) -> String {
     if !name.is_empty() {
         return name;
     }
-    login
-        .username
-        .as_deref()
-        .filter(|username| !username.trim().is_empty())
+    username
+        .map(str::trim)
+        .filter(|username| !username.is_empty())
         .map_or_else(|| "Telegram".into(), str::to_owned)
+}
+
+fn identity_display_name(identity: &TelegramIdentity) -> String {
+    telegram_name(
+        &identity.first_name,
+        identity.last_name.as_deref(),
+        identity.username.as_deref(),
+    )
 }
 
 /// # Errors
@@ -612,24 +719,38 @@ pub async fn telegram(
         .as_deref()
         .filter(|token| !token.is_empty())
         .ok_or(AppError::ServiceUnavailable)?;
-    if payload.id <= 0 || payload.first_name.trim().is_empty() {
-        return Err(AppError::BadRequest("invalid telegram identity".into()));
-    }
+    let init_data = payload
+        .init_data
+        .as_deref()
+        .map(str::trim)
+        .filter(|data| !data.is_empty());
+    let identity = if let Some(init_data) = init_data {
+        verified_web_app_identity(init_data, token)?
+    } else {
+        if payload.id <= 0 || payload.first_name.trim().is_empty() {
+            return Err(AppError::BadRequest("invalid telegram identity".into()));
+        }
+        let secret = Sha256::digest(token.as_bytes());
+        let expected = hex(&hmac_sha256(
+            &secret,
+            telegram_data_check(&payload).as_bytes(),
+        ));
+        if !expected.eq_ignore_ascii_case(&payload.hash) {
+            return Err(AppError::Unauthorized);
+        }
+        identity_from_login(&payload)
+    };
     let now = unix_seconds()?;
-    if now.saturating_sub(payload.auth_date) > 300 {
-        return Err(AppError::Unauthorized);
-    }
-    let secret = Sha256::digest(token.as_bytes());
-    let expected = hex(&hmac_sha256(
-        &secret,
-        telegram_data_check(&payload).as_bytes(),
-    ));
-    if !expected.eq_ignore_ascii_case(&payload.hash) {
+    // Mini App sessions can stay open for a day; the Login Widget return is
+    // short-lived. Telegram's own guidance is a freshness check, not a fixed
+    // five-minute window shared by both flows.
+    let max_age = if init_data.is_some() { 86_400 } else { 300 };
+    if now.saturating_sub(identity.auth_date) > max_age {
         return Err(AppError::Unauthorized);
     }
 
-    let identifier = payload.id.to_string();
-    let display_name = telegram_display_name(&payload);
+    let identifier = identity.id.to_string();
+    let display_name = identity_display_name(&identity);
     let mut tx = state.pool.begin().await?;
     let existing = find_login(&mut tx, "telegram", &identifier).await?;
     let prepared = prepare_user(

@@ -412,12 +412,21 @@ just ci            # full hermetic CI = nix flake check
 Create an optional, untracked `.env.local` to pass local integrations:
 
 ```sh
-TELEGRAM_BOT_TOKEN=...       # optional Telegram bot for approval notifications
-ADMIN_TELEGRAM_ID=...        # bootstrap admin Telegram id
-ADMIN_TELEGRAM_CHAT_ID=...   # chat that receives approval requests
-ADMIN_EMAIL=...              # bootstrap admin email
-VITE_TELEGRAM_BOT_ID=...     # Telegram Login Widget bot id exposed to Vite
+TELEGRAM_BOT_TOKEN=...          # optional Telegram bot for login and approvals
+TELEGRAM_BOT_USERNAME=...       # bot username without @; enables the Login Widget
+ADMIN_TELEGRAM_ID=...           # bootstrap admin Telegram id
+ADMIN_TELEGRAM_CHAT_ID=...      # chat that receives approval requests; falls back to ADMIN_TELEGRAM_ID
+ADMIN_EMAIL=...                 # bootstrap admin email
+VITE_TELEGRAM_BOT_ID=...        # optional; `just dev` derives it from the token prefix
+VITE_TELEGRAM_BOT_USERNAME=...  # optional; `just dev` copies TELEGRAM_BOT_USERNAME
 ```
+
+A copy of the same keys is in [`.env.example`](.env.example). The bot must be
+able to message the admin chat (send `/start` to it once). For browser login,
+add the exact origin used to open the app to the bot domain in BotFather;
+`trycloudflare.com` URLs change, so each tunnel host needs to be registered.
+When Telegram returns a domain error, the sign-in form now names the origin
+instead of failing silently.
 
 `Ctrl+C` stops the API and Vite together; PostgreSQL keeps running for the
 next `just dev`.

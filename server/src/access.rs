@@ -590,7 +590,9 @@ async fn notify_user(
     } else {
         "Access rejected."
     };
-    let _ = gateway.send_message(chat_id, text, &[]).await;
+    if let Err(error) = gateway.send_message(chat_id, text, &[]).await {
+        eprintln!("telegram: access notification to {chat_id} failed: {error}");
+    }
 }
 
 /// Approve or reject a pending user and notify their linked Telegram account.
@@ -642,7 +644,9 @@ pub async fn notify_pending(
         },
     ];
     let text = format!("New access request from {label}.\nUser id: {user_id}");
-    let _ = gateway.send_message(chat_id, &text, &buttons).await;
+    if let Err(error) = gateway.send_message(chat_id, &text, &buttons).await {
+        eprintln!("telegram: approval request to {chat_id} failed: {error}");
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
