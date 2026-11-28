@@ -5,11 +5,12 @@
 //! family's instruction or βᶠ prior changes it.
 
 use refl_core::bundle::{Bundle, Required};
+use refl_core::content::{Example, Refutation, Representation};
 use refl_core::ids::{InstructionId, ItemId, ItemVersion, KcId};
 use refl_core::item::ItemBody;
 use refl_core::model::fold_version;
 use refl_core::projection::{ItemProjection, ItemVersionEntry};
-use refl_core::value::{Finite, UnitInterval};
+use refl_core::value::{Finite, Localized, UnitInterval};
 use refl_sim::{BundleSpec, kc_id, synthetic_bundle};
 
 fn bundle() -> Bundle {
@@ -106,6 +107,32 @@ fn editing_a_text_keeps_it() {
     b.content.kcs[1].kc.rule.push_str(" Edited.");
     b.content.misconceptions[0].title.en = Some("Edited".into());
     b.content.instructions.clear();
+    assert_eq!(fold_version(&b), fold_version(&base));
+}
+
+/// The optional pedagogy fields are presentation/authoring data; they do not
+/// enter the fold's inputs and must not force a refold.
+#[test]
+fn pedagogical_fields_keep_the_fold_version() {
+    let base = bundle();
+    let mut b = base.clone();
+    b.content.misconceptions[0]
+        .refutations
+        .push(Refutation::Contrast {
+            correct: "I have lost my keys.".into(),
+            incorrect: "I lost my keys.".into(),
+            difference: Localized {
+                uz: None,
+                ru: None,
+                en: None,
+            },
+        });
+    b.content.explanations[0].examples.push(Example {
+        text: "I have a cat.".into(),
+        audio: None,
+        representation: Some(Representation::Pictorial),
+    });
+    b.content.items[0].item.representation = Some(Representation::Concrete);
     assert_eq!(fold_version(&b), fold_version(&base));
 }
 

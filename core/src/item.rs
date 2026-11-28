@@ -417,6 +417,10 @@ pub struct Item {
     pub difficulty: AuthorDifficulty,
     /// Seconds; for the fluency prior βᶠ and session planning.
     pub expected_time: u32,
+    /// Optional CPA representation of this item (`docs/12-method.md`, §2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub representation: Option<crate::content::Representation>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "ts", ts(optional))]
     pub topic: Option<TopicId>,

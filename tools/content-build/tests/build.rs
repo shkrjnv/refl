@@ -10,7 +10,7 @@ use content_build::lock::Lock;
 use content_build::report::{Code, Severity};
 use content_build::{Options, Output, build, to_bytes};
 use refl_core::bundle::KcStatus;
-use refl_core::content::MisconceptionOrigin;
+use refl_core::content::{MisconceptionOrigin, Refutation, Representation};
 use refl_core::ids::{ItemId, ItemRef, ItemVersion};
 use refl_core::item::ItemStatus;
 use refl_core::value::Lang;
@@ -94,6 +94,58 @@ fn clean_fixture_has_no_diagnostics() {
     let out = run(&fixtures().join("clean"));
     assert!(out.report.diagnostics.is_empty(), "{}", out.report);
     assert!(out.bundle.is_some());
+}
+
+/// Optional docs/12 fields survive the Nickel schema and the compiler;
+/// omitted fields stay empty/None for the existing content.
+#[test]
+fn pedagogical_fields_are_compiled() {
+    let out = run(&fixtures().join("clean"));
+    assert!(out.report.diagnostics.is_empty(), "{}", out.report);
+    let bundle = out.bundle.expect("bundle");
+
+    let misconception = bundle
+        .content
+        .misconceptions
+        .iter()
+        .find(|m| m.id.as_str() == "en.m.one")
+        .expect("misconception");
+    assert_eq!(misconception.refutations.len(), 2);
+    assert!(matches!(
+        &misconception.refutations[0],
+        Refutation::Contrast { correct, .. } if correct == "I have lost my keys."
+    ));
+    assert!(matches!(
+        &misconception.refutations[1],
+        Refutation::Counterexample { counterexample, .. } if counterexample == "a university"
+    ));
+
+    let explanation = bundle
+        .content
+        .explanations
+        .iter()
+        .find(|e| e.id.as_str() == "e.m.one")
+        .expect("explanation");
+    assert_eq!(
+        explanation.examples[0].representation,
+        Some(Representation::Pictorial)
+    );
+
+    let item = bundle
+        .content
+        .items
+        .iter()
+        .find(|e| e.item.id.as_str() == "it.gap")
+        .expect("item");
+    assert_eq!(item.item.representation, Some(Representation::Concrete));
+
+    let untouched = bundle
+        .content
+        .misconceptions
+        .iter()
+        .find(|m| m.id.as_str() == "en.m.two")
+        .expect("second misconception");
+    assert_eq!(untouched.refutations, Vec::new());
 }
 
 /// The spelling KC only receives observations: it is draft but not listed

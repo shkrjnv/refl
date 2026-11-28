@@ -86,6 +86,35 @@ pub struct L1Prior {
     pub ru: UnitInterval,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename_all = "lowercase"))]
+#[serde(rename_all = "lowercase")]
+pub enum Representation {
+    Concrete,
+    Pictorial,
+    Abstract,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Refutation {
+    /// Two sentences that differ in the disputed form, with the meaning
+    /// difference a learner must notice (`docs/12-method.md`, «Опровержение»).
+    Contrast {
+        correct: String,
+        incorrect: String,
+        difference: Localized,
+    },
+    /// A claim and a concrete case where it breaks, optionally derived from
+    /// an executable buggy rule in the future.
+    Counterexample {
+        claim: String,
+        counterexample: String,
+        explanation: Localized,
+    },
+}
+
 /// A stable wrong idea that produces predictable errors. Its micro-explanation
 /// is found by key: target = this misconception, depth = short, language by
 /// the chain interface -> ru -> en.
@@ -103,6 +132,10 @@ pub struct Misconception {
     pub prior: L1Prior,
     /// Topic that treats the cause; usually a prerequisite.
     pub remedy: KcId,
+    /// Optional refutations; empty for the existing content. Multiple
+    /// entries are safe micro-randomisation branches (`docs/11`, К5).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub refutations: Vec<Refutation>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -245,6 +278,10 @@ pub struct Example {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "ts", ts(optional))]
     pub audio: Option<AudioRef>,
+    /// Optional CPA representation of this example (`docs/12`, §2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub representation: Option<Representation>,
 }
 
 /// One explanation record: one target, one depth, one language.

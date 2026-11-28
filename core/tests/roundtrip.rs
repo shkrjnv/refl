@@ -627,6 +627,7 @@ fn item() -> impl Strategy<Value = Item> {
                 instruction,
                 difficulty: AuthorDifficulty::new(d).unwrap(),
                 expected_time: t,
+                representation: None,
                 topic,
                 status,
                 source,
@@ -713,6 +714,7 @@ fn misconception() -> impl Strategy<Value = Misconception> {
                 l1: L1Set { uz, ru },
                 prior: L1Prior { uz: puz, ru: pru },
                 remedy,
+                refutations: Vec::new(),
             },
         )
 }

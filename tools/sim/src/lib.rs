@@ -187,6 +187,7 @@ pub fn synthetic_bundle(spec: BundleSpec) -> Bundle {
                     ru: UnitInterval::new(p / 2.0).expect("unit"),
                 },
                 remedy: kc_id(i.saturating_sub(1)),
+                refutations: Vec::new(),
             });
         }
         explanations.push(Explanation {
@@ -282,6 +283,7 @@ pub fn synthetic_bundle(spec: BundleSpec) -> Bundle {
                 difficulty: AuthorDifficulty::new(1 + u8::try_from(j % 5).expect("small"))
                     .expect("1..=5"),
                 expected_time: 8 + 2 * u32::try_from(j % 4).expect("small"),
+                representation: None,
                 topic: None,
                 status: ItemStatus::Live,
                 source: None,
