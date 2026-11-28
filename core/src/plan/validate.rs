@@ -156,7 +156,7 @@ impl Planner<'_> {
         let shown_ok = plan
             .shown()
             .all(|(st, sh)| self.eligible_for(st, &sh.item, sh.slot));
-        if !shown_ok || plan.steps.iter().any(|st| !self.servable(plan, st)) {
+        if !shown_ok || plan.steps.iter().any(|st| !self.servable(plan, st, now)) {
             out.push(Violation::Ineligible);
         }
 
@@ -229,10 +229,13 @@ impl Planner<'_> {
             return None;
         };
         let shown: BTreeSet<&ItemId> = plan.shown().map(|(_, sh)| &sh.item.id).collect();
-        let review_left = plan
-            .reviews
-            .iter()
-            .any(|r| plan.shown().all(|(st, _)| st.kc != r.kc));
+        let review_left = plan.reviews.iter().any(|r| {
+            plan.shown().all(|(st, _)| st.kc != r.kc)
+                && self
+                    .slots(&r.kc)
+                    .iter()
+                    .any(|c| !shown.contains(&c.item.id))
+        });
         let contrasts = plan.learn.iter().flat_map(|l| &l.contrasts);
         let started = plan
             .candidates
@@ -286,11 +289,13 @@ impl Planner<'_> {
     }
 
     /// A step ahead has an unseen eligible item that fits it.
-    fn servable(&self, plan: &Plan, step: &Step) -> bool {
+    fn servable(&self, plan: &Plan, step: &Step, now: Timestamp) -> bool {
         if step.phase == Phase::Lesson {
             return self.is_live(&step.kc);
         }
         let shown: BTreeSet<_> = plan.shown().map(|(_, sh)| &sh.item.id).collect();
+        let session_families: BTreeSet<_> = plan.shown().map(|(_, sh)| &sh.family).collect();
+        let stale = Timestamp(now.0 - 30 * 86_400_000);
         self.slots(&step.kc).iter().any(|c| {
             !shown.contains(&c.item.id)
                 && step
@@ -298,6 +303,12 @@ impl Planner<'_> {
                     .as_ref()
                     .is_none_or(|f| *f == c.projection.family)
                 && (!step.production || c.projection.is_production())
+                && (!step.phase.is_probe()
+                    || (!session_families.contains(&c.projection.family)
+                        && plan
+                            .history
+                            .last_shown(&c.projection.family)
+                            .is_none_or(|t| t <= stale)))
         })
     }
 

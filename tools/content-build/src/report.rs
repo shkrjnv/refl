@@ -203,6 +203,8 @@ pub struct Report {
     /// KCs that only receive observations: not live, and not blocked by
     /// anything an author could write.
     pub observed: Vec<String>,
+    /// Reviewed and draft senses available to the vocabulary layer.
+    pub lexemes: usize,
 }
 
 impl Report {
@@ -242,11 +244,12 @@ impl fmt::Display for Report {
         }
         write!(
             f,
-            "{} error(s), {} warning(s), {} live KC(s), {} draft KC(s)",
+            "{} error(s), {} warning(s), {} live KC(s), {} draft KC(s), {} lexeme(s)",
             self.count(Severity::Error),
             self.count(Severity::Warning),
             self.live.len(),
-            self.draft.len()
+            self.draft.len(),
+            self.lexemes
         )
     }
 }

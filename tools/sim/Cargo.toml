@@ -20,6 +20,8 @@ sha2 = "0.10"
 proptest = "1"
 # Builds the real content for the Articles cohort test; needs `nickel`.
 content-build = { path = "../content-build" }
+# W24: the JSON boundary of the browser bridge, measured on the host.
+refl-core-wasm = { path = "../../core-wasm" }
 
 [lints]
 workspace = true

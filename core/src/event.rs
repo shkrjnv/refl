@@ -5,7 +5,9 @@
 //! older versions are lifted to the current one by upcasters before
 //! deserialization. Corrections are new events (`reclassified`), never edits.
 
-use alloc::string::String;
+use alloc::collections::BTreeMap;
+use alloc::format;
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::fmt;
 use serde::{Deserialize, Serialize};
@@ -13,8 +15,9 @@ use serde_json::Value;
 
 use crate::content::ExplanationDepth;
 use crate::ids::{
-    AchievementId, ContentVersion, EventId, ExplanationId, ItemRef, KcId, LearnerId, LessonId,
-    MisconceptionId, PackageKey, SessionId, UserId,
+    AchievementId, BookId, BookMarkId, ContentVersion, CustomLexemeId, EventId, ExplanationId,
+    ItemRef, KcId, LearnerId, LessonId, LexemeId, MisconceptionId, NoteId, PackageKey, SessionId,
+    SubjectId, UserId,
 };
 use crate::unlock::{
     AchievementTier, CosmeticSlot, Milestone, ShowcaseKeys, ShowcaseKind, UnlockKind, UnlockSource,
@@ -95,12 +98,396 @@ pub struct Event {
     pub payload: EventPayload,
 }
 
+/// Why a placement result was recorded: the learner chose to start from
+/// zero (or the check decided they should), or the check measured a level.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename_all = "snake_case"))]
+#[serde(rename_all = "snake_case")]
+pub enum PlacementSource {
+    StartFromZero,
+    Diagnostic,
+}
+
+/// The starting level per subject chosen by the entry step or the placement
+/// check (`docs/04-placement-planner.md`). The fold merges it into
+/// `Profile.start_level`, so the log is the single source of truth.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct PlacementCompletedEvent {
+    pub start_level: BTreeMap<SubjectId, Finite>,
+    pub answered: u16,
+    pub source: PlacementSource,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename_all = "snake_case"))]
+#[serde(rename_all = "snake_case")]
+pub enum LexicalDirection {
+    Recognize,
+    Produce,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename_all = "snake_case"))]
+#[serde(rename_all = "snake_case")]
+pub enum CustomLexemeSource {
+    Own,
+    Book,
+    Lesson,
+    Placement,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct CustomLexemeContext {
+    pub text: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub book_id: Option<BookId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub sentence_id: Option<String>,
+}
+
+/// A learner-authored vocabulary entry. Created and updated carry the same
+/// full snapshot; folding is last-write-wins by `event_id`
+/// (`docs/16-vocabulary-library-notes-graph.md`, §1).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[serde(try_from = "CustomLexemeRaw")]
+pub struct CustomLexemeEvent {
+    pub custom_id: CustomLexemeId,
+    pub source: CustomLexemeSource,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bundle_lexeme_id: Option<LexemeId>,
+    pub lemma: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pos: Option<String>,
+    pub definition_en: String,
+    #[serde(default)]
+    pub gloss_uz: String,
+    #[serde(default)]
+    pub gloss_ru: String,
+    #[serde(default)]
+    pub examples: Vec<String>,
+    #[serde(default)]
+    pub collocations: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ipa: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audio_key: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context: Option<CustomLexemeContext>,
+    #[serde(default)]
+    pub archived: bool,
+}
+
+#[derive(Deserialize)]
+struct CustomLexemeRaw {
+    custom_id: CustomLexemeId,
+    source: CustomLexemeSource,
+    #[serde(default)]
+    bundle_lexeme_id: Option<LexemeId>,
+    lemma: String,
+    #[serde(default)]
+    pos: Option<String>,
+    definition_en: String,
+    #[serde(default)]
+    gloss_uz: String,
+    #[serde(default)]
+    gloss_ru: String,
+    #[serde(default)]
+    examples: Vec<String>,
+    #[serde(default)]
+    collocations: Vec<String>,
+    #[serde(default)]
+    ipa: Option<String>,
+    #[serde(default)]
+    audio_key: Option<String>,
+    #[serde(default)]
+    context: Option<CustomLexemeContext>,
+    #[serde(default)]
+    archived: bool,
+}
+
+impl TryFrom<CustomLexemeRaw> for CustomLexemeEvent {
+    type Error = String;
+    fn try_from(raw: CustomLexemeRaw) -> Result<Self, Self::Error> {
+        if !raw.custom_id.is_v7() {
+            return Err("custom_id must be a UUIDv7".into());
+        }
+        let event = Self {
+            custom_id: raw.custom_id,
+            source: raw.source,
+            bundle_lexeme_id: raw.bundle_lexeme_id,
+            lemma: raw.lemma,
+            pos: raw.pos,
+            definition_en: raw.definition_en,
+            gloss_uz: raw.gloss_uz,
+            gloss_ru: raw.gloss_ru,
+            examples: raw.examples,
+            collocations: raw.collocations,
+            ipa: raw.ipa,
+            audio_key: raw.audio_key,
+            context: raw.context,
+            archived: raw.archived,
+        };
+        let bytes = serde_json::to_vec(&event).map_err(|error| error.to_string())?;
+        if bytes.len() > 4_096 {
+            return Err("custom lexeme exceeds 4096 JSON bytes".into());
+        }
+        Ok(event)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[serde(try_from = "CustomLexemeArchivedRaw")]
+pub struct CustomLexemeArchivedEvent {
+    pub custom_id: CustomLexemeId,
+    #[serde(default = "yes")]
+    pub archived: bool,
+}
+
+#[derive(Deserialize)]
+struct CustomLexemeArchivedRaw {
+    custom_id: CustomLexemeId,
+    #[serde(default = "yes")]
+    archived: bool,
+}
+
+impl TryFrom<CustomLexemeArchivedRaw> for CustomLexemeArchivedEvent {
+    type Error = String;
+    fn try_from(raw: CustomLexemeArchivedRaw) -> Result<Self, Self::Error> {
+        if !raw.custom_id.is_v7() {
+            return Err("custom_id must be a UUIDv7".into());
+        }
+        Ok(Self {
+            custom_id: raw.custom_id,
+            archived: raw.archived,
+        })
+    }
+}
+
+const fn yes() -> bool {
+    true
+}
+
+/// Direct lexical evidence from the vocabulary review block
+/// (`docs/16-vocabulary-library-notes-graph.md`, §1). The sense id is either
+/// a bundle sense or a personal word.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct LexicalReviewEvent {
+    pub lexeme: LexemeId,
+    pub direction: LexicalDirection,
+    pub correct: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename_all = "snake_case"))]
+#[serde(rename_all = "snake_case")]
+pub enum BookMarkKind {
+    Highlight,
+    Bookmark,
+}
+
+/// A book highlight or bookmark. Token indices are JSON-safe integers and
+/// `start_token <= end_token`; hashes are SHA-256 hex.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[serde(try_from = "BookMarkCreatedRaw")]
+pub struct BookMarkCreatedEvent {
+    pub mark_id: BookMarkId,
+    pub book_id: BookId,
+    /// SHA-256 of the book asset; the reader keeps an old mark readable.
+    pub book_version: String,
+    pub kind: BookMarkKind,
+    pub chapter_id: String,
+    pub paragraph_id: String,
+    pub sentence_id: String,
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
+    pub start_token: u64,
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
+    pub end_token: u64,
+    /// SHA-256 of the quoted sentence; a mismatch is shown, not rejected.
+    pub quote_hash: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct BookMarkCreatedRaw {
+    mark_id: BookMarkId,
+    book_id: BookId,
+    book_version: String,
+    kind: BookMarkKind,
+    chapter_id: String,
+    paragraph_id: String,
+    sentence_id: String,
+    start_token: u64,
+    end_token: u64,
+    quote_hash: String,
+    #[serde(default)]
+    color: Option<String>,
+}
+
+fn is_sha256_hex(value: &str) -> bool {
+    value.len() == 64 && value.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+impl TryFrom<BookMarkCreatedRaw> for BookMarkCreatedEvent {
+    type Error = String;
+    fn try_from(raw: BookMarkCreatedRaw) -> Result<Self, Self::Error> {
+        if !raw.mark_id.is_v7() {
+            return Err("mark_id must be a UUIDv7".into());
+        }
+        if raw.start_token > MAX_SAFE_INTEGER || raw.end_token > MAX_SAFE_INTEGER {
+            return Err("book mark token index exceeds 2^53 - 1".into());
+        }
+        if raw.start_token > raw.end_token {
+            return Err("start_token must not exceed end_token".into());
+        }
+        if !is_sha256_hex(&raw.book_version) {
+            return Err("book_version must be a SHA-256 hex digest".into());
+        }
+        if !is_sha256_hex(&raw.quote_hash) {
+            return Err("quote_hash must be a SHA-256 hex digest".into());
+        }
+        Ok(Self {
+            mark_id: raw.mark_id,
+            book_id: raw.book_id,
+            book_version: raw.book_version,
+            kind: raw.kind,
+            chapter_id: raw.chapter_id,
+            paragraph_id: raw.paragraph_id,
+            sentence_id: raw.sentence_id,
+            start_token: raw.start_token,
+            end_token: raw.end_token,
+            quote_hash: raw.quote_hash,
+            color: raw.color,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[serde(try_from = "BookMarkDeletedRaw")]
+pub struct BookMarkDeletedEvent {
+    pub mark_id: BookMarkId,
+}
+
+#[derive(Deserialize)]
+struct BookMarkDeletedRaw {
+    mark_id: BookMarkId,
+}
+
+impl TryFrom<BookMarkDeletedRaw> for BookMarkDeletedEvent {
+    type Error = String;
+    fn try_from(raw: BookMarkDeletedRaw) -> Result<Self, Self::Error> {
+        if !raw.mark_id.is_v7() {
+            return Err("mark_id must be a UUIDv7".into());
+        }
+        Ok(Self {
+            mark_id: raw.mark_id,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename_all = "snake_case"))]
+#[serde(rename_all = "snake_case")]
+pub enum NoteAnchorKind {
+    Kc,
+    Misconception,
+    Lexeme,
+    Item,
+    BookMark,
+    Standalone,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct NoteAnchor {
+    pub kind: NoteAnchorKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+}
+
+/// An anchored Markdown note; `body` is capped at 4096 UTF-8 bytes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[serde(try_from = "NoteSavedRaw")]
+pub struct NoteSavedEvent {
+    pub note_id: NoteId,
+    pub anchor: NoteAnchor,
+    pub body: String,
+}
+
+#[derive(Deserialize)]
+struct NoteSavedRaw {
+    note_id: NoteId,
+    anchor: NoteAnchor,
+    body: String,
+}
+
+impl TryFrom<NoteSavedRaw> for NoteSavedEvent {
+    type Error = String;
+    fn try_from(raw: NoteSavedRaw) -> Result<Self, Self::Error> {
+        if !raw.note_id.is_v7() {
+            return Err("note_id must be a UUIDv7".into());
+        }
+        if raw.body.len() > 4_096 {
+            return Err("note body exceeds 4096 UTF-8 bytes".into());
+        }
+        if raw.anchor.kind == NoteAnchorKind::Standalone && raw.anchor.id.is_some() {
+            return Err("a standalone note has no anchor id".into());
+        }
+        if raw.anchor.kind != NoteAnchorKind::Standalone
+            && raw.anchor.id.as_deref().is_none_or(str::is_empty)
+        {
+            return Err("an anchored note needs an anchor id".into());
+        }
+        Ok(Self {
+            note_id: raw.note_id,
+            anchor: raw.anchor,
+            body: raw.body,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[serde(try_from = "NoteDeletedRaw")]
+pub struct NoteDeletedEvent {
+    pub note_id: NoteId,
+}
+
+#[derive(Deserialize)]
+struct NoteDeletedRaw {
+    note_id: NoteId,
+}
+
+impl TryFrom<NoteDeletedRaw> for NoteDeletedEvent {
+    type Error = String;
+    fn try_from(raw: NoteDeletedRaw) -> Result<Self, Self::Error> {
+        if !raw.note_id.is_v7() {
+            return Err("note_id must be a UUIDv7".into());
+        }
+        Ok(Self {
+            note_id: raw.note_id,
+        })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum EventPayload {
     Answer(AnswerEvent),
     Reclassified(ReclassifiedEvent),
+    /// The entry step or the placement check fixed a starting level.
+    PlacementCompleted(PlacementCompletedEvent),
     LessonStarted {
         lesson: LessonId,
     },
@@ -162,6 +549,16 @@ pub enum EventPayload {
     MentorOverride(MentorOverrideEvent),
     /// Criterion scores of a written answer (stage 5).
     WritingScored(WritingScoredEvent),
+    /// Learner-authored vocabulary (`docs/16-vocabulary-library-notes-graph.md`).
+    CustomLexemeCreated(CustomLexemeEvent),
+    CustomLexemeUpdated(CustomLexemeEvent),
+    CustomLexemeArchived(CustomLexemeArchivedEvent),
+    BookMarkCreated(BookMarkCreatedEvent),
+    BookMarkDeleted(BookMarkDeletedEvent),
+    NoteSaved(NoteSavedEvent),
+    NoteDeleted(NoteDeletedEvent),
+    /// Direct evidence from the vocabulary review block.
+    LexicalReview(LexicalReviewEvent),
 }
 
 /// Uniqueness key of an event the server derives from the log: the database
@@ -181,6 +578,7 @@ impl EventPayload {
         match self {
             Self::Answer(_) => "answer",
             Self::Reclassified(_) => "reclassified",
+            Self::PlacementCompleted(_) => "placement_completed",
             Self::LessonStarted { .. } => "lesson_started",
             Self::LessonFinished { .. } => "lesson_finished",
             Self::ExplanationViewed { .. } => "explanation_viewed",
@@ -196,6 +594,14 @@ impl EventPayload {
             Self::PlanIssued(_) => "plan_issued",
             Self::MentorOverride(_) => "mentor_override",
             Self::WritingScored(_) => "writing_scored",
+            Self::CustomLexemeCreated(_) => "custom_lexeme_created",
+            Self::CustomLexemeUpdated(_) => "custom_lexeme_updated",
+            Self::CustomLexemeArchived(_) => "custom_lexeme_archived",
+            Self::BookMarkCreated(_) => "book_mark_created",
+            Self::BookMarkDeleted(_) => "book_mark_deleted",
+            Self::NoteSaved(_) => "note_saved",
+            Self::NoteDeleted(_) => "note_deleted",
+            Self::LexicalReview(_) => "lexical_review",
         }
     }
 
@@ -228,7 +634,7 @@ impl EventPayload {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename_all = "snake_case"))]
 #[serde(rename_all = "snake_case")]
 pub enum AnswerContext {
@@ -549,6 +955,7 @@ pub struct WritingScoredEvent {
 pub const EVENT_TYPES: &[&str] = &[
     "answer",
     "reclassified",
+    "placement_completed",
     "lesson_started",
     "lesson_finished",
     "explanation_viewed",
@@ -564,6 +971,14 @@ pub const EVENT_TYPES: &[&str] = &[
     "plan_issued",
     "mentor_override",
     "writing_scored",
+    "custom_lexeme_created",
+    "custom_lexeme_updated",
+    "custom_lexeme_archived",
+    "book_mark_created",
+    "book_mark_deleted",
+    "note_saved",
+    "note_deleted",
+    "lexical_review",
 ];
 
 /// `kind` tags of every [`Response`] variant this core knows; checked like
@@ -635,6 +1050,23 @@ pub enum DecodeError {
     Json(serde_json::Error),
     MissingSchemaVersion,
     UnknownSchemaVersion(u64),
+    /// A `note_saved` body is longer than 4096 UTF-8 bytes
+    /// (`docs/16-vocabulary-library-notes-graph.md`, «Ограничения»).
+    NoteTooLarge,
+    /// A `custom_lexeme_created`/`updated` payload is longer than 4096 JSON
+    /// bytes.
+    CustomLexemeTooLarge,
+}
+
+impl DecodeError {
+    /// The stable rejection reason the sync API reports.
+    pub fn reason(&self) -> String {
+        match self {
+            Self::NoteTooLarge => String::from("note_too_large"),
+            Self::CustomLexemeTooLarge => String::from("custom_lexeme_too_large"),
+            _ => format!("invalid_event: {self}"),
+        }
+    }
 }
 
 impl fmt::Display for DecodeError {
@@ -643,6 +1075,8 @@ impl fmt::Display for DecodeError {
             Self::Json(e) => write!(f, "invalid event JSON: {e}"),
             Self::MissingSchemaVersion => f.write_str("event has no schema_version"),
             Self::UnknownSchemaVersion(v) => write!(f, "unknown schema_version {v}"),
+            Self::NoteTooLarge => f.write_str("note body exceeds 4096 UTF-8 bytes"),
+            Self::CustomLexemeTooLarge => f.write_str("custom lexeme exceeds 4096 JSON bytes"),
         }
     }
 }
@@ -705,7 +1139,35 @@ pub fn decode_event(json: &str) -> Result<Decoded, DecodeError> {
     if value.get("payload").is_some_and(has_unknown_tag) {
         return Ok(unknown());
     }
+    check_payload_limits(&value)?;
     Ok(Decoded::Known(serde_json::from_value(value)?))
+}
+
+/// Size limits of the Batch 4 record events, checked before serde so the
+/// sync API can name the rejection reason instead of a JSON error.
+fn check_payload_limits(value: &Value) -> Result<(), DecodeError> {
+    let Some(payload) = value.get("payload") else {
+        return Ok(());
+    };
+    match payload.get("type").and_then(Value::as_str) {
+        Some("note_saved") => {
+            if payload
+                .get("body")
+                .and_then(Value::as_str)
+                .is_some_and(|body| body.len() > 4_096)
+            {
+                return Err(DecodeError::NoteTooLarge);
+            }
+        }
+        Some("custom_lexeme_created" | "custom_lexeme_updated") => {
+            let bytes = serde_json::to_vec(payload)?;
+            if bytes.len() > 4_096 {
+                return Err(DecodeError::CustomLexemeTooLarge);
+            }
+        }
+        _ => {}
+    }
+    Ok(())
 }
 
 #[cfg(test)]

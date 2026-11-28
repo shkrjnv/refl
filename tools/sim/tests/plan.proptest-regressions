@@ -5,3 +5,4 @@
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
 cc d619835657ff99166b590ad6ca6a99c08a808dadc138e6dfea091b7f303f4dfb # shrinks to c = Case { kcs: 4, items_per_kc: 10, drafts: [], events: 519, log_seed: 462813389551604707, level: 0, days: 2, budget: Ten, seed: 5089768509700273848, impatient: false }
+cc 5b77f1c4f0adf47d61556cdd6e1a5d1627202df0934d64aa81c5ed7fde04bb1a # shrinks to c = Case { kcs: 5, items_per_kc: 9, drafts: [], events: 352, log_seed: 12507723021171852507, level: 0, days: 1, budget: Ten, seed: 0, impatient: false }

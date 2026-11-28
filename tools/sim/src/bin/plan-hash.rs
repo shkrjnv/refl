@@ -15,6 +15,8 @@ use refl_core::model::{KnowledgeModel, Profile, replay};
 use refl_core::plan::{Budget, History, Next, Params, Planner, ReadingSpeed};
 use refl_core::value::{Lang, Seed, Timestamp};
 use refl_sim::cohort::{Learner, Track, session_ours};
+use refl_sim::prereq;
+use refl_sim::termination;
 use refl_sim::{BundleSpec, DAY_MS, LogSpec, event_time, synthetic_bundle, synthetic_log};
 use sha2::{Digest, Sha256};
 
@@ -71,6 +73,7 @@ fn time(kcs: usize, items_per_kc: usize) {
     );
 }
 
+#[allow(clippy::too_many_lines)] // one report with hash and Rule 3 scenarios
 fn main() -> ExitCode {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
     let timing = args.first().is_some_and(|a| a == "--time");
@@ -128,6 +131,81 @@ fn main() -> ExitCode {
         Planner::new(&model, &bundle, &params, &reading).version(),
         track.state.hash()
     );
+
+    let scenario_a = match prereq::scenario_a() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("prerequisite scenario A: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let scenario_b = match prereq::scenario_b() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("prerequisite scenario B: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    println!(
+        "prereq_a rule={} selected={:?} trigger={:?} prerequisite_steps={} subsequent_steps={} final_steps={} end={:?} continued={} post_prerequisite_steps={} post_prerequisite_prereq_steps={}",
+        scenario_a.rule,
+        scenario_a.selected,
+        scenario_a.trigger,
+        scenario_a.prerequisite_steps,
+        scenario_a.subsequent_steps,
+        scenario_a.final_steps,
+        scenario_a.end,
+        scenario_a.continued,
+        scenario_a.post_prerequisite_steps,
+        scenario_a.post_prerequisite_prereq_steps
+    );
+    println!(
+        "prereq_b rule={} selected={:?} trigger={:?} prerequisite_steps={} subsequent_steps={} final_steps={} end={:?} continued={} post_prerequisite_steps={} post_prerequisite_prereq_steps={}",
+        scenario_b.rule,
+        scenario_b.selected,
+        scenario_b.trigger,
+        scenario_b.prerequisite_steps,
+        scenario_b.subsequent_steps,
+        scenario_b.final_steps,
+        scenario_b.end,
+        scenario_b.continued,
+        scenario_b.post_prerequisite_steps,
+        scenario_b.post_prerequisite_prereq_steps
+    );
+
+    let terminal = termination::scenario_terminal();
+    let alternative = termination::scenario_review_alternative();
+    println!(
+        "runlimit_terminal end={:?} steps={} review_steps={} final_steps={}",
+        terminal.end, terminal.steps, terminal.review_steps, terminal.final_steps
+    );
+    println!(
+        "runlimit_alternative end={:?} steps={} review_steps={} final_steps={}",
+        alternative.end, alternative.steps, alternative.review_steps, alternative.final_steps
+    );
+
+    let rule_failed = scenario_a.rule != "prerequisite_check"
+        || scenario_a.selected != Some(prereq::expected_selected())
+        || scenario_a.trigger.as_deref() != Some("prerequisite_check")
+        || scenario_a.prerequisite_steps != 1
+        || scenario_a.subsequent_steps == 0
+        || !scenario_a.continued
+        || scenario_a.post_prerequisite_steps == 0
+        || scenario_a.post_prerequisite_prereq_steps != 0
+        || scenario_b.rule != "prerequisite_check"
+        || scenario_b.selected != Some(prereq::expected_selected())
+        || scenario_b.trigger.as_deref() != Some("prerequisite_check")
+        || scenario_b.prerequisite_steps != 0
+        || scenario_b.final_steps == 0
+        || scenario_b.end != prereq::expected_b_end().map(|e| e.code().to_string())
+        || terminal.end.as_deref() != Some("run_limit")
+        || terminal.steps != 0
+        || alternative.end.is_some()
+        || alternative.review_steps == 0;
+    if rule_failed {
+        eprintln!("prerequisite scenario assertions failed");
+        return ExitCode::FAILURE;
+    }
     if violations > 0 {
         return ExitCode::FAILURE;
     }

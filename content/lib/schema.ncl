@@ -12,6 +12,48 @@ let Lang = OneOf ["uz", "ru", "en"] in
 # `hashes.txt` from `report --review` has the current one.
 let ReviewRecord = { status | OneOf ["draft", "reviewed"], by | String | optional, hash | String | optional } in
 let LangReviews = { uz | ReviewRecord | optional, ru | ReviewRecord | optional, en | ReviewRecord | optional } in
+let Representation = OneOf ["concrete", "pictorial", "abstract"] in
+# A refutation is either a contrast pair (the disputed form in two sentences
+# and the meaning difference) or a claim with a counterexample
+# (docs/12-method.md, «Опровержение»).
+let Refutation =
+  std.contract.custom
+    (
+      fun label value =>
+        if !(std.is_record value) || !(std.record.has_field "kind" value) then
+          'Error { message = "a refutation needs a `kind`" }
+        else if value.kind == "contrast" then
+          'Ok
+            (
+              std.contract.apply
+                {
+                  kind | OneOf ["contrast"],
+                  correct | String,
+                  incorrect | String,
+                  difference | Localized,
+                }
+                label
+                value
+            )
+        else if value.kind == "counterexample" then
+          'Ok
+            (
+              std.contract.apply
+                {
+                  kind | OneOf ["counterexample"],
+                  claim | String,
+                  counterexample | String,
+                  explanation | Localized,
+                }
+                label
+                value
+            )
+        else
+          'Error {
+            message = "unknown refutation kind `%{std.to_string value.kind}`",
+          }
+    )
+in
 
 {
   Subject = {
@@ -47,6 +89,32 @@ let LangReviews = { uz | ReviewRecord | optional, ru | ReviewRecord | optional, 
     from | String,
     to | String,
   },
+  LexemeExample = { text | String, audio_key | String | optional },
+  LexemeSense = {
+    id | String,
+    definition_en | String,
+    gloss_uz | String | optional,
+    gloss_ru | String | optional,
+    examples | Array LexemeExample | optional,
+    collocations | Array String | optional,
+    ipa_uk | String | optional,
+    ipa_us | String | optional,
+    audio_key | String | optional,
+    review | LangReviews | optional,
+  },
+  Lexeme = {
+    id | String,
+    lemma | String,
+    pos | OneOf ["noun", "verb", "adj", "adv", "prep", "pron", "det", "conj", "phrase"],
+    frequency_rank | Number,
+    level | String,
+    forms | Array String | optional,
+    senses | Array LexemeSense,
+    kc_ids | Array String | optional,
+    source | String | optional,
+    license | String | optional,
+    review | LangReviews | optional,
+  },
   Misconception = {
     id | String,
     title | Localized,
@@ -56,13 +124,15 @@ let LangReviews = { uz | ReviewRecord | optional, ru | ReviewRecord | optional, 
     l1 | { uz | Bool, ru | Bool },
     prior | { uz | Unit, ru | Unit },
     remedy | String,
+    # Optional authored refutations; multiple entries are safe branches.
+    refutations | Array Refutation | optional,
   },
   Instruction = {
     id | String,
     text | Localized,
     review | LangReviews | optional,
   },
-  Example = { text | String, audio | String | optional },
+  Example = { text | String, audio | String | optional, representation | Representation | optional },
   Explanation = {
     id | String,
     target | { kind | OneOf ["kc", "misconception"], id | String },
@@ -92,6 +162,7 @@ let LangReviews = { uz | ReviewRecord | optional, ru | ReviewRecord | optional, 
     instruction | String,
     difficulty | OneOf [1, 2, 3, 4, 5],
     expected_time | Number,
+    representation | Representation | optional,
     topic | String | optional,
     status | OneOf ["draft", "review", "live", "retired"],
     source | String | optional,
@@ -135,6 +206,7 @@ let LangReviews = { uz | ReviewRecord | optional, ru | ReviewRecord | optional, 
   File = {
     subjects | Array Subject | optional,
     kcs | Array Kc | optional,
+    lexemes | Array Lexeme | optional,
     edges | Array Edge | optional,
     misconceptions | Array Misconception | optional,
     explanations | Array Explanation | optional,

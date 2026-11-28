@@ -14,6 +14,7 @@
 extern crate alloc;
 
 pub mod answer;
+pub mod book;
 pub mod bundle;
 pub mod content;
 pub mod event;
@@ -23,9 +24,12 @@ pub mod kind;
 pub mod lesson;
 pub mod lexicon;
 pub mod model;
+pub mod placement;
 pub mod plan;
 pub mod projection;
+pub mod quality;
 pub mod rng;
+pub mod stats;
 pub mod subject;
 pub mod unlock;
 pub mod value;

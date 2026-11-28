@@ -239,6 +239,7 @@ fn projection_answers_like_the_item() {
             instruction: InstructionId::new("en.instr.x").unwrap(),
             difficulty: AuthorDifficulty::new(3).unwrap(),
             expected_time: 10,
+            representation: None,
             topic: None,
             status: ItemStatus::Live,
             source: None,

@@ -1,0 +1,31 @@
+/*
+ * Self-hosted fonts: refl never requests a font from a CDN (docs/08, docs/14).
+ * Geologica covers Latin and Cyrillic; the IPA face is a subset of Noto Sans
+ * served under the same family for the sounds Geologica does not draw, so a
+ * transcript never falls back to an unpredictable system font.
+ */
+@font-face {
+  font-family: "Geologica";
+  src: url("/fonts/Geologica-Variable.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geologica";
+  src: url("/fonts/Geologica-IPA.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  unicode-range: U+02BB, U+0259, U+0252, U+025C, U+0261, U+026A, U+0283,
+    U+028A, U+028C, U+0292, U+02C8, U+02CC, U+02D0;
+}
+
+@font-face {
+  font-family: "Pixelify Sans";
+  src: url("/fonts/PixelifySans-Variable.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+}

@@ -789,6 +789,8 @@ fn context(phase: Phase) -> AnswerContext {
         Phase::Review => AnswerContext::Review,
         Phase::Lesson | Phase::Block => AnswerContext::Lesson,
         Phase::Interleaved | Phase::Prerequisite | Phase::Final => AnswerContext::Practice,
+        Phase::Audit => AnswerContext::Audit,
+        Phase::ReturnCheck => AnswerContext::ReturnCheck,
     }
 }
 
@@ -1006,6 +1008,8 @@ pub fn session_fsrs(
             budget,
             started: track.now(),
             seed: Seed::new(0).expect("small"),
+            history: History::default(),
+            return_check: false,
             learn: Vec::new(),
             candidates: Vec::new(),
             deferred_today: Vec::new(),

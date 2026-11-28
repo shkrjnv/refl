@@ -12,8 +12,8 @@ use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 
 use crate::answer::dfa::{Dfa, TokenTable};
-use crate::content::{Edge, Explanation, Instruction, Kc, Misconception};
-use crate::ids::{ContentVersion, ItemRef, KcId, MisconceptionId};
+use crate::content::{Edge, Explanation, Instruction, Kc, Lexeme, Misconception};
+use crate::ids::{ContentVersion, ItemId, ItemRef, KcId, LexemeId, MisconceptionId};
 use crate::item::Item;
 use crate::lesson::Lesson;
 use crate::lexicon::LexiconRef;
@@ -43,6 +43,14 @@ pub struct BundleContent {
     pub subjects: Vec<Subject>,
     /// Sorted by id.
     pub kcs: Vec<KcEntry>,
+    /// Lexical bank, outside the KC graph; sorted by id.
+    #[serde(default)]
+    pub lexemes: Vec<Lexeme>,
+    /// Lexeme ids exposed by each current item's stimulus and reference
+    /// answers. This is a content-build index, not an item projection, so
+    /// published item projections stay append-only.
+    #[serde(default)]
+    pub item_lexemes: BTreeMap<ItemId, Vec<LexemeId>>,
     /// Sorted.
     pub edges: Vec<Edge>,
     /// Every KC mapped to all KCs it requires directly or transitively,
@@ -103,6 +111,12 @@ pub struct KcEntry {
     pub status: KcStatus,
     /// Rank of `kc.level` in its subject's scale, lowest = 0.
     pub level_rank: u16,
+    /// Precomputed graph position, 0..=1000; content-build fills it and the
+    /// client never runs a layout algorithm for the layered view.
+    #[serde(default)]
+    pub layout_x: u16,
+    #[serde(default)]
+    pub layout_y: u16,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

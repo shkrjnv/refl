@@ -1,6 +1,10 @@
 target/
 node_modules/
+web/dist/
+web/src/generated/wasm/
 result*
 .direnv/
 .env
 CLAUDE.md
+.pgdata/
+.env.local

@@ -6,6 +6,7 @@ import type { LangReviews } from "./LangReviews";
 import type { Localized } from "./Localized";
 import type { MisconceptionId } from "./MisconceptionId";
 import type { MisconceptionOrigin } from "./MisconceptionOrigin";
+import type { Refutation } from "./Refutation";
 
 /**
  * A stable wrong idea that produces predictable errors. Its micro-explanation
@@ -20,4 +21,9 @@ review: LangReviews, affects: Array<KcId>, origin: MisconceptionOrigin, l1: L1Se
 /**
  * Topic that treats the cause; usually a prerequisite.
  */
-remedy: KcId, };
+remedy: KcId, 
+/**
+ * Optional refutations; empty for the existing content. Multiple
+ * entries are safe micro-randomisation branches (`docs/11`, К5).
+ */
+refutations?: Array<Refutation>, };

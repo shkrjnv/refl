@@ -15,11 +15,13 @@ use sha2::{Digest, Sha256};
 use super::fluency::Families;
 use crate::bundle::{Bundle, Required};
 use crate::content::ExplanationTarget;
-use crate::ids::{ExplanationId, FamilyId, InstructionId, KcId, MisconceptionId, SubjectId};
+use crate::ids::{
+    ExplanationId, FamilyId, InstructionId, ItemId, KcId, LexemeId, MisconceptionId, SubjectId,
+};
 
 /// Bumped when the set of hashed inputs changes, so an old and a new
-/// composition never collide. 2: the family table.
-pub const FOLD_INPUTS_FORMAT: u32 = 2;
+/// composition never collide. 3: the lexeme bank and item→lexeme index.
+pub const FOLD_INPUTS_FORMAT: u32 = 3;
 
 #[derive(Serialize)]
 struct FamilyInput<'a> {
@@ -58,10 +60,25 @@ struct ExplanationInput<'a> {
 }
 
 #[derive(Serialize)]
+struct LexemeInput<'a> {
+    id: &'a LexemeId,
+    frequency_rank: u32,
+    level: &'a str,
+}
+
+#[derive(Serialize)]
+struct ItemLexemeInput<'a> {
+    item: &'a ItemId,
+    lexemes: &'a [LexemeId],
+}
+
+#[derive(Serialize)]
 struct FoldInputs<'a> {
     format: u32,
     subjects: Vec<SubjectInput<'a>>,
     kcs: Vec<KcInput<'a>>,
+    lexemes: Vec<LexemeInput<'a>>,
+    item_lexemes: Vec<ItemLexemeInput<'a>>,
     requires_closure: &'a BTreeMap<KcId, Vec<Required>>,
     misconceptions: Vec<MisconceptionInput<'a>>,
     explanation_targets: Vec<ExplanationInput<'a>>,
@@ -96,6 +113,23 @@ pub fn fold_version(bundle: &Bundle) -> String {
                 subject: &e.kc.subject,
                 level_rank: e.level_rank,
                 importance: e.kc.importance.get(),
+            })
+            .collect(),
+        lexemes: c
+            .lexemes
+            .iter()
+            .map(|l| LexemeInput {
+                id: &l.id,
+                frequency_rank: l.frequency_rank,
+                level: l.level.as_str(),
+            })
+            .collect(),
+        item_lexemes: c
+            .item_lexemes
+            .iter()
+            .map(|(item, lexemes)| ItemLexemeInput {
+                item,
+                lexemes: lexemes.as_slice(),
             })
             .collect(),
         requires_closure: &c.requires_closure,

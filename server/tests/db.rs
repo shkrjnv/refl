@@ -608,6 +608,46 @@ async fn privacy_defaults_depend_on_minor(c: &Cluster) {
     db.close().await;
 }
 
+async fn minor_privacy_and_chat_are_enforced(c: &Cluster) {
+    let db = migrated(c, "minor_guard").await;
+    let child = Uuid::from_u128(0x0193_0000_0000_7000_8000_0000_0000_0005);
+    user(&db, child, "AAAA0005", true).await;
+
+    let public =
+        sqlx::query("UPDATE privacy_settings SET profile_visibility = 'public' WHERE user_id = $1")
+            .bind(child)
+            .execute(&db)
+            .await
+            .unwrap_err();
+    assert!(public.to_string().contains("minor profile"), "{public}");
+    let anyone = sqlx::query(
+        "UPDATE privacy_settings SET friend_requests_from = 'anyone' WHERE user_id = $1",
+    )
+    .bind(child)
+    .execute(&db)
+    .await
+    .unwrap_err();
+    assert!(anyone.to_string().contains("minor profile"), "{anyone}");
+
+    // An adult can still open the profile.
+    sqlx::query("UPDATE privacy_settings SET profile_visibility = 'public' WHERE user_id = $1")
+        .bind(LEARNER)
+        .execute(&db)
+        .await
+        .unwrap();
+
+    let allowed = |sender: Uuid, recipient: Uuid| {
+        sqlx::query_scalar::<_, bool>("SELECT direct_message_allowed($1, $2)")
+            .bind(sender)
+            .bind(recipient)
+            .fetch_one(&db)
+    };
+    assert!(!allowed(LEARNER, child).await.unwrap());
+    assert!(!allowed(child, LEARNER).await.unwrap());
+    assert!(allowed(LEARNER, ADMIN).await.unwrap());
+    db.close().await;
+}
+
 async fn content_bundle_imports_idempotently(c: &Cluster) {
     let db = migrated(c, "content").await;
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../content");
@@ -813,6 +853,7 @@ fn database() {
         duplicate_derived_event_is_rejected(&cluster).await;
         erasure_removes_one_learner(&cluster).await;
         privacy_defaults_depend_on_minor(&cluster).await;
+        minor_privacy_and_chat_are_enforced(&cluster).await;
         content_bundle_imports_idempotently(&cluster).await;
         published_item_versions_are_kept(&cluster).await;
     });

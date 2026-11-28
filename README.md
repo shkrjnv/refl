@@ -6,7 +6,7 @@ English is the first subject. From day one the core is built with a boundary bet
 
 refl does not hand out points for activity. It builds a model of what the learner knows, what they are forgetting, what they do slowly and where they make systematic mistakes, and it assembles every session from that model. Every decision the system makes can be explained: "why this task" is not marketing, it is a formula.
 
-> **Status: stage 0, foundation.** The core (domain types, answer checking, the full schema-1 event set, decoding of events from newer clients), content build and validation, database schema and event log are done. There is no learner-facing interface yet. Everything described below as a feature is the specification development follows; what is already built is listed under [Stages](#stages).
+> **Status: Batch 4B.** The core, content compiler, server event log, WASM bridge and React PWA are built. The PWA includes entry/placement, Today, lesson, summary, progress, profile, settings, Vocabulary, Library with the offline book reader, the layered/web knowledge graph, private notes and bookmarks, and the Iella/Sendo companion registry. Five Articles KCs are live; 27 A1 KCs and their starter bank are draft pending review. Full placement stage 2, extended diagnostics and quality dashboard remain specification work. The implementation map is [docs/ARCHITECTURE_STATUS.md](docs/ARCHITECTURE_STATUS.md); everything below as a feature is the specification development follows, and what is built is listed under [Stages](#stages).
 >
 > The specifications in [`docs/`](docs/README.md) are written in Russian and are the single source of truth. This README is their English overview.
 
@@ -157,7 +157,7 @@ FSRS-6 memory: R(t) = (1 + F·t/S)^(−w₂₀), F = 0.9^(−1/w₂₀) − 1. F
 
 **A topic is mastered** when all hold at once: the probability that skill is above the threshold is ≥ 0.8; the learner is fluent on it; at least two correct answers on typed or free-answer tasks.
 
-**Fluency** (model v1.3, [docs/03](docs/03-layer2-learner-model.md)) measures recall, not the whole answer time. The answer event records only per-task totals: time to the first tap or keystroke, typing time, characters typed and deleted, the input device and how long the page was hidden; never the rhythm of keystrokes, which is biometric. Retrieval time is the time to the first input, plus, for typed answers, any typing beyond 1.5 times the learner's own usual time for that many characters (their typing speed per device, shrunk to 1.5 characters a second on touch and 3 on a keyboard). It is compared with the expected retrieval time of the task family, βᶠ: the author's expected time minus the time to type the reference answer. In the prototype βᶠ is that prior; later it will be calibrated on many learners' answers, never on one learner's, or it would absorb that learner's own speed. Only clean answers count: correct, first attempt, no hint, no rapid guess, page never hidden, not the first answer after a new instruction, a task not seen in the last 14 days. A topic is fluent after at least 6 such answers if the learner is at most 1.22 times slower than expected, or, for learners who are slow everywhere but steady (slow readers, young children), if the topic is no slower than their usual pace on topics they know and the times are steady. The same residual sets the FSRS grade: slow is Hard, fast is Easy.
+**Fluency** (model v1.3, [docs/03](docs/03-layer2-learner-model.md)) measures recall, not the whole answer time. The answer event records only per-task totals: time to the first tap or keystroke, typing time, characters typed and deleted, the input device and how long the page was hidden; never the rhythm of keystrokes, which is biometric. Retrieval time is the time to the first input, plus, for typed answers, any typing beyond 1.5 times the learner's own usual time for that many characters (their typing speed per device, shrunk to 1.5 characters a second on touch and 3 on a keyboard). It is compared with the expected retrieval time of the task family, βᶠ: the author's expected time minus the time to type the reference answer. In the prototype βᶠ is that prior; later it will be calibrated on many learners' answers, never on one learner's, or it would absorb that learner's own speed. Only clean answers count: correct, first attempt, no hint, no rapid guess, page never hidden, not the first answer after a new instruction, a task not seen in the last 3 days. A topic is fluent after at least 6 such answers if the learner is at most 1.22 times slower than expected, or, for learners who are slow everywhere but steady (slow readers, young children), if the topic is no slower than their usual pace on topics they know and the times are steady. The same residual sets the FSRS grade: slow is Hard, fast is Easy.
 
 **The model checks itself:** the prediction is made before the task is shown, and "prediction vs outcome" calibration is visible to the learner in the "Model" tab of the statistics. A new model can run "in the shadow" next to the old one (the `LearnerModel` trait) and be compared on the real log.
 
@@ -176,7 +176,7 @@ How do we know the system understands the learner and builds a good plan? Predic
 | Decisions | is the plan better than alternatives? | a decision log with reasons, micro-randomisation of near-equal options, a learner simulator (built on a different model than ours) against baseline planners |
 | Outside view | do we agree with people? | external tests, mentor overrides, blind scoring of writing |
 
-**Prototype session builder** (built for the "Articles" prototype, `core/src/plan/`, [docs/04](docs/04-placement-planner.md), «Сборка сессии в прототипе»). A simple session without the value-per-minute knapsack: a 10 / 15 / 25-minute budget, an upper bound rather than a target, filled by tasks' expected time and by explanations (100 words a minute times the learner's own reading-speed factor: the median ratio of their actual to expected reading time, pulled towards 1; a per-explanation correction waits for population statistics); a session with nothing valuable left ends early and records why (time is up, nothing due, reviews done, the topic practised alone reached its cap, the topics were mastered, the topic is deferred, or no unseen task is left); FSRS reviews up to 35%, no new topic while reviews don't fit; up to two topics to learn among those not yet mastered (the second opens only when nothing else is left to interleave, see P1 below) (a topic set aside after 12 tasks without progress comes back the next day), picked by learning value with seeded micro-randomisation among near-equal options; a block of tasks on it, then interleaving with reviews, contrasting topics and other started topics, never more than three in a row while anything else can be given (see P1b below); a final block of this session's errors in new variants. The next task is picked by target difficulty, the type ladder and family freshness; six adaptation rules re-plan after each answer. Every plan and every task choice is logged as `plan_issued` with its candidates, factors, seed, propensity, dominant factor and validator violations. The plan is a pure function of the session's answers, the learner state and the bundle, recomputed after every answer; the core API is `build_session`, `next_item`, `adapt` and `validate_plan`. A session plan takes under 1 ms and a task choice about 0.1 ms on 200 topics (native; in WASM under wasmtime about 1.3× that).
+**Prototype session builder** (built for the "Articles" prototype, `core/src/plan/`, [docs/04](docs/04-placement-planner.md), «Сборка сессии в прототипе»). A simple session without the value-per-minute knapsack: a 10 / 15 / 25-minute budget, an upper bound rather than a target, filled by tasks' expected time and by explanations (100 words a minute times the learner's own reading-speed factor: the median ratio of their actual to expected reading time, pulled towards 1; a per-explanation correction waits for population statistics); a session with nothing valuable left ends early and records why (time is up, nothing due, reviews done, the topic practised alone reached its cap, the topics were mastered, the topic is deferred, an otherwise eligible task was rejected by the three-in-a-row rule with nothing else left, or no unseen task is left); FSRS reviews up to 35%, no new topic while reviews don't fit; up to two topics to learn among those not yet mastered (the second opens only when nothing else is left to interleave, see P1 below) (a topic set aside after 12 tasks without progress comes back the next day), picked by learning value with seeded micro-randomisation among near-equal options; a block of tasks on it, then interleaving with reviews, contrasting topics and other started topics, never more than three in a row while anything else can be given (see P1b below); a final block of this session's errors in new variants. The next task is picked by target difficulty, the type ladder and family freshness; six adaptation rules re-plan after each answer. Every plan and every task choice is logged as `plan_issued` with its candidates, factors, seed, propensity, dominant factor and validator violations. The plan is a pure function of the session's answers, the learner state and the bundle, recomputed after every answer; the core API is `build_session`, `next_item`, `adapt` and `validate_plan`. A session plan takes under 1 ms and a task choice about 0.1 ms on 200 topics (native; in WASM under wasmtime about 1.3× that).
 
 **P1, practice volume** (planner `session-prototype-2`, docs/04). A session keeps going while a started, not-mastered topic can get a task and time is left. A topic is practised in a block until its block closes (3 correct, one of them typed), then interleaved with reviews, contrasting topics and other started topics, still never more than three in a row. If nothing is left to interleave with, a second new topic opens (at most two per session), picked the same way as the first. The reason a session ends goes into `plan_issued` (new field `end`, event schema 2; an upcaster lifts version 1 events).
 
@@ -241,7 +241,7 @@ Alternatives `( | )`, optional `[ ]`, nesting up to 4, no repetition: the langua
 - every task has only the fields of its kind, so a checker setting on a choice task is an error;
 - subjects: ids carry the subject prefix, levels and domains exist in the subject, the scale has a positive step, a task's KCs and the spelling KC belong to its subject, and `requires` never crosses subjects;
 - no prerequisite cycles in the graph;
-- no implied prerequisite: if every session-available task of topic A has topic B as a secondary topic, A must require B (the task cannot be solved without B, and the planner could otherwise give A first). On the current content this flags `en.gram.article.a-an-sound` → `en.gram.article.first-mention`; the edge is the content author's decision, so the content build fails until they make it;
+- no implied prerequisite: if every session-available task of topic A has topic B as a secondary topic, A must require B (the task cannot be solved without B, and the planner could otherwise give A first). The current content has the required `en.gram.article.a-an-sound` → `en.gram.article.first-mention` edge, so this check passes; a new missing edge fails the build;
 - no redundant `supports` edge: a soft `supports` link between two topics already joined by a `requires` path (either direction) is an error, since the hard dependency says it already;
 - no downstream secondary topic: a secondary topic of a slot must not require the slot's primary topic, in any task, whatever its status. The planner gives the primary first, so the learner would meet a rule they have not studied, and an edge cannot fix it (it would close a cycle). A prerequisite of the primary or an unrelated topic is allowed. This is why the five first-mention tasks with a vowel noun (*an umbrella*, *an egg*) have a / an as primary;
 - one instruction per task family, whatever the status (`family-instruction`): fluency reads the instruction and the expected retrieval time of the family;
@@ -323,7 +323,7 @@ flowchart LR
   end
   S["server/ — axum + sqlx"]
   DB[(PostgreSQL<br/>event log)]
-  W["web/ — SolidJS PWA<br/>IndexedDB"]
+  W["web/ — React PWA<br/>IndexedDB"]
   N --> CB --> DB
   CB -. uses .-> core
   S --> core
@@ -332,7 +332,7 @@ flowchart LR
   W <-- events, sync --> S
 ```
 
-All learning logic lives in one Rust core. The server calls it natively, the PWA through WASM, so answer checking and the learner model work without internet and compute the same results.
+All learning logic lives in one Rust core. The server calls it natively, the PWA through WASM, so answer checking and the learner model work without internet and compute the same results. The exact module status, data flows, event limits and deferred gaps are in [docs/ARCHITECTURE_STATUS.md](docs/ARCHITECTURE_STATUS.md).
 
 **Principles** (in full in [docs/01](docs/01-architecture.md)):
 
@@ -369,6 +369,8 @@ A subject's methodology adapts through the subject's data (item kinds, input che
 | `core/` | `refl-core`: domain types, events, normalisation, pattern language, DFA, unlock model, learner model v1 with FSRS-6, the prototype session builder with its plan validator, the SplitMix64 PRNG. `no_std` + `alloc`; the `std` feature is for tests and tools, `ts` for TS type generation |
 | `server/` | `refl-server`: migrations, event writes, bundle import (including the projections of all published task versions), tests on a temporary PostgreSQL. HTTP from stage 1 |
 | `tools/content-build/` | CLI for building and checking content; keeps `content/item-versions.lock` (`--locked` in CI); test fixtures for every check |
+| `tools/book-import/` | Stage 1 importer: EPUB/text-layer PDF/TXT/Markdown to canonical `content/books/<slug>/source.md`, structural repair and optional OCR |
+| `tools/book-build/` | deterministic graded-reader compiler, license checks, `content/book-versions.lock` and web book assets |
 | `tools/sim/` | `refl-sim`: synthetic bundles and learner logs for the fold and planner tests; the native = WASM hash checks of the fold (`fold-hash`) and of planned sessions (`plan-hash`) with timings; the K5 cohort simulator (`cohort`): learners from a different model than ours, our sessions against the «only FSRS» baseline; frozen benchmark configurations in `bench/` (v1: the F2 run); measurements in `m1/` (`m1`: why the knowledge model lags) |
 | `content/` | Nickel content: schema (`lib/`) and a sample "Articles" topic (`articles/`); `item-versions.lock`, the generated append-only projections of published task versions; `bench/`, frozen content builds for the simulator benchmarks |
 | `web/` | the client; for now, TS types generated from Rust in `web/src/generated/core/` |
@@ -383,7 +385,7 @@ A subject's methodology adapts through the subject's data (item kinds, input che
 | --- | --- |
 | Core | Rust (version in `rust-toolchain.toml`), native and `wasm32-unknown-unknown`; `wasm32-wasip1` under wasmtime for the native = WASM check |
 | Server | axum + tokio, sqlx, PostgreSQL |
-| Client | TypeScript + SolidJS + Vite, PWA, IndexedDB; types from Rust (ts-rs) |
+| Client | TypeScript + React + Vite, PWA, IndexedDB; types from Rust (ts-rs) |
 | Content | Nickel → `content-build` in Rust |
 | Answer checking | in the core; typos are told apart from real words with the SCOWL word list (en\_US + en\_GB, size 60, from nixpkgs), shipped as a separate versioned file |
 | Memory | FSRS-6 in the core; fsrs-rs only offline, for fitting weights |
@@ -401,13 +403,39 @@ You need Nix with flakes enabled; everything else comes from the environment. Wi
 
 ```sh
 nix develop        # Rust, sqlx-cli, PostgreSQL, Nickel, Node, just, wasmtime
+just dev           # PostgreSQL on :5433, refl-server on :3000, Vite on :5173
 just               # fmt-check, clippy, tests, wasm32 core build, native = WASM fold hash, content-build
 just --list        # individual recipes
 just ci            # full hermetic CI = nix flake check
 ```
 
+`just dev` initializes and starts `.pgdata` on port 5433 with its socket in
+`/tmp`, applies the server migrations, and runs the API and Vite together.
+Create an optional, untracked `.env.local` to pass local integrations:
+
+```sh
+TELEGRAM_BOT_TOKEN=...          # optional Telegram bot for login and approvals
+TELEGRAM_BOT_USERNAME=...       # bot username without @; enables the Login Widget
+ADMIN_TELEGRAM_ID=...           # bootstrap admin Telegram id
+ADMIN_TELEGRAM_CHAT_ID=...      # chat that receives approval requests; falls back to ADMIN_TELEGRAM_ID
+ADMIN_EMAIL=...                 # bootstrap admin email
+VITE_TELEGRAM_BOT_ID=...        # optional; `just dev` derives it from the token prefix
+VITE_TELEGRAM_BOT_USERNAME=...  # optional; `just dev` copies TELEGRAM_BOT_USERNAME
+```
+
+A copy of the same keys is in [`.env.example`](.env.example). The bot must be
+able to message the admin chat (send `/start` to it once). For browser login,
+add the exact origin used to open the app to the bot domain in BotFather;
+`trycloudflare.com` URLs change, so each tunnel host needs to be registered.
+When Telegram returns a domain error, the sign-in form now names the origin
+instead of failing silently.
+
+`Ctrl+C` stops the API and Vite together; PostgreSQL keeps running for the
+next `just dev`.
+
 | Recipe | What it does |
 | --- | --- |
+| `just dev` | initialize `.pgdata` on :5433 and run the API plus Vite on :3000/:5173 |
 | `just fmt` / `just fmt-check` | format / check formatting |
 | `just lint` | clippy with `-D warnings` |
 | `just test` | all tests, including the database (temporary PostgreSQL) and TS type freshness |
@@ -452,14 +480,14 @@ Server tests start a throwaway PostgreSQL cluster themselves (`initdb` in a temp
 
 Every stage has a measurable exit criterion. Value starts after stage 1, not at the end.
 
-**Next milestone: the end-to-end prototype** ([docs/15](docs/15-prototype.md)). One topic, "Articles", all the way through: content → bundle → server → offline PWA → answer check in WASM → event → sync → fold → a number in the statistics, with the first run guided by Iella. Narrow, but finished: no placeholders, every state designed, uz / ru / en, phone and desktop. Its UI follows the artboards in `design/reference/`. The specs for stages 0–1 are frozen until it is accepted.
+**Next milestone: reviewed vocabulary and reading content.** Batches 4A and 4B are implemented: the lexical layer, private notes/bookmarks, the offline library and reader, the hybrid knowledge graph, Sendo and the architecture map. The next content pass replaces the 13-word starter bank with a reviewed A1–A2 bank and promotes the 27 draft A1 KCs; server-side book delivery follows when the library grows.
 
 | Stage | Scope | Status |
 | --- | --- | --- |
 | 0. Foundation | monorepo, Nix flake, CI; domain types; content-build with checks; DB schema and event log | in progress: 0.1–0.3 done, unknown events and schema-1 additions done |
 | 1. Learning core | item kinds, checking pipeline, learner model v1 + FSRS, lessons, offline PWA, sync, Telegram bot; grammar A1–A2 (~60 KCs) | in progress: learner model v1 and the prototype session builder done |
 | 2. Placement and planner | adaptive placement, planner, knowledge map, "why this task", mentor, teams and friends, error notebook; up to B1 (~120 KCs) | — |
-| 3. Vocabulary, reading, library | vocabulary model, FSRS for words, texts, personal dictionary, notes graph, achievements, cosmetics, cards | — |
+| 3. Vocabulary, reading, library | vocabulary model, FSRS for words, texts, personal dictionary, notes graph, achievements, cosmetics, cards | in progress: lexical cards and passive credit, personal words, notes/bookmarks, graded reader, library, graph and Sendo registry done; reviewed bank, server book delivery, achievements and cosmetics pending |
 | 4. Listening | audio pipeline, player, dictation with error classification, shadowing | — |
 | 5. Writing | free answers, LanguageTool, criteria checklists, mentor review | — |
 | 6. IELTS | full timed mocks, band conversion, forecast with an interval; B2–C1 | — |
@@ -498,6 +526,7 @@ In Russian; the index is in [docs/README.md](docs/README.md).
 | [13-sync-versions](docs/13-sync-versions.md) | sync protocol, versions, on-device storage, multiple devices, backups and deployment |
 | [14-privacy-license](docs/14-privacy-license.md) | personal data, children and consent, licenses |
 | [15-prototype](docs/15-prototype.md) | the end-to-end "Articles" prototype: scope, visual reference, "looks finished" bar, acceptance criteria |
+| [16-vocabulary-library-notes-graph](docs/16-vocabulary-library-notes-graph.md) | Batch 4: vocabulary and personal words, A1–C1 library and books, knowledge graph, offline notes and bookmarks, Sendo, new events and delivery order |
 
 ## License
 

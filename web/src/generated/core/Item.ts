@@ -12,6 +12,7 @@ import type { ItemVersion } from "./ItemVersion";
 import type { LangReviews } from "./LangReviews";
 import type { MatchingBody } from "./MatchingBody";
 import type { OwnSentenceBody } from "./OwnSentenceBody";
+import type { Representation } from "./Representation";
 import type { SentenceAssemblyBody } from "./SentenceAssemblyBody";
 import type { ShadowingBody } from "./ShadowingBody";
 import type { SubjectId } from "./SubjectId";
@@ -34,7 +35,11 @@ subject: SubjectId, family: FamilyId, instruction: InstructionId, difficulty: Au
 /**
  * Seconds; for the fluency prior βᶠ and session planning.
  */
-expected_time: number, topic?: TopicId, status: ItemStatus, source?: string, license?: string, 
+expected_time: number, 
+/**
+ * Optional CPA representation of this item (`docs/12-method.md`, §2).
+ */
+representation?: Representation, topic?: TopicId, status: ItemStatus, source?: string, license?: string, 
 /**
  * Set when this version changes difficulty: stats of older versions are not carried over.
  */

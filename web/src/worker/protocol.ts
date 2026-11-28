@@ -1,0 +1,241 @@
+import {
+  isJsonObject,
+  isJsonValue,
+  type JsonValue,
+} from "../types/json";
+
+export type CoreRequest =
+  | { id: number; method: "coreInfo" }
+  | {
+      id: number;
+      method: "checkBundleCompatibility";
+      bundleJson: string;
+    }
+  | { id: number; method: "decodeEvent"; event: JsonValue }
+  | {
+      id: number;
+      method: "foldState";
+      bundleJson?: string;
+      lexiconJson?: string;
+      snapshotJson: string | null;
+      events: JsonValue[];
+    }
+  | {
+      id: number;
+      method: "planSession";
+      bundleJson?: string;
+      snapshotJson: string;
+      nowMs: number;
+      budgetMs: number;
+    }
+  | {
+      id: number;
+      method: "nextItem";
+      bundleJson?: string;
+      snapshotJson: string;
+      planJson: string;
+      nowMs: number;
+    }
+  | {
+      id: number;
+      method: "replanSession";
+      bundleJson?: string;
+      snapshotJson: string;
+      planJson: string;
+      outcome: JsonValue;
+      nowMs: number;
+    }
+  | {
+      id: number;
+      method: "checkAnswer";
+      bundleJson?: string;
+      lexiconJson?: string;
+      itemRef: JsonValue;
+      response: JsonValue;
+      elapsedMs: number;
+    }
+  | {
+      id: number;
+      method: "placementStart";
+      bundleJson?: string;
+      snapshotJson: string;
+      subject: string;
+      nowMs: number;
+    }
+  | {
+      id: number;
+      method: "placementNext";
+      bundleJson?: string;
+      snapshotJson: string;
+      placementJson: string;
+      nowMs: number;
+    }
+  | {
+      id: number;
+      method: "bookCoverage";
+      bookJson: string;
+      snapshotJson: string;
+      nowMs: number;
+    }
+  | {
+      id: number;
+      method: "placementAnswer";
+      bundleJson?: string;
+      snapshotJson: string;
+      placementJson: string;
+      itemRefJson: string;
+      slot: number;
+      correct: boolean;
+      nowMs: number;
+    };
+
+export interface CoreRpcErrorPayload {
+  code: string;
+  message: string;
+}
+
+export type CoreResponse =
+  | { id: number; ok: true; result: JsonValue }
+  | { id: number; ok: false; error: CoreRpcErrorPayload };
+
+function isFiniteNumber(value: JsonValue | undefined): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function optionalString(value: JsonValue | undefined): boolean {
+  return value === undefined || typeof value === "string";
+}
+
+/**
+ * Methods answered from the worker's cached content. The client sends the
+ * bundle and lexicon text only when they change; requests in between omit
+ * them and the worker reuses the parsed content.
+ */
+export const CONTENT_METHODS: ReadonlySet<CoreRequest["method"]> = new Set([
+  "foldState",
+  "planSession",
+  "nextItem",
+  "replanSession",
+  "checkAnswer",
+  "placementStart",
+  "placementNext",
+  "placementAnswer",
+]);
+
+export function isCoreRequest(value: unknown): value is CoreRequest {
+  if (!isJsonObject(value)) {
+    return false;
+  }
+  const id = value["id"];
+  const method = value["method"];
+  if (typeof id !== "number" || !Number.isInteger(id)) {
+    return false;
+  }
+  if (typeof method !== "string") {
+    return false;
+  }
+  switch (method) {
+    case "coreInfo":
+      return true;
+    case "checkBundleCompatibility":
+      return typeof value["bundleJson"] === "string";
+    case "decodeEvent":
+      return isJsonValue(value["event"]);
+    case "foldState":
+      return (
+        optionalString(value["bundleJson"]) &&
+        optionalString(value["lexiconJson"]) &&
+        (value["snapshotJson"] === null ||
+          typeof value["snapshotJson"] === "string") &&
+        Array.isArray(value["events"]) &&
+        value["events"].every(isJsonValue)
+      );
+    case "planSession":
+      return (
+        optionalString(value["bundleJson"]) &&
+        typeof value["snapshotJson"] === "string" &&
+        isFiniteNumber(value["nowMs"]) &&
+        isFiniteNumber(value["budgetMs"])
+      );
+    case "nextItem":
+      return (
+        optionalString(value["bundleJson"]) &&
+        typeof value["snapshotJson"] === "string" &&
+        typeof value["planJson"] === "string" &&
+        isFiniteNumber(value["nowMs"])
+      );
+    case "replanSession":
+      return (
+        optionalString(value["bundleJson"]) &&
+        typeof value["snapshotJson"] === "string" &&
+        typeof value["planJson"] === "string" &&
+        isJsonValue(value["outcome"]) &&
+        isFiniteNumber(value["nowMs"])
+      );
+    case "checkAnswer":
+      return (
+        optionalString(value["bundleJson"]) &&
+        optionalString(value["lexiconJson"]) &&
+        isJsonValue(value["itemRef"]) &&
+        isJsonValue(value["response"]) &&
+        isFiniteNumber(value["elapsedMs"])
+      );
+    case "placementStart":
+      return (
+        optionalString(value["bundleJson"]) &&
+        typeof value["snapshotJson"] === "string" &&
+        typeof value["subject"] === "string" &&
+        isFiniteNumber(value["nowMs"])
+      );
+    case "placementNext":
+      return (
+        optionalString(value["bundleJson"]) &&
+        typeof value["snapshotJson"] === "string" &&
+        typeof value["placementJson"] === "string" &&
+        isFiniteNumber(value["nowMs"])
+      );
+    case "bookCoverage":
+      return (
+        typeof value["bookJson"] === "string" &&
+        typeof value["snapshotJson"] === "string" &&
+        isFiniteNumber(value["nowMs"])
+      );
+    case "placementAnswer":
+      return (
+        optionalString(value["bundleJson"]) &&
+        typeof value["snapshotJson"] === "string" &&
+        typeof value["placementJson"] === "string" &&
+        typeof value["itemRefJson"] === "string" &&
+        typeof value["slot"] === "number" &&
+        Number.isInteger(value["slot"]) &&
+        value["slot"] >= 0 &&
+        typeof value["correct"] === "boolean" &&
+        isFiniteNumber(value["nowMs"])
+      );
+    default:
+      return false;
+  }
+}
+
+export function isCoreResponse(value: unknown): value is CoreResponse {
+  if (!isJsonObject(value)) {
+    return false;
+  }
+  const id = value["id"];
+  const ok = value["ok"];
+  if (typeof id !== "number" || !Number.isInteger(id)) {
+    return false;
+  }
+  if (ok === true) {
+    return isJsonValue(value["result"]);
+  }
+  if (ok === false) {
+    const error = value["error"];
+    return (
+      isJsonObject(error) &&
+      typeof error["code"] === "string" &&
+      typeof error["message"] === "string"
+    );
+  }
+  return false;
+}

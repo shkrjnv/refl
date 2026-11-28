@@ -149,7 +149,6 @@ impl KnowledgeModel {
     /// Level of one domain over its live KCs; `None` if it has none. An
     /// empty scale level below the highest populated one counts as covered,
     /// above it as zero.
-    #[allow(clippy::cast_precision_loss)] // sample count
     pub fn level(
         &self,
         s: &State,
@@ -158,11 +157,43 @@ impl KnowledgeModel {
         domain: &DomainId,
         now: Timestamp,
     ) -> Option<Level> {
+        self.level_inner(s, bundle, subject_id, domain, now, true)
+    }
+
+    /// The same level over live KCs that have at least one direct
+    /// observation. Placement uses this so an untouched KC's prior does not
+    /// drag a short check down; the full level above remains the statistics
+    /// and planner view.
+    pub fn level_assessed(
+        &self,
+        s: &State,
+        bundle: &Bundle,
+        subject_id: &SubjectId,
+        domain: &DomainId,
+        now: Timestamp,
+    ) -> Option<Level> {
+        self.level_inner(s, bundle, subject_id, domain, now, false)
+    }
+
+    #[allow(clippy::cast_precision_loss)] // sample count
+    fn level_inner(
+        &self,
+        s: &State,
+        bundle: &Bundle,
+        subject_id: &SubjectId,
+        domain: &DomainId,
+        now: Timestamp,
+        include_unobserved: bool,
+    ) -> Option<Level> {
         let p = &self.params;
         let scale_len = subject(bundle, subject_id)?.scale.levels.len();
         let mut kcs: Vec<(usize, f64, Belief)> = Vec::new();
         for e in &bundle.content.kcs {
             if e.status == KcStatus::Live && &e.kc.subject == subject_id && &e.kc.domain == domain {
+                let observed = s.kcs.get(&e.kc.id).is_some_and(|k| k.observations > 0);
+                if !include_unobserved && !observed {
+                    continue;
+                }
                 let belief = self.belief(s, bundle, &e.kc.id, now)?;
                 kcs.push((usize::from(e.level_rank), e.kc.importance.get(), belief));
             }

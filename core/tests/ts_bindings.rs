@@ -9,9 +9,12 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use refl_core::Event;
-use refl_core::content::{Edge, Explanation, Instruction, Kc, Misconception};
+use refl_core::book::{Book, Coverage};
+use refl_core::content::{Edge, Explanation, Instruction, Kc, Lexeme, Misconception};
 use refl_core::item::Item;
 use refl_core::lesson::Lesson;
+use refl_core::quality::QualityReport;
+use refl_core::stats::PeriodStats;
 use refl_core::subject::Subject;
 use ts_rs::{Config, TS};
 
@@ -24,12 +27,17 @@ fn export_all(dir: &Path) {
     Event::export_all(&cfg).unwrap();
     Item::export_all(&cfg).unwrap();
     Kc::export_all(&cfg).unwrap();
+    Lexeme::export_all(&cfg).unwrap();
+    Book::export_all(&cfg).unwrap();
+    Coverage::export_all(&cfg).unwrap();
     Edge::export_all(&cfg).unwrap();
     Misconception::export_all(&cfg).unwrap();
     Explanation::export_all(&cfg).unwrap();
     Instruction::export_all(&cfg).unwrap();
     Lesson::export_all(&cfg).unwrap();
     Subject::export_all(&cfg).unwrap();
+    QualityReport::export_all(&cfg).unwrap();
+    PeriodStats::export_all(&cfg).unwrap();
 }
 
 fn read_tree(dir: &Path) -> BTreeMap<PathBuf, String> {

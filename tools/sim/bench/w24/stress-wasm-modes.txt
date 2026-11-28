@@ -1,0 +1,26 @@
+--- native replay 100k
+core=0.0.0 mode=replay events=100000 seed=7 kcs=33 items=384
+replay n=100 ms=0.363 hash=e360f39ec345788c6d70a2d24ac38a008724891f16a8f49bdbf94af6c00cfa09 snapshot_bytes=10048
+replay n=1000 ms=3.194 hash=edf7072853e7f32cffd73d5c460471cd93cd1d8cd547bf5401668285f9bab558 snapshot_bytes=35519
+replay n=10000 ms=29.844 hash=cdb282b9816b6f6333fc7dd86f6b2c626bfcfe46a005778950d3a80813bcf2a0 snapshot_bytes=35676
+replay n=100000 ms=301.743 hash=ea95cc6b6bc1dadd490631c1b39e8dc7e6ed37f9492d5eeb84b74f76f379ed6b snapshot_bytes=35843
+threshold>16ms n=5437 ms=16.633
+threshold>50ms n=16354 ms=50.165
+--- wasm replay 100k
+core=0.0.0 mode=replay events=100000 seed=7 kcs=33 items=384
+replay n=100 ms=0.623 hash=e360f39ec345788c6d70a2d24ac38a008724891f16a8f49bdbf94af6c00cfa09 snapshot_bytes=10048
+replay n=1000 ms=7.929 hash=edf7072853e7f32cffd73d5c460471cd93cd1d8cd547bf5401668285f9bab558 snapshot_bytes=35519
+replay n=10000 ms=82.130 hash=cdb282b9816b6f6333fc7dd86f6b2c626bfcfe46a005778950d3a80813bcf2a0 snapshot_bytes=35676
+replay n=100000 ms=833.568 hash=ea95cc6b6bc1dadd490631c1b39e8dc7e6ed37f9492d5eeb84b74f76f379ed6b snapshot_bytes=35843
+threshold>16ms n=1994 ms=16.009
+threshold>50ms n=6251 ms=50.080
+--- native select 10000
+core=0.0.0 mode=select events=10000 seed=7 kcs=33 items=384
+planner_next_item: n=10000 total_ms=485.414 ops_per_sec=20601 p50_us=48 p95_us=50 p99_us=52 max_us=77
+placement_next: n=10000 total_ms=409.781 ops_per_sec=24403 p50_us=40 p95_us=41 p99_us=43 max_us=66
+select seed=7 kcs=33 items=384
+--- wasm select 10000
+core=0.0.0 mode=select events=10000 seed=7 kcs=33 items=384
+planner_next_item: n=10000 total_ms=799.444 ops_per_sec=12509 p50_us=79 p95_us=82 p99_us=83 max_us=109
+placement_next: n=10000 total_ms=819.140 ops_per_sec=12208 p50_us=81 p95_us=84 p99_us=86 max_us=107
+select seed=7 kcs=33 items=384

@@ -23,7 +23,9 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::bundle::Bundle;
-use crate::event::{AnswerEvent, Confidence, Decoded, EventPayload, PlanAction, PlanIssuedEvent};
+use crate::event::{
+    AnswerContext, AnswerEvent, Confidence, Decoded, EventPayload, PlanAction, PlanIssuedEvent,
+};
 use crate::ids::{ExplanationId, FamilyId, ItemRef, KcId};
 use crate::item::ItemKindTag;
 use crate::model::{AnswerOutcome, KnowledgeModel};
@@ -166,6 +168,11 @@ pub enum Phase {
     Review,
     Prerequisite,
     Final,
+    /// A mastery-audit probe (`docs/11-quality.md`, «К4»): chosen by the
+    /// audit rule, not by value.
+    Audit,
+    /// A check after a break (`docs/04-placement-planner.md`).
+    ReturnCheck,
 }
 
 impl Phase {
@@ -175,9 +182,31 @@ impl Phase {
         matches!(self, Self::Lesson | Self::Block | Self::Interleaved)
     }
 
-    /// Counted by the «no more than three in a row» rule.
+    /// Counted by the «no more than three in a row» rule. The final has its
+    /// own 10% budget and is explicitly outside the run limit, even when it
+    /// reviews a KC that was just practised (`docs/04`, «Сборка сессии в
+    /// прототипе»).
     fn counts_in_runs(self) -> bool {
-        !matches!(self, Self::Lesson | Self::Block)
+        !matches!(
+            self,
+            Self::Lesson | Self::Block | Self::Final | Self::Audit | Self::ReturnCheck
+        )
+    }
+
+    /// A probe is chosen for measurement, not by the value formula.
+    pub fn is_probe(self) -> bool {
+        matches!(self, Self::Audit | Self::ReturnCheck)
+    }
+
+    /// The `answer.context` the runner writes when this step is answered.
+    pub fn context(self) -> AnswerContext {
+        match self {
+            Self::Lesson | Self::Block => AnswerContext::Lesson,
+            Self::Interleaved | Self::Prerequisite | Self::Final => AnswerContext::Practice,
+            Self::Review => AnswerContext::Review,
+            Self::Audit => AnswerContext::Audit,
+            Self::ReturnCheck => AnswerContext::ReturnCheck,
+        }
     }
 }
 
@@ -274,6 +303,15 @@ pub struct Plan {
     pub started: Timestamp,
     /// Seed of the session decision.
     pub seed: Seed,
+    /// Log-derived family recency and deferrals, kept with the plan so audit
+    /// probes can require a family unseen for 30 days after every replan
+    /// without another argument to `adapt`.
+    #[serde(default)]
+    pub history: History,
+    /// The session started after a break; its return check is fixed for the
+    /// whole session even after the first answer moves `last_answer`.
+    #[serde(default)]
+    pub return_check: bool,
     /// At most `learn_max`: the one picked at the start, then one opened by
     /// rule 6.
     pub learn: Vec<Learn>,
@@ -315,6 +353,9 @@ pub enum End {
     KcMastered,
     /// The learning KC was deferred, or its Ready fell below the threshold.
     KcDeferred,
+    /// An otherwise eligible step was rejected by the run rule, and no
+    /// other valid step remained.
+    RunLimit,
     /// The steps left have no unseen item.
     ItemsExhausted,
 }
@@ -328,6 +369,7 @@ impl End {
             Self::KcCap => "kc_cap",
             Self::KcMastered => "kc_mastered",
             Self::KcDeferred => "kc_deferred",
+            Self::RunLimit => "run_limit",
             Self::ItemsExhausted => "items_exhausted",
         }
     }
@@ -402,6 +444,8 @@ pub struct Choice {
     pub item: ItemRef,
     pub slot: u16,
     pub issued: PlanIssuedEvent,
+    /// The step's answer context: lesson, review, audit, return check, …
+    pub context: AnswerContext,
 }
 
 /// An answer as the planner reads it.

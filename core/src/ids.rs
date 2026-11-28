@@ -115,6 +115,14 @@ slug_id!(
     /// Package of a theme, frame or companion (`docs/07-themes-achievements-frames.md`).
     PackageKey
 );
+slug_id!(
+    /// Lexeme or word sense, e.g. `en.lex.article.bank.finance`.
+    LexemeId
+);
+slug_id!(
+    /// Graded reader (`docs/16-vocabulary-library-notes-graph.md`).
+    BookId
+);
 
 /// Item version; an event always references `(item_id, version)`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -178,6 +186,14 @@ macro_rules! uuid_id {
         #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(type = "string"))]
         #[serde(transparent)]
         pub struct $name(pub Uuid);
+
+        impl $name {
+            /// Returns `false` unless this is a version-7 UUID. Runtime ids
+            /// are `UUIDv7` so event ordering and last-write-wins agree.
+            pub fn is_v7(&self) -> bool {
+                self.0.get_version_num() == 7
+            }
+        }
     };
 }
 
@@ -192,6 +208,18 @@ uuid_id!(
 uuid_id!(
     /// User account. A learner's [`LearnerId`] is the same UUID as their user id.
     UserId
+);
+uuid_id!(
+    /// Learner-authored vocabulary entry; the `UUIDv7` of its creation event.
+    CustomLexemeId
+);
+uuid_id!(
+    /// Anchor id of an offline note.
+    NoteId
+);
+uuid_id!(
+    /// Anchor id of a book highlight or bookmark.
+    BookMarkId
 );
 
 #[cfg(test)]

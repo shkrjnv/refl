@@ -11,6 +11,10 @@
 #![allow(clippy::missing_panics_doc)]
 
 pub mod cohort;
+pub mod hetero;
+pub mod prereq;
+pub mod stress;
+pub mod termination;
 
 use std::collections::BTreeMap;
 
@@ -25,13 +29,16 @@ use refl_core::content::{
     LangReviews, Misconception, MisconceptionOrigin, Review, ReviewStatus,
 };
 use refl_core::event::{
-    AnswerContext, AnswerEvent, CURRENT_SCHEMA_VERSION, Confidence, Decoded, Event, EventPayload,
-    InputDevice, PlanAction, PlanCandidate, PlanIssuedEvent, PlanScope, ReclassifiedEvent,
-    Response, UnknownEvent, Verdict,
+    AnswerContext, AnswerEvent, BookMarkCreatedEvent, BookMarkDeletedEvent, BookMarkKind,
+    CURRENT_SCHEMA_VERSION, Confidence, CustomLexemeArchivedEvent, CustomLexemeEvent,
+    CustomLexemeSource, Decoded, Event, EventPayload, InputDevice, LexicalDirection,
+    LexicalReviewEvent, NoteAnchor, NoteAnchorKind, NoteDeletedEvent, NoteSavedEvent, PlanAction,
+    PlanCandidate, PlanIssuedEvent, PlanScope, ReclassifiedEvent, Response, UnknownEvent, Verdict,
 };
 use refl_core::ids::{
-    ContentVersion, DomainId, EventId, ExplanationId, FamilyId, InstructionId, ItemId, ItemRef,
-    ItemVersion, KcId, LearnerId, LessonId, MisconceptionId, SessionId, SubjectId,
+    BookId, BookMarkId, ContentVersion, CustomLexemeId, DomainId, EventId, ExplanationId, FamilyId,
+    InstructionId, ItemId, ItemRef, ItemVersion, KcId, LearnerId, LessonId, MisconceptionId,
+    NoteId, SessionId, SubjectId,
 };
 use refl_core::item::{
     AnswerPattern, AuthorDifficulty, ChoiceBody, ChoiceOption, EnglishCheck, ExpectedWrong,
@@ -136,6 +143,8 @@ pub fn synthetic_bundle(spec: BundleSpec) -> Bundle {
         },
         status: KcStatus::Live,
         level_rank: rank,
+        layout_x: 0,
+        layout_y: 0,
     };
 
     let mut kcs = vec![kc_entry(kc(SPELLING_KC), &orthography, 1, 0.5)];
@@ -183,6 +192,7 @@ pub fn synthetic_bundle(spec: BundleSpec) -> Bundle {
                     ru: UnitInterval::new(p / 2.0).expect("unit"),
                 },
                 remedy: kc_id(i.saturating_sub(1)),
+                refutations: Vec::new(),
             });
         }
         explanations.push(Explanation {
@@ -278,6 +288,7 @@ pub fn synthetic_bundle(spec: BundleSpec) -> Bundle {
                 difficulty: AuthorDifficulty::new(1 + u8::try_from(j % 5).expect("small"))
                     .expect("1..=5"),
                 expected_time: 8 + 2 * u32::try_from(j % 4).expect("small"),
+                representation: None,
                 topic: None,
                 status: ItemStatus::Live,
                 source: None,
@@ -325,6 +336,8 @@ pub fn synthetic_bundle(spec: BundleSpec) -> Bundle {
             },
             subjects: vec![subject],
             kcs,
+            lexemes: Vec::new(),
+            item_lexemes: BTreeMap::new(),
             edges,
             requires_closure,
             misconceptions,
@@ -483,15 +496,27 @@ pub fn event_in(
     })
 }
 
-/// Milliseconds of the latest known event of a log; [`T0`] for none.
+/// Milliseconds of the latest event of a log; [`T0`] for none.
+///
+/// Unknown events carry no decoded `client_ts`, but their `UUIDv7` timestamp is
+/// still part of the fold position, so it must also bound a synthetic session
+/// that starts after the log.
 pub fn event_time(log: &[Decoded]) -> i64 {
     log.iter()
-        .filter_map(|e| match e {
-            Decoded::Known(e) => Some(e.client_ts.0),
-            Decoded::Unknown(_) => None,
+        .map(|e| match e {
+            Decoded::Known(e) => e.client_ts.0.max(uuid_time(e.event_id)),
+            Decoded::Unknown(u) => uuid_time(u.event_id),
         })
         .max()
         .unwrap_or(T0.0)
+}
+
+fn uuid_time(id: EventId) -> i64 {
+    let bytes = id.as_uuid().as_bytes();
+    let ms = u64::from_be_bytes([
+        0, 0, bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5],
+    ]);
+    i64::try_from(ms).expect("UUIDv7 time after the epoch and before i64::MAX")
 }
 
 /// An event from a newer core: a payload type this core does not know.
@@ -625,6 +650,80 @@ pub fn synthetic_log(bundle: &Bundle, spec: LogSpec) -> Vec<Decoded> {
             ));
             continue;
         }
+        // Batch 4 personal records: notes, custom words and book marks. Their
+        // ids are the event's own UUIDv7 so the log stays deterministic.
+        if (11..22).contains(&roll) {
+            let id = *event_id(at, tail).as_uuid();
+            let custom = || CustomLexemeEvent {
+                custom_id: CustomLexemeId(id),
+                source: CustomLexemeSource::Own,
+                bundle_lexeme_id: None,
+                lemma: "mira".into(),
+                pos: Some("noun".into()),
+                definition_en: "a name for a girl".into(),
+                gloss_uz: "ism".into(),
+                gloss_ru: "имя".into(),
+                examples: vec!["Mira has a book.".into()],
+                collocations: Vec::new(),
+                ipa: None,
+                audio_key: None,
+                context: None,
+                archived: false,
+            };
+            let payload = match roll {
+                11 | 12 => EventPayload::NoteSaved(NoteSavedEvent {
+                    note_id: NoteId(id),
+                    anchor: if roll == 11 {
+                        NoteAnchor {
+                            kind: NoteAnchorKind::Standalone,
+                            id: None,
+                        }
+                    } else {
+                        NoteAnchor {
+                            kind: NoteAnchorKind::Kc,
+                            id: Some(kc_id(focus).to_string()),
+                        }
+                    },
+                    body: "Mira's first day.\n\n- a cat\n- a red book".into(),
+                }),
+                13 => EventPayload::NoteDeleted(NoteDeletedEvent {
+                    note_id: NoteId(id),
+                }),
+                14 | 15 => EventPayload::CustomLexemeCreated(custom()),
+                16 => EventPayload::CustomLexemeUpdated(custom()),
+                17 => EventPayload::CustomLexemeArchived(CustomLexemeArchivedEvent {
+                    custom_id: CustomLexemeId(id),
+                    archived: true,
+                }),
+                18 => EventPayload::BookMarkCreated(BookMarkCreatedEvent {
+                    mark_id: BookMarkId(id),
+                    book_id: BookId::new("book.synthetic").expect("valid book id"),
+                    book_version: "a".repeat(64),
+                    kind: BookMarkKind::Bookmark,
+                    chapter_id: "chapter.synthetic.1".into(),
+                    paragraph_id: "para.synthetic.1.1".into(),
+                    sentence_id: "sentence.synthetic.1.1.1".into(),
+                    start_token: 0,
+                    end_token: tail % 8,
+                    quote_hash: "b".repeat(64),
+                    color: None,
+                }),
+                20 | 21 => EventPayload::LexicalReview(LexicalReviewEvent {
+                    lexeme: refl_core::ids::LexemeId::new(id.to_string()).expect("UUID is a slug"),
+                    direction: if roll == 20 {
+                        LexicalDirection::Recognize
+                    } else {
+                        LexicalDirection::Produce
+                    },
+                    correct: roll == 20,
+                }),
+                _ => EventPayload::BookMarkDeleted(BookMarkDeletedEvent {
+                    mark_id: BookMarkId(id),
+                }),
+            };
+            log.push(event(at, tail, payload));
+            continue;
+        }
         if one_in(&mut rng, 5) {
             focus = pick(&mut rng, grammar.len());
         }
@@ -744,6 +843,68 @@ pub fn synthetic_log(bundle: &Bundle, spec: LogSpec) -> Vec<Decoded> {
     log
 }
 
+/// Number of learner-cluster bootstrap replicates used by the diagnostics.
+pub const LEARNER_BOOTSTRAP_REPLICATES: usize = 2000;
+
+/// Fixed seed of the learner-cluster bootstrap.
+pub const LEARNER_BOOTSTRAP_SEED: u64 = 0x5EED_1E7E_2026;
+
+/// A 95% percentile interval for `sum(false_mastered) / sum(mastered)` by
+/// resampling learners with replacement. Each row is `(learner, false)`.
+/// Learners, not pairs, are the resampling unit.
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)] // bootstrap indices and small counts
+pub fn learner_cluster_bootstrap(rows: &[(usize, bool)]) -> (f64, f64) {
+    let mut by_learner: BTreeMap<usize, (u32, u32)> = BTreeMap::new();
+    for &(learner, false_mastery) in rows {
+        let cell = by_learner.entry(learner).or_insert((0, 0));
+        cell.1 += 1;
+        if false_mastery {
+            cell.0 += 1;
+        }
+    }
+    let learners: Vec<usize> = by_learner.keys().copied().collect();
+    if learners.is_empty() {
+        return (f64::NAN, f64::NAN);
+    }
+    let mut rng = SplitMix64::new(LEARNER_BOOTSTRAP_SEED);
+    let mut ratios = Vec::with_capacity(LEARNER_BOOTSTRAP_REPLICATES);
+    for _ in 0..LEARNER_BOOTSTRAP_REPLICATES {
+        let (mut false_count, mut total) = (0u32, 0u32);
+        for _ in 0..learners.len() {
+            let learner = learners[pick(&mut rng, learners.len())];
+            let (false_mastery, mastered) = by_learner[&learner];
+            false_count += false_mastery;
+            total += mastered;
+        }
+        if total > 0 {
+            ratios.push(f64::from(false_count) / f64::from(total));
+        }
+    }
+    if ratios.is_empty() {
+        return (f64::NAN, f64::NAN);
+    }
+    ratios.sort_by(f64::total_cmp);
+    (percentile(&ratios, 0.025), percentile(&ratios, 0.975))
+}
+
+/// Linear-interpolated percentile of a sorted, non-empty slice.
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)]
+fn percentile(sorted: &[f64], p: f64) -> f64 {
+    let rank = p * (sorted.len() - 1) as f64;
+    let low = rank.floor() as usize;
+    let high = rank.ceil() as usize;
+    let weight = rank - rank.floor();
+    sorted[low] + weight * (sorted[high] - sorted[low])
+}
+
 fn slot_misconception(slot: &Slot, x: usize) -> Option<MisconceptionId> {
     slot.options
         .get(x)
@@ -780,4 +941,27 @@ fn one_in(rng: &mut SplitMix64, n: u64) -> bool {
 fn pick(rng: &mut SplitMix64, n: usize) -> usize {
     let n = u64::try_from(n).expect("usize fits u64");
     usize::try_from(rng.next_u64() % n).expect("below n")
+}
+
+#[cfg(test)]
+mod bootstrap_tests {
+    use super::*;
+
+    #[test]
+    fn learner_cluster_bootstrap_is_deterministic_and_bounded() {
+        let rows = [
+            (0, false),
+            (0, true),
+            (1, false),
+            (1, false),
+            (2, true),
+            (2, true),
+            (2, false),
+        ];
+        let first = learner_cluster_bootstrap(&rows);
+        let second = learner_cluster_bootstrap(&rows);
+        assert_eq!(first, second);
+        assert!(first.0.is_finite() && first.1.is_finite());
+        assert!(0.0 <= first.0 && first.0 <= first.1 && first.1 <= 1.0);
+    }
 }

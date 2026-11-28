@@ -74,6 +74,63 @@ fn prior_mu(rank: f64) -> f64 {
 }
 
 #[test]
+fn empty_log_is_the_initial_state() {
+    let b = bundle();
+    let model = KnowledgeModel::default();
+    let profile = Profile::default();
+    let state = replay(&model, &profile, &b, &[]);
+    assert_eq!(state, State::new(profile));
+    assert_eq!(state.position, None);
+    assert_eq!(state.kcs.len(), 0);
+    assert_eq!(state.misconceptions.len(), 0);
+    let back: State = serde_json::from_slice(&state.canonical_bytes()).expect("state round-trips");
+    assert_eq!(back, state);
+}
+
+#[test]
+fn correct_and_incorrect_answers_move_mu_in_opposite_directions() {
+    let b = bundle();
+    let model = KnowledgeModel::default();
+    let profile = Profile::default();
+    let prior = model.prior(&profile, &b, &kc_id(0)).expect("prior").0;
+
+    let correct = fold(&b, &[ev(at(0, 0), 1, chosen(0, 0))]);
+    let mut wrong_answer = chosen(0, 0);
+    wrong_answer.verdict = Verdict::Wrong;
+    wrong_answer.response = Response::Option(1);
+    let wrong = fold(&b, &[ev(at(0, 0), 1, wrong_answer)]);
+
+    assert!(mu(&correct, &kc_id(0)) > prior);
+    assert!(mu(&wrong, &kc_id(0)) < prior);
+    assert!(mu(&correct, &kc_id(0)) > mu(&wrong, &kc_id(0)));
+    assert!(correct.kcs[&kc_id(0)].var < 2.25);
+    assert!(wrong.kcs[&kc_id(0)].var < 2.25);
+}
+
+#[test]
+fn a_secondary_kc_moves_less_than_the_primary() {
+    let b = bundle();
+    let model = KnowledgeModel::default();
+    let profile = Profile::default();
+    let prior0 = model.prior(&profile, &b, &kc_id(0)).expect("prior").0;
+    let prior1 = model.prior(&profile, &b, &kc_id(1)).expect("prior").0;
+    let projection = b.projection(&item_ref(1, 4)).expect("projection");
+    assert_eq!(projection.slots[0].kcs.len(), 2);
+    assert_eq!(
+        projection.slots[0].kcs[1].role,
+        refl_core::item::KcRole::Secondary
+    );
+
+    let state = fold(&b, &[ev(at(0, 0), 1, chosen(1, 4))]);
+    let primary = mu(&state, &kc_id(1)) - prior1;
+    let secondary = mu(&state, &kc_id(0)) - prior0;
+    assert!(
+        primary > secondary && secondary > 0.0,
+        "{primary} {secondary}"
+    );
+}
+
+#[test]
 fn correct_typed_answer_raises_spelling() {
     let b = bundle();
     let s = fold(&b, &[ev(at(0, 0), 1, typed(0, 1, "the"))]);
@@ -279,6 +336,33 @@ fn misconception_turns_active_and_decays() {
 }
 
 #[test]
+fn misconception_cures_after_enough_resisted_answers() {
+    let b = bundle();
+    let id = misconception_id(0, 0);
+    let mut events = Vec::new();
+    for n in 0..2u64 {
+        let mut wrong = chosen(0, 0);
+        wrong.verdict = Verdict::Wrong;
+        wrong.response = Response::Option(1);
+        wrong.misconception = Some(id.clone());
+        events.push(ev(at(0, i64::try_from(n).expect("small")), n, wrong));
+    }
+    for n in 0..12u64 {
+        events.push(ev(
+            at(0, i64::try_from(n).expect("small") + 2),
+            n + 2,
+            chosen(0, 0),
+        ));
+    }
+    let s = fold(&b, &events);
+    let view = KnowledgeModel::default()
+        .misconception(&s, &id, at(0, 20))
+        .expect("touched");
+    assert_eq!(view.manifested, 2);
+    assert_eq!(view.status, MisconceptionStatus::Cured);
+}
+
+#[test]
 fn the_fold_reports_the_prediction_made_at_display_time() {
     let b = bundle();
     let model = KnowledgeModel::default();
@@ -390,6 +474,7 @@ fn mastery_statuses_and_the_return_check() {
     let s = fold(&b, &events);
     let k: &KcState = &s.kcs[&kc_id(0)];
     assert!(k.ever_mastered);
+    assert!(s.mastered_at.contains_key(&kc_id(0)));
     assert!(k.production.len() == 2 && k.tau > 0.0);
     let last = at(29, 0);
     let progress = model.progress(&s, &b, &kc_id(0), last);
@@ -640,7 +725,7 @@ fn process_noise_widens_the_belief_before_the_update_and_changes_the_version() {
         },
     };
     let v11 = KnowledgeModel::default();
-    assert!(v11.version().starts_with("knowledge-v1.3+"));
+    assert!(v11.version().starts_with("knowledge-v1.4+"));
     assert_ne!(v1.version(), v11.version());
     let first = ev(at(0, 0), 1, chosen(0, 0));
     let shown = Timestamp(at(0, 0).0 - 8_000);

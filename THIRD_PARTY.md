@@ -2,6 +2,17 @@
 
 Every dataset, dictionary, voice or model that refl uses but did not write is listed here before it is used: what it is, where it comes from, its license and what that license requires ([docs/14](docs/14-privacy-license.md), «Чужие данные и модели»).
 
+## Fonts
+
+| | |
+| --- | --- |
+| What | Geologica by Monokrom (variable weight), Pixelify Sans by the Pixelify Sans Project Authors, and a Noto Sans subset for IPA and the Uzbek `ʻ` (U+02BB) |
+| Used for | the interface text (Geologica), pixel display accents (Pixelify Sans), and IPA transcriptions served under the Geologica family so a transcript never falls back to an arbitrary system font |
+| Where from | Google Fonts / upstream projects; the exact `.woff2` files are committed under `web/public/fonts/`; no runtime CDN request is made |
+| License | SIL Open Font License 1.1 for all three; full notices: [`licenses`](web/public/fonts/) in the client assets |
+| What it requires | the copyright and OFL notices travel with the font files; a modified version may not use a Reserved Font Name. We do not modify the font programs; the Noto subset is served under the `Geologica` CSS family name only as a distinct IPA face |
+| How we comply | the OFL text and attribution are shipped with the PWA; `web/src/theme/fonts.test.ts` checks glyph coverage and that no external font URL is referenced |
+
 ## SCOWL word lists
 
 | | |
@@ -13,3 +24,14 @@ Every dataset, dictionary, voice or model that refl uses but did not write is li
 | License | SCOWL copyright: permissive, MIT-like; it collects notices of its sources (Moby, UKACD, WordNet, Ispell and others). Full text: [`licenses/SCOWL.txt`](licenses/SCOWL.txt), copied verbatim from the package |
 | What it requires | the copyright and permission notices appear with every copy of the word list and in supporting documentation; the UKACD notice must be displayed prominently with the text of its license. Nothing restricts commercial use, and the lexicon does not make our content a derivative work |
 | How we comply | `licenses/SCOWL.txt` lives in the repository; the server serves it next to every lexicon file, and the client shows it on its licenses screen (both from stage 1, when the lexicon is first shipped to devices) |
+
+## Graded readers
+
+| | |
+| --- | --- |
+| What | Three public-domain graded readers: “The Lion and the Mouse” (`book.aesop-lion-mouse`, A1), “The North Wind and the Sun” (`book.aesop-north-wind-sun`, A2), and “The Gift of the Magi” (`book.ohenry-gift-magi`, B1) |
+| Used for | the offline reader and personalized lexical coverage ([docs/16](docs/16-vocabulary-library-notes-graph.md), «Компилятор книг») |
+| Where from | Aesop's fables from *Three Hundred Æsop's Fables*, translated by George Fyler Townsend (1867) — [The Lion and the Mouse](https://en.wikisource.org/wiki/Three_Hundred_%C3%86sop%27s_Fables/The_Lion_and_the_Mouse), [The North Wind and the Sun](https://en.wikisource.org/wiki/Three_Hundred_%C3%86sop%27s_Fables/The_North_Wind_and_the_Sun) — and O. Henry's *The Gift of the Magi* (1905), [Wikisource](https://en.wikisource.org/wiki/The_Gift_of_the_Magi). The A1 and A2 readers are simplified retellings of the Townsend fables |
+| License | Public domain in the United States. The A1/A2 retellings remain derivative works of public-domain sources and carry no additional restriction |
+| What it requires | no permission or payment; attribution is kept here and in `content/LICENSE` as a provenance record |
+| How we comply | `book-build` refuses a book whose id has no record here and in `content/LICENSE`; `just books` compiles only checked manifests |

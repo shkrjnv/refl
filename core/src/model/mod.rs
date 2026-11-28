@@ -27,7 +27,10 @@ use crate::value::{Finite, Timestamp};
 
 pub use fluency::Families;
 pub use fold_version::fold_version;
-pub use state::{Baseline, KcState, MisconceptionState, RapidStats, State};
+pub use state::{
+    Baseline, BookMarkRecord, CustomLexemeRecord, KcState, LexicalCard, LexicalDirection,
+    LexicalExposure, LexicalSource, MisconceptionState, NoteRecord, RapidStats, State,
+};
 pub use v1::{Belief, Fluency, KnowledgeModel, Params};
 
 /// What the model needs to know about the learner that is not in the log yet

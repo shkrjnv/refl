@@ -1,5 +1,5 @@
 {
-  description = "refl: English learning platform (Rust core + WASM, axum, Postgres, SolidJS, Nickel)";
+  description = "refl: English learning platform (Rust core + WASM, axum, Postgres, React, Nickel)";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -42,6 +42,7 @@
             root = ./.;
             fileset = lib.fileset.unions [
               (craneLib.fileset.commonCargoSources ./.)
+              ./core-wasm
               ./core/clippy.toml
               ./tools/content-build/clippy.toml
               ./tools/sim/clippy.toml
@@ -51,7 +52,8 @@
               # sqlx::migrate! embeds the migrations at compile time.
               ./server/migrations
               # Committed TS bindings: the ts_bindings test checks they are current.
-              ./web/src/generated
+              # Generated wasm glue is ignored and must not enter the Nix source.
+              ./web/src/generated/core
             ];
           };
           commonArgs = {
@@ -114,6 +116,18 @@
               doInstallCargoArtifacts = false;
             }
           );
+          # The browser bridge, with wasm-bindgen exports, must build for the
+          # same wasm32 target as refl-core itself.
+          core-wasm-bridge = craneLib.mkCargoDerivation (
+            commonArgs
+            // {
+              pnameSuffix = "-core-wasm-bridge";
+              cargoArtifacts = null;
+              buildPhaseCargoCommand = "cargo build --locked --release -p refl-core-wasm --target wasm32-unknown-unknown";
+              installPhaseCommand = "mkdir -p $out";
+              doInstallCargoArtifacts = false;
+            }
+          );
           # The learner-model fold and the session builder are bit-identical
           # native and in WASM: one generated log, folded by both builds, gives
           # one state hash (docs/03); three sessions planned on it give one
@@ -160,6 +174,11 @@
               pkgs.just
               # Runs the wasm32-wasip1 fold for the native = WASM hash check.
               pkgs.wasmtime
+              # Generates the JS glue for the browser bridge.
+              pkgs.wasm-bindgen-cli
+              # Strips debug sections so the browser wasm stays inside the
+              # gzip budget.
+              pkgs.binaryen
             ];
             # Stages 3-5 bring back: piper-tts (audio), languagetool and
             # hunspell (writing checks), ffmpeg/opus-tools (audio pipeline).
@@ -171,7 +190,7 @@
       );
 
       # Local CI: `nix flake check` runs fmt, clippy (-D warnings), all tests
-      # (including the TS bindings freshness check), the wasm32 build of the core,
+      # (including the TS bindings freshness check), the wasm32 builds of the core and bridge,
       # the native = WASM learner-state hash and content-build on content/. Database tests run against a throwaway
       # PostgreSQL started inside the test check.
       checks = forAllSystems (

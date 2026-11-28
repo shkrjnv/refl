@@ -89,6 +89,9 @@ impl Planner<'_> {
     fn fired(&self, s: &State, plan: &Plan, now: Timestamp) -> Option<Rule> {
         let p = self.params;
         let last = plan.done.last()?;
+        if last.step.phase.is_probe() {
+            return None;
+        }
         let shown = last.shown.as_ref()?;
         let kc = &last.step.kc;
         // Non-rapid answers on the KC in this session, oldest first.
@@ -111,7 +114,7 @@ impl Planner<'_> {
         if !shown.rapid && !shown.correct {
             let in_row = answers.iter().rev().take_while(|a| !a.correct).count();
             if (last.step.phase == Phase::Prerequisite || in_row >= p.errors_in_row)
-                && let Some(j) = self.suspect(s, kc, now)
+                && let Some(j) = self.suspect(s, plan, kc, now)
             {
                 return Some(Rule::PrerequisiteCheck { kc: j });
             }
@@ -129,10 +132,11 @@ impl Planner<'_> {
     }
 
     /// The direct prerequisite of `kc` with the largest `D × importance`
-    /// among those with `D` above the threshold and an eligible item.
-    fn suspect(&self, s: &State, kc: &KcId, now: Timestamp) -> Option<KcId> {
+    /// among those with `D` above the threshold, not deferred in this
+    /// session, and with an unseen eligible item.
+    fn suspect(&self, s: &State, plan: &Plan, kc: &KcId, now: Timestamp) -> Option<KcId> {
         self.direct_requires(kc)
-            .filter(|j| self.is_live(j) && !self.slots(j).is_empty())
+            .filter(|j| self.is_live(j) && !plan.deferred(j) && self.has_unseen(plan, j, false))
             .map(|j| (j, self.suspicion(s, j, now)))
             .filter(|(_, d)| *d > self.params.suspicion_min)
             .map(|(j, d)| (j, d * self.importance(j)))

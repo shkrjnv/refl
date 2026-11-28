@@ -1,0 +1,94 @@
+simulator v2
+revision: cdc1877
+seed=1 learners=1000 horizon=600 steps (~30 days at 20 steps/day) + stress=200
+bootstrap: learner-cluster, SplitMix64, B=2000; 80% and 95% percentiles
+live=content/bench/v3/bundle.json (5 live KCs); full=target/bundle.json (32 learning KCs)
+day_ms=86400000; mastery=0.85 (simulator reach), 0.80 model criterion
+
+== live Articles sub-graph: 1000 learners x 200 steps (target KCs 5) ==
+
+-- S1 Leitner/linear --
+target reach: 0.271 [80% 0.251-0.291; 95% 0.241-0.300; n=833]
+level MAE:    0.343 [80% 0.328-0.358; 95% 0.319-0.366; n=1000]
+mis reduction: 0.435 [80% 0.414-0.456; 95% 0.403-0.467; n=750]
+reached KC-step mean: 96.1 over 1127 reached KCs
+
+-- S2 KC-adaptive --
+target reach: 0.241 [80% 0.221-0.259; 95% 0.212-0.270; n=833]
+level MAE:    0.361 [80% 0.344-0.379; 95% 0.334-0.389; n=1000]
+mis reduction: 0.445 [80% 0.425-0.466; 95% 0.415-0.478; n=750]
+reached KC-step mean: 95.9 over 1001 reached KCs
+
+-- S3 full refl --
+target reach: 0.544 [80% 0.521-0.566; 95% 0.510-0.578; n=833]
+level MAE:    0.290 [80% 0.279-0.302; 95% 0.273-0.309; n=1000]
+mis reduction: 0.946 [80% 0.940-0.953; 95% 0.936-0.957; n=750]
+reached KC-step mean: 68.6 over 2263 reached KCs
+
+en.gram.article.a-an-sound: bank 21/8 slots/families; S1/S2/S3 reach%/median-step 27%/111, 24%/117, 52%/98; edges: Requires en.gram.article.a-an-sound->en.gram.article.first-mention
+
+== full 32-KC A1 projection (draft content promoted): 1000 learners x 200 steps (target KCs 32) ==
+
+-- S1 Leitner/linear --
+target reach: 0.183 [80% 0.174-0.191; 95% 0.170-0.196; n=833]
+level MAE:    0.426 [80% 0.404-0.449; 95% 0.393-0.460; n=1000]
+mis reduction: 0.356 [80% 0.341-0.371; 95% 0.334-0.379; n=830]
+reached KC-step mean: 59.1 over 3349 reached KCs
+
+-- S2 KC-adaptive --
+target reach: 0.189 [80% 0.180-0.197; 95% 0.176-0.201; n=833]
+level MAE:    0.475 [80% 0.451-0.498; 95% 0.439-0.511; n=1000]
+mis reduction: 0.390 [80% 0.374-0.406; 95% 0.366-0.415; n=830]
+reached KC-step mean: 74.5 over 3492 reached KCs
+
+-- S3 full refl --
+target reach: 0.369 [80% 0.355-0.383; 95% 0.347-0.391; n=833]
+level MAE:    0.665 [80% 0.641-0.689; 95% 0.628-0.702; n=1000]
+mis reduction: 0.839 [80% 0.831-0.847; 95% 0.826-0.852; n=830]
+reached KC-step mean: 72.4 over 6841 reached KCs
+
+en.gram.article.a-an-sound: bank 21/8 slots/families; S1/S2/S3 reach%/median-step 3%/97, 0%/0, 12%/180; edges: Requires en.gram.article.a-an-sound->en.gram.article.first-mention
+
+== live Articles sub-graph: 1000 learners x 600 steps (target KCs 5) ==
+
+-- S1 Leitner/linear --
+target reach: 0.351 [80% 0.330-0.371; 95% 0.317-0.382; n=833]
+level MAE:    0.273 [80% 0.264-0.281; 95% 0.259-0.286; n=1000]
+mis reduction: 0.435 [80% 0.415-0.456; 95% 0.404-0.468; n=750]
+reached KC-step mean: 156.9 over 1461 reached KCs
+
+-- S2 KC-adaptive --
+target reach: 0.292 [80% 0.273-0.312; 95% 0.263-0.321; n=833]
+level MAE:    0.317 [80% 0.307-0.329; 95% 0.301-0.335; n=1000]
+mis reduction: 0.445 [80% 0.425-0.466; 95% 0.415-0.477; n=750]
+reached KC-step mean: 135.2 over 1215 reached KCs
+
+-- S3 full refl --
+target reach: 0.730 [80% 0.711-0.748; 95% 0.701-0.759; n=833]
+level MAE:    0.201 [80% 0.190-0.212; 95% 0.184-0.218; n=1000]
+mis reduction: 0.946 [80% 0.940-0.953; 95% 0.936-0.957; n=750]
+reached KC-step mean: 148.8 over 3040 reached KCs
+
+en.gram.article.a-an-sound: bank 21/8 slots/families; S1/S2/S3 reach%/median-step 35%/113, 30%/125, 72%/120; edges: Requires en.gram.article.a-an-sound->en.gram.article.first-mention
+
+== full 32-KC A1 projection (draft content promoted): 1000 learners x 600 steps (target KCs 32) ==
+
+-- S1 Leitner/linear --
+target reach: 0.324 [80% 0.310-0.337; 95% 0.303-0.344; n=833]
+level MAE:    0.497 [80% 0.478-0.516; 95% 0.468-0.527; n=1000]
+mis reduction: 0.356 [80% 0.341-0.370; 95% 0.334-0.379; n=830]
+reached KC-step mean: 202.8 over 6025 reached KCs
+
+-- S2 KC-adaptive --
+target reach: 0.360 [80% 0.347-0.374; 95% 0.340-0.381; n=833]
+level MAE:    0.558 [80% 0.535-0.579; 95% 0.524-0.591; n=1000]
+mis reduction: 0.390 [80% 0.375-0.405; 95% 0.367-0.414; n=830]
+reached KC-step mean: 217.6 over 6818 reached KCs
+
+-- S3 full refl --
+target reach: 0.520 [80% 0.503-0.538; 95% 0.494-0.546; n=833]
+level MAE:    0.533 [80% 0.517-0.548; 95% 0.510-0.555; n=1000]
+mis reduction: 0.839 [80% 0.830-0.847; 95% 0.826-0.851; n=830]
+reached KC-step mean: 148.3 over 9746 reached KCs
+
+en.gram.article.a-an-sound: bank 21/8 slots/families; S1/S2/S3 reach%/median-step 24%/226, 14%/431, 62%/267; edges: Requires en.gram.article.a-an-sound->en.gram.article.first-mention

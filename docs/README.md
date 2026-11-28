@@ -20,6 +20,8 @@
 | 13-sync-versions.md | протокол синхронизации, время устройства, токены, несовпадение версий схемы / ядра / контента, неизвестные события, хранение на устройстве, несколько устройств, бэкапы и выкатка | — |
 | 14-privacy-license.md | персональные данные: что храним, зачем и сколько; дети и согласие; лицензии кода (AGPL-3.0) и контента (все права защищены) | — |
 | 15-prototype.md | сквозной прототип «Артикли»: объём, визуальный эталон (`design/reference/`), планка «выглядит завершённым», первый вход с Iella, критерии приёмки; заморозка спеки этапов 0–1 | — |
+| 16-vocabulary-library-notes-graph.md | Batch 4: lexical layer and personal words, library and books A1–C1, knowledge map, offline notes and bookmarks, Sendo, new events and rollout order | — |
+| [ARCHITECTURE_STATUS.md](ARCHITECTURE_STATUS.md) | implementation map: system data flows, schema-2 event set, module status across core/wasm/server/tools/content/web, quality gates and deferred gaps | — |
 
 **README.md в корне — на английском** (публичное лицо репозитория); спецификации в `docs/` — на русском. **README дополняется вместе со спекой:** всё, что появляется в `docs/` как сделанное или запланированное, в том же изменении отражается в README.
 
