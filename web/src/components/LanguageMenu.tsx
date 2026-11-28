@@ -56,6 +56,15 @@ export function LanguageMenu({
       className={`language-menu ${className}`.trim()}
       data-open={open ? "true" : "false"}
       ref={rootRef}
+      onBlur={(event) => {
+        if (
+          event.relatedTarget instanceof Node &&
+          !event.currentTarget.contains(event.relatedTarget)
+        ) {
+          setOpen(false);
+          setHighlighted(null);
+        }
+      }}
     >
       <button
         type="button"

@@ -64,8 +64,15 @@ describe("self-hosted fonts", () => {
     expect(brandRules.length).toBeGreaterThan(0);
     for (const rule of brandRules) {
       expect(rule).toContain("font-family: var(--font-family)");
+      expect(rule).toContain("font-weight: 600");
       expect(rule).not.toContain("var(--font-pixel)");
+      expect(rule).not.toContain("font-weight: 800");
     }
+    const lockup = css.match(
+      /\.brand-lockup,\s*\.mobile-brand \{[^}]*gap: 7px[^}]*\}/s,
+    )?.[0];
+    expect(lockup).toBeTruthy();
+    expect(css).toMatch(/\.auth-brand \{[^}]*gap: 7px[^}]*\}/s);
   });
 });
 

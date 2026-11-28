@@ -8,7 +8,7 @@ import type { ThemeName } from "../theme/tokens";
 import { IellaSprite } from "./IellaSprite";
 import { LanguageMenu } from "./LanguageMenu";
 import { BrandLogo, StudioIcon, type StudioIconName } from "./StudioIcons";
-import { ThemeToggle } from "./ThemeToggle";
+import { ThemeMenu } from "./ThemeMenu";
 
 export type AppRoute = "today" | "lesson" | "stats" | "profile";
 
@@ -141,7 +141,7 @@ export function AppShell({
               locales={locales}
               onLocaleChange={onLocaleChange}
             />
-            <ThemeToggle theme={theme} onThemeChange={onThemeChange} />
+            <ThemeMenu theme={theme} onThemeChange={onThemeChange} />
           </div>
         </header>
         <main className="studio-content">{children}</main>

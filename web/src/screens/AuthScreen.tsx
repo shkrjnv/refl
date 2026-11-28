@@ -21,7 +21,8 @@ import {
 import { AuthBackdrop } from "../components/AuthBackdrop";
 import { IellaSprite, type IellaMood } from "../components/IellaSprite";
 import { LanguageMenu } from "../components/LanguageMenu";
-import { ThemeToggle } from "../components/ThemeToggle";
+import { TelegramLoginWidget } from "../components/TelegramLoginWidget";
+import { ThemeMenu } from "../components/ThemeMenu";
 import {
   BrandLogo,
   ConfirmationCheck,
@@ -33,6 +34,8 @@ import type { SkinName, ThemeName } from "../theme/tokens";
 import {
   markTelegramReady,
   TELEGRAM_OAUTH_ORIGIN,
+  telegramErrorFromLocation,
+  telegramErrorMentionsDomain,
   telegramInitData,
   telegramOAuthUrl,
   telegramPayloadFromLocation,
@@ -82,6 +85,9 @@ const TELEGRAM_QUERY_KEYS = [
   "photo_url",
   "auth_date",
   "hash",
+  "error",
+  "error_code",
+  "error_description",
 ] as const;
 const CODE_LENGTH = 6;
 const CONFIRMATION_HOLD_MS = 650;
@@ -123,7 +129,7 @@ function authErrorKey(error: unknown): string {
       case "invite_invalid":
         return "auth-invite-invalid";
       case "service_unavailable":
-        return "auth-telegram-unavailable";
+        return "auth-telegram-config";
       case "unauthorized":
         return "auth-invalid-code";
       default:
@@ -176,6 +182,11 @@ export function AuthScreen({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [telegram] = useState(() => telegramInitData());
+  const [telegramWidgetFailed, setTelegramWidgetFailed] = useState(false);
+  const telegramUsername =
+    import.meta.env.VITE_TELEGRAM_BOT_USERNAME?.trim() ?? "";
+  const telegramWidget =
+    telegramUsername.length > 0 && telegram === null && !telegramWidgetFailed;
   const [iellaMood, setIellaMood] = useState<IellaMood>("curious");
   const [thermalFocus, setThermalFocus] = useState<{
     x: number;
@@ -252,6 +263,11 @@ export function AuthScreen({
             callbacksRef.current.onAccessBlocked(caught.code);
             return;
           }
+          if (caught.code === "unauthorized") {
+            setIellaMood("proud");
+            setError("auth-telegram-failed");
+            return;
+          }
         }
         setIellaMood("proud");
         setError(authErrorKey(caught));
@@ -264,6 +280,21 @@ export function AuthScreen({
 
   const consumeTelegramReturn = useCallback(() => {
     if (typeof window === "undefined" || handledReturnRef.current) {
+      return;
+    }
+    const authError = telegramErrorFromLocation(
+      window.location.search,
+      window.location.hash,
+    );
+    if (authError) {
+      handledReturnRef.current = true;
+      clearTelegramParams();
+      setIellaMood("proud");
+      setError(
+        telegramErrorMentionsDomain(authError)
+          ? "auth-telegram-domain"
+          : "auth-telegram-failed",
+      );
       return;
     }
     const payload = telegramPayloadFromLocation(
@@ -420,22 +451,25 @@ export function AuthScreen({
   };
 
   const startTelegram = () => {
-    const webAppPayload = telegram
-      ? telegramPayloadFromWebApp(telegram)
-      : null;
-    if (webAppPayload) {
-      void authenticateTelegram(webAppPayload);
+    if (telegram) {
+      const webAppPayload = telegramPayloadFromWebApp(telegram);
+      if (webAppPayload) {
+        void authenticateTelegram(webAppPayload);
+      } else {
+        setIellaMood("proud");
+        setError("auth-telegram-failed");
+      }
       return;
     }
     const botId = import.meta.env.VITE_TELEGRAM_BOT_ID ?? "";
     if (typeof window === "undefined") {
-      setError("auth-telegram-unavailable");
+      setError("auth-telegram-config");
       return;
     }
     const returnTo = `${window.location.origin}${window.location.pathname}${window.location.search}`;
     const url = telegramOAuthUrl(botId, window.location.origin, returnTo);
     if (!url) {
-      setError("auth-telegram-unavailable");
+      setError("auth-telegram-config");
       return;
     }
     window.location.assign(url);
@@ -452,19 +486,17 @@ export function AuthScreen({
     <div className="auth-screen" data-skin={skin}>
       <section className="auth-panel" aria-label={t("auth-title")}>
         <div className="auth-panel-topbar">
-          <div className="auth-brand-group">
-            <div className="auth-brand">
-              <BrandLogo size={40} />
-              <span className="brand-name">{t("app-name")}</span>
-            </div>
+          <div className="auth-brand">
+            <BrandLogo size={40} />
+            <span className="brand-name">{t("app-name")}</span>
+          </div>
+          <div className="auth-header-controls">
             <LanguageMenu
               locale={locale}
               locales={locales}
               onLocaleChange={onLocaleChange}
             />
-          </div>
-          <div className="auth-header-controls">
-            <ThemeToggle theme={theme} onThemeChange={onThemeChange} />
+            <ThemeMenu theme={theme} onThemeChange={onThemeChange} />
           </div>
         </div>
 
@@ -508,7 +540,12 @@ export function AuthScreen({
 
               {error ? (
                 <p className="inline-alert danger" role="alert">
-                  {t(error)}
+                  {t(error, {
+                    origin:
+                      typeof window === "undefined"
+                        ? ""
+                        : window.location.origin,
+                  })}
                 </p>
               ) : null}
 
@@ -605,16 +642,28 @@ export function AuthScreen({
               <div className="auth-divider">
                 <span>{t("auth-or")}</span>
               </div>
-              <Button
-                type="button"
-                variant="secondary"
-                block
-                busy={busy}
-                onClick={startTelegram}
-              >
-                <StudioIcon name="arrow-right" size={16} />
-                <span className="auth-submit-label">{t("auth-telegram")}</span>
-              </Button>
+              {telegramWidget ? (
+                <TelegramLoginWidget
+                  username={telegramUsername}
+                  onAuth={(payload) => void authenticateTelegram(payload)}
+                  onError={() => {
+                    setTelegramWidgetFailed(true);
+                    setIellaMood("proud");
+                    setError("auth-telegram-failed");
+                  }}
+                />
+              ) : (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  block
+                  busy={busy}
+                  onClick={startTelegram}
+                >
+                  <StudioIcon name="arrow-right" size={16} />
+                  <span className="auth-submit-label">{t("auth-telegram")}</span>
+                </Button>
+              )}
               {telegram ? (
                 <p className="auth-note">{t("auth-telegram-detected")}</p>
               ) : null}

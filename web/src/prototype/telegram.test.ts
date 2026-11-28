@@ -2,11 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import type { TelegramLoginPayload } from "../api/client";
 import {
+  telegramErrorFromLocation,
+  telegramErrorMentionsDomain,
   telegramPayloadFromAuthResult,
   telegramPayloadFromHash,
   telegramPayloadFromLocation,
   telegramPayloadFromMessage,
   telegramPayloadFromSearch,
+  telegramPayloadFromWebApp,
 } from "./telegram";
 
 const PAYLOAD: TelegramLoginPayload = {
@@ -66,5 +69,34 @@ describe("Telegram OAuth return parsing", () => {
       telegramPayloadFromMessage({ tgAuthResult: base64({ ...PAYLOAD, first_name: "" }) }),
     ).toBeNull();
     expect(telegramPayloadFromMessage({ result: { id: 4242 } })).toBeNull();
+  });
+
+  it("keeps raw Mini App initData for server-side verification", () => {
+    const user = encodeURIComponent(
+      JSON.stringify({ id: 4242, first_name: "Aziza" }),
+    );
+    const initData = `auth_date=1700000000&query_id=AAH-test&user=${user}&hash=abc`;
+    const payload = telegramPayloadFromWebApp(initData);
+    expect(payload?.init_data).toBe(initData);
+    expect(payload?.id).toBe(4242);
+  });
+
+  it("surfaces Telegram OAuth and domain errors instead of dropping them", () => {
+    expect(
+      telegramErrorFromLocation("?error=access_denied", ""),
+    ).toEqual({ code: "access_denied", description: null });
+    const domain = telegramErrorFromLocation(
+      "?error=bot_domain_invalid&error_description=Invalid+domain",
+      "",
+    );
+    expect(domain).toEqual({
+      code: "bot_domain_invalid",
+      description: "Invalid domain",
+    });
+    expect(domain && telegramErrorMentionsDomain(domain)).toBe(true);
+    expect(
+      telegramErrorMentionsDomain({ code: "access_denied", description: null }),
+    ).toBe(false);
+    expect(telegramErrorFromLocation("", "")).toBeNull();
   });
 });

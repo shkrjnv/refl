@@ -30,6 +30,8 @@ export interface TelegramLoginPayload {
   photo_url?: string | null;
   auth_date: number;
   hash: string;
+  /** Raw Mini App initData, verified server-side with the WebApp secret. */
+  init_data?: string;
   invite_code?: string | null;
 }
 

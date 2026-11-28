@@ -4,7 +4,14 @@ import "fake-indexeddb/auto";
 
 import { readFileSync } from "node:fs";
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -314,6 +321,52 @@ describe("auth and access flow", () => {
     expect(window.location.search).toBe("?invite=INVITE-42");
   });
 
+  it("surfaces a Telegram domain error with an actionable message", async () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/?error=bot_domain_invalid&error_description=Invalid+domain",
+    );
+    let called = false;
+    render(
+      <I18nProvider initialLocale="en">
+        <AuthGate
+          api={{
+            requestCode: async () => ({ sent: true, expires_in: 600 }),
+            verifyCode: async () => ({
+              access_token: "a",
+              refresh_token: "r",
+              learner_id: "learner-42",
+              expires_in: 900,
+            }),
+            telegramLogin: async () => {
+              called = true;
+              return {
+                access_token: "a",
+                refresh_token: "r",
+                learner_id: "learner-42",
+                expires_in: 900,
+              };
+            },
+          }}
+          inviteCode={null}
+          theme="deep-umber"
+          skin="living-studio"
+          locale="en"
+          locales={["en", "ru", "uz"]}
+          onLocaleChange={() => undefined}
+          onThemeChange={() => undefined}
+          onAuthenticated={() => undefined}
+        />
+      </I18nProvider>,
+    );
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("BotFather");
+    expect(alert.textContent).toContain("http");
+    expect(called).toBe(false);
+    expect(window.location.search).toBe("");
+  });
+
   it("persists the palette chosen before sign-in", () => {
     let selected: ThemeName = "deep-umber";
     function Harness() {
@@ -354,9 +407,8 @@ describe("auth and access flow", () => {
       );
     }
     render(<Harness />);
-    fireEvent.click(
-      screen.getByRole("button", { name: "Switch to light theme" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Theme: Deep Umber" }));
+    fireEvent.click(screen.getByRole("option", { name: "Cream Paper" }));
     expect(selected).toBe("cream-paper");
     expect(window.localStorage.getItem("refl.theme")).toBe("cream-paper");
     expect(window.localStorage.getItem("refl.palette")).toBe("cream-paper");
@@ -364,7 +416,7 @@ describe("auth and access flow", () => {
     expect(document.documentElement.dataset["theme"]).toBe("light");
   });
 
-  it("renders the editorial studio copy and one scheme toggle", () => {
+  it("groups language and the compact palette menu on the right", () => {
     render(
       <I18nProvider initialLocale="en">
         <AuthGate
@@ -408,17 +460,32 @@ describe("auth and access flow", () => {
     expect(title?.classList.contains("auth-title-liquid")).toBe(false);
     expect(title?.classList.contains("auth-form-title")).toBe(true);
     expect(document.querySelector(".auth-form-header .auth-card-subtitle")).toBeNull();
-    expect(
-      screen.getByRole("button", { name: "Switch to light theme" }),
-    ).toBeTruthy();
+    const topbar = document.querySelector(".auth-panel-topbar");
+    const brand = topbar?.querySelector(".auth-brand");
+    const controls = topbar?.querySelector(".auth-header-controls");
+    expect(brand).toBeTruthy();
+    expect(controls).toBeTruthy();
+    expect(controls?.querySelector(".language-menu")).toBeTruthy();
+    expect(controls?.querySelector(".theme-menu")).toBeTruthy();
+    expect(controls?.querySelector(".auth-brand")).toBeNull();
     expect(document.querySelectorAll(".auth-panel-topbar .palette-choice"))
       .toHaveLength(0);
+    const trigger = screen.getByRole("button", {
+      name: "Theme: Burgundy Studio",
+    });
+    fireEvent.click(trigger);
+    const palette = screen.getByRole("listbox", { name: "Theme" });
+    expect(within(palette).getAllByRole("option")).toHaveLength(5);
     expect(
-      screen.queryByRole("button", { name: "Burgundy Studio" }),
+      within(palette).queryByText("burgundy", { exact: true }),
     ).toBeNull();
     expect(
-      screen.queryByRole("button", { name: "Sand & Forest" }),
-    ).toBeNull();
+      within(palette).getByRole("option", { name: "Sand & Forest" }),
+    ).toBeTruthy();
+    const css = readFileSync("src/app.css", "utf8");
+    expect(
+      cssRule(css, ".auth-header-controls {"),
+    ).toContain("margin-left: auto");
   });
 
   it("renders one clean email input with a single inset focus ring", () => {

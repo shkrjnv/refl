@@ -342,7 +342,7 @@ input:focus-visible {
 .mobile-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 7px;
 }
 
 .brand-lockup {
@@ -366,8 +366,11 @@ input:focus-visible {
 .brand-name {
   font-family: var(--font-family);
   font-size: 22px;
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: -0.02em;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .side-nav {
@@ -4419,7 +4422,7 @@ input:focus-visible {
 .auth-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 7px;
 }
 
 .auth-brand .brand-mark {
@@ -7835,8 +7838,11 @@ input:focus-visible {
 
 .brand-name {
   font-family: var(--font-family);
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: -0.02em;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* W9 — ambient ring/curve motion and isometric mastery towers. */
@@ -8294,7 +8300,7 @@ input:focus-visible {
 }
 
 .auth-brand {
-  gap: 8px;
+  gap: 7px;
 }
 
 .auth-brand .brand-name {
@@ -11002,46 +11008,137 @@ input:focus-visible {
   }
 }
 
-/* Prototype schemes: one tidy Light/Dark control in the header, with the
-   fuller choice in Settings. The header never shows palette names or swatches. */
-.theme-toggle {
-  display: inline-grid;
-  width: 44px;
-  min-height: 44px;
+/* Prototype palettes: a compact header menu with colour swatches only, and
+   the full labelled picker in Settings. */
+.theme-menu {
+  position: relative;
+  z-index: 12;
+  display: flex;
   flex: none;
-  place-items: center;
+  align-items: center;
+}
+
+.theme-menu-trigger {
+  display: inline-flex;
+  min-width: 44px;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--surface);
   color: var(--text);
-  padding: 0;
+  padding: 0 8px;
 }
 
-.theme-toggle:hover {
+.theme-menu-trigger:hover {
   border-color: var(--border-strong);
   background: var(--surface-muted);
 }
 
-.theme-toggle:focus-visible {
+.theme-menu-trigger:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
-.theme-toggle .studio-icon {
-  pointer-events: none;
+.theme-menu-trigger .palette-swatch {
+  width: 20px;
+  height: 20px;
 }
 
-.topbar-actions,
-.auth-header-controls {
+.theme-menu-options {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  right: 0;
+  display: grid;
+  grid-template-columns: repeat(5, 34px);
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+  opacity: 0;
+  padding: 6px;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+  visibility: hidden;
+}
+
+.theme-menu[data-open="true"] .theme-menu-options {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+  visibility: visible;
+}
+
+.theme-menu-option {
   position: relative;
-  z-index: 12;
-  align-items: center;
+  display: grid;
+  width: 34px;
+  height: 40px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  padding: 0;
+}
+
+.theme-menu-option:hover,
+.theme-menu-option.active {
+  border-color: var(--border-strong);
+  background: var(--surface-muted);
+}
+
+.theme-menu-option:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.theme-menu-check {
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  color: var(--text);
+}
+
+/* Header alignment: brand on the left, language + theme on the right. */
+.studio-topbar {
+  justify-content: space-between;
+}
+
+.mobile-brand {
+  margin-right: auto;
+}
+
+.topbar-actions {
+  width: auto;
+  margin-left: auto;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
   gap: 8px;
+}
+
+.auth-panel-topbar {
+  justify-content: space-between;
+}
+
+.auth-brand {
+  margin-right: auto;
 }
 
 .auth-header-controls {
   display: flex;
   flex: none;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  position: relative;
+  z-index: 12;
 }
 
 @media (max-width: 430px) {
@@ -11053,4 +11150,23 @@ input:focus-visible {
   .language-current {
     padding: 0 8px;
   }
+
+  .theme-menu-options {
+    grid-template-columns: repeat(5, 32px);
+  }
+
+  .theme-menu-option {
+    width: 32px;
+  }
+}
+
+.telegram-login-widget {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+}
+
+.telegram-login-widget iframe {
+  max-width: 100%;
 }

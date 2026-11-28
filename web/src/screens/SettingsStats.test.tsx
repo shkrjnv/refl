@@ -257,7 +257,7 @@ describe("statistics, profile, and settings", () => {
     ).toBeTruthy();
   });
 
-  it("switches language, light/dark scheme, navigation, and sign-out from settings", async () => {
+  it("switches language, palette, navigation, and sign-out from settings", async () => {
     let locale = "en";
     let selectedPalette = "cream-paper";
     let navigation: NavigationPosition = "left";
@@ -315,14 +315,19 @@ describe("statistics, profile, and settings", () => {
     fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
     expect(signedOut).toBe(true);
     fireEvent.click(screen.getByRole("tab", { name: "Appearance" }));
-    expect(
-      screen.queryByRole("button", { name: /Burgundy Studio/ }),
-    ).toBeNull();
-    expect(screen.getByRole("button", { name: /^Light/ })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /^Dark/ }));
+    for (const name of [
+      /Deep Umber/,
+      /Burgundy Studio/,
+      /Midnight Cobalt/,
+      /Cream Paper/,
+      /Sand & Forest/,
+    ]) {
+      expect(screen.getByRole("button", { name })).toBeTruthy();
+    }
+    fireEvent.click(screen.getByRole("button", { name: /Sand & Forest/ }));
     fireEvent.click(screen.getByRole("button", { name: "Right rail" }));
     expect(locale).toBe("ru");
-    expect(selectedPalette).toBe("deep-umber");
+    expect(selectedPalette).toBe("sand-forest");
     expect(navigation).toBe("right");
     expect(screen.getByText("Settings")).toBeTruthy();
     fireEvent.click(screen.getByRole("tab", { name: "Offline & Data" }));

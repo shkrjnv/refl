@@ -70,7 +70,7 @@ describe("adaptive studio shell", () => {
     expect(routes).toEqual(["profile"]);
   });
 
-  it("exposes one light/dark toggle and no palette or skin swatches", () => {
+  it("keeps a compact palette menu with all palettes and no slug labels", () => {
     const selected: ThemeName[] = [];
     const { container } = renderShell(
       "left",
@@ -80,13 +80,19 @@ describe("adaptive studio shell", () => {
     );
     expect(container.querySelectorAll(".palette-choice")).toHaveLength(0);
     expect(screen.queryByRole("button", { name: "Skin" })).toBeNull();
-    expect(
-      screen.queryByRole("button", { name: /Burgundy Studio/ }),
-    ).toBeNull();
-    const toggle = screen.getByRole("button", {
-      name: "Switch to light theme",
+    const trigger = screen.getByRole("button", {
+      name: "Theme: Deep Umber",
     });
-    fireEvent.click(toggle);
+    expect(trigger.textContent).not.toContain("burgundy");
+    fireEvent.click(trigger);
+    const palette = screen.getByRole("listbox", { name: "Theme" });
+    expect(within(palette).getAllByRole("option")).toHaveLength(5);
+    expect(
+      within(palette).queryByText("burgundy", { exact: true }),
+    ).toBeNull();
+    fireEvent.click(
+      within(palette).getByRole("option", { name: "Cream Paper" }),
+    );
     expect(selected).toEqual(["cream-paper"]);
   });
 

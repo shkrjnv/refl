@@ -81,6 +81,7 @@ export function telegramPayloadFromWebApp(
     photo_url: typeof photoUrl === "string" ? photoUrl : null,
     auth_date: authDate,
     hash,
+    init_data: initData,
   };
 }
 
@@ -220,6 +221,38 @@ export function telegramPayloadFromLocation(
   hash: string,
 ): TelegramLoginPayload | null {
   return telegramPayloadFromSearch(search) ?? telegramPayloadFromHash(hash);
+}
+
+export interface TelegramOAuthError {
+  code: string | null;
+  description: string | null;
+}
+
+/** Telegram returns OAuth failures as query/hash params, not as JSON. */
+export function telegramErrorFromLocation(
+  search: string,
+  hash: string,
+): TelegramOAuthError | null {
+  const query = new URLSearchParams(search);
+  const fragment = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : hash);
+  const code =
+    query.get("error") ??
+    query.get("error_code") ??
+    fragment.get("error") ??
+    fragment.get("error_code");
+  const description =
+    query.get("error_description") ??
+    fragment.get("error_description");
+  if (!code && !description) {
+    return null;
+  }
+  return { code, description };
+}
+
+export function telegramErrorMentionsDomain(
+  error: TelegramOAuthError,
+): boolean {
+  return /domain|origin|bot/i.test(`${error.code ?? ""} ${error.description ?? ""}`);
 }
 
 function payloadFromMessageValue(
