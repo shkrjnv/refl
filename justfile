@@ -126,11 +126,18 @@ wasm:
     rm -rf web/src/generated/wasm
     mkdir -p web/src/generated/wasm
     wasm-bindgen --target web --out-dir web/src/generated/wasm target/wasm32-unknown-unknown/wasm-release/refl_core_wasm.wasm
-    wasm-opt --strip-debug --strip-producers --strip-target-features --all-features -Oz \
+    # Only features every supported browser ships by default (Safari 15+,
+    # Chrome 96+, Firefox 100+). `--all-features` let wasm-opt emit the
+    # experimental compact import encoding, which stock browsers reject.
+    wasm-opt --strip-debug --strip-producers --strip-target-features \
+        --mvp-features --enable-sign-ext --enable-mutable-globals \
+        --enable-nontrapping-float-to-int --enable-bulk-memory \
+        --enable-reference-types --enable-multivalue -Oz \
         web/src/generated/wasm/refl_core_wasm_bg.wasm \
         -o web/src/generated/wasm/refl_core_wasm_bg.opt.wasm
     mv web/src/generated/wasm/refl_core_wasm_bg.opt.wasm \
         web/src/generated/wasm/refl_core_wasm_bg.wasm
+    node web/scripts/check-wasm.mjs web/src/generated/wasm/refl_core_wasm_bg.wasm
 
 # Fold one generated log and plan three sessions on it natively and in wasm32 (wasmtime): the hashes must match
 wasm-hash events="20000" seed="7":
