@@ -3,12 +3,14 @@
 //! fixture (`tests/fixtures/<code>/`, built on `tests/fixtures/lib/base.ncl`).
 //! Needs `nickel` on PATH (the dev shell and `nix flake check` provide it).
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use content_build::lock::Lock;
 use content_build::report::{Code, Severity};
 use content_build::{Options, Output, build, to_bytes};
 use refl_core::bundle::KcStatus;
+use refl_core::content::MisconceptionOrigin;
 use refl_core::ids::{ItemId, ItemRef, ItemVersion};
 use refl_core::item::ItemStatus;
 use refl_core::value::Lang;
@@ -480,6 +482,83 @@ fn example_content_builds() {
             ("en.gram.article.first-mention", 1),
             ("en.gram.noun.countability", 2)
         ]
+    );
+}
+
+/// The CEFR A1 core graph is compiled alongside the Articles unit: 27 new
+/// KCs, 18 misconceptions (15 L1-transfer + 3 other), all levels in the
+/// existing A1/A2 scale. Status stays review-driven and is not pinned here.
+#[test]
+fn a1_core_graph_is_compiled() {
+    let out = run(&repo().join("content"));
+    assert!(!out.report.has_errors(), "{}", out.report);
+    let bundle = out.bundle.expect("bundle");
+    let ids: BTreeSet<&str> = bundle
+        .content
+        .kcs
+        .iter()
+        .map(|k| k.kc.id.as_str())
+        .collect();
+    for kc in [
+        "en.gram.pronoun.subject",
+        "en.gram.pronoun.object",
+        "en.gram.possessive.adjectives",
+        "en.gram.possessive.s",
+        "en.gram.noun.plural-regular",
+        "en.gram.noun.plural-irregular",
+        "en.gram.determiner.demonstratives",
+        "en.gram.be.present-affirmative",
+        "en.gram.be.present-negative",
+        "en.gram.be.present-questions",
+        "en.gram.there-is-are",
+        "en.gram.present-simple.affirmative",
+        "en.gram.present-simple.third-person-s",
+        "en.gram.present-simple.negative",
+        "en.gram.present-simple.questions",
+        "en.gram.present-continuous.affirmative",
+        "en.gram.present-continuous.questions",
+        "en.gram.can.ability",
+        "en.gram.can.requests",
+        "en.gram.imperative",
+        "en.gram.question.words",
+        "en.gram.adjective.position",
+        "en.gram.adverb.frequency",
+        "en.gram.preposition.place",
+        "en.gram.preposition.time",
+        "en.gram.quantifier.some-any",
+        "en.gram.quantifier.much-many",
+    ] {
+        assert!(ids.contains(kc), "{kc}");
+    }
+    assert_eq!(ids.len(), 33, "32 learning KCs plus the spelling KC");
+
+    let misconceptions: BTreeSet<&str> = bundle
+        .content
+        .misconceptions
+        .iter()
+        .map(|m| m.id.as_str())
+        .collect();
+    for mis in [
+        "en.mis.be.drop-copula",
+        "en.mis.be.am-agree",
+        "en.mis.pronoun.drop-subject",
+        "en.mis.present.third-person-s",
+        "en.mis.present.no-do",
+        "en.mis.question.word-order",
+        "en.mis.preposition.time",
+        "en.mis.quantifier.much-many",
+    ] {
+        assert!(misconceptions.contains(mis), "{mis}");
+    }
+    assert_eq!(misconceptions.len(), 18);
+    assert_eq!(
+        bundle
+            .content
+            .misconceptions
+            .iter()
+            .filter(|m| m.origin == MisconceptionOrigin::L1Transfer)
+            .count(),
+        15
     );
 }
 
