@@ -498,8 +498,10 @@ fn check_lexemes(content: &load::Content, ids: &check::Ids, diags: &mut Vec<repo
 /// Word boundaries shared with `book-build`: ASCII letters, apostrophes and
 /// hyphens; punctuation and digits separate words. Spans keep their case.
 pub fn word_spans(text: &str) -> impl Iterator<Item = &str> + '_ {
-    text.split(|c: char| !(c.is_ascii_alphabetic() || c == '\'' || c == '-'))
-        .filter(|word| !word.is_empty())
+    text.split(|c: char| {
+        !(c.is_ascii_alphabetic() || matches!(c, '\'' | '-' | '\u{2019}' | '\u{2018}'))
+    })
+    .filter(|word| !word.is_empty())
 }
 
 /// [`word_spans`], lowercased for matching against the lexical bank.

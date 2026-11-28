@@ -14,7 +14,18 @@ The schema files in content/lib/ are part of the software and are licensed
 under the GNU Affero General Public License v3.0 only, like the rest of the
 repository.
 
-Graded readers under content/books/, including book.first-day ("The First
-Day"), are original works by the copyright holder and are covered by the
-terms above. Third-party public-domain or attribution-licensed readers are
-listed in THIRD_PARTY.md together with their license and attribution.
+The graded readers under content/books/ are public-domain works or
+retellings of public-domain works:
+
+- `book.aesop-lion-mouse` ("The Lion and the Mouse") is an A1 retelling of
+  Aesop's fable as translated by George Fyler Townsend (1867).
+- `book.aesop-north-wind-sun` ("The North Wind and the Sun") is an A2
+  retelling of the same Townsend translation.
+- `book.ohenry-gift-magi` ("The Gift of the Magi") is O. Henry's 1905 short
+  story.
+
+The source texts are in the public domain in the United States. The
+retellings add no restriction beyond the public-domain source. Full
+provenance and source URLs are recorded in THIRD_PARTY.md. The refl compiler
+and reader code that processes these texts remain under the GNU Affero
+General Public License v3.0 only.

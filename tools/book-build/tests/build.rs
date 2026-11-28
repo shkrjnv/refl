@@ -39,8 +39,9 @@ fn options(bundle: &Path, tag: &str) -> Options {
     opts
 }
 
+#[allow(clippy::assert_is_empty)]
 #[test]
-fn the_starter_reader_is_deterministic_and_linked() {
+fn the_graded_readers_are_deterministic_and_linked() {
     let bundle_path = content_bundle(&repo().join("content"), "linked");
     let bundle: refl_core::bundle::Bundle =
         serde_json::from_slice(&std::fs::read(&bundle_path).unwrap()).unwrap();
@@ -54,58 +55,74 @@ fn the_starter_reader_is_deterministic_and_linked() {
     opts.lock = unique("linked-lock").with_extension("lock");
     let first = build(&opts).unwrap();
     assert!(first.diagnostics.is_empty(), "{:?}", first.diagnostics);
-    assert_eq!(first.compiled.len(), 1, "the starter A1 reader");
-    let compiled = &first.compiled[0];
-    assert_eq!(compiled.book.id.as_str(), "book.first-day");
+    assert_eq!(first.compiled.len(), 3, "three graded readers");
+    let compiled = first
+        .compiled
+        .iter()
+        .find(|item| item.book.id.as_str() == "book.aesop-lion-mouse")
+        .expect("the A1 reader");
     assert_eq!(compiled.book.level.as_str(), "A1");
     assert_eq!(compiled.book.version.len(), 64);
     assert!(compiled.book.version.bytes().all(|b| b.is_ascii_hexdigit()));
-    assert!(compiled.book.chapters.len() >= 2);
+    assert!(!compiled.book.chapters.is_empty());
     let mut linked = 0;
-    for chapter in &compiled.book.chapters {
-        assert!(chapter.id.starts_with("chapter.first-day."));
-        for paragraph in &chapter.paragraphs {
-            assert!(paragraph.id.starts_with("para.first-day."));
-            for sentence in &paragraph.sentences {
-                assert!(sentence.id.starts_with("sentence.first-day."));
-                for token in &sentence.tokens {
-                    assert!(token.id.starts_with("token.first-day."));
-                    if let Some(lexeme) = &token.lexeme_id {
-                        linked += 1;
-                        assert!(senses.contains(lexeme), "{}", lexeme);
-                    }
-                    for lexeme in &token.sense_ids {
-                        assert!(senses.contains(lexeme), "{}", lexeme);
+    for item in &first.compiled {
+        let slug = item.book.id.as_str().trim_start_matches("book.");
+        for chapter in &item.book.chapters {
+            assert!(chapter.id.starts_with(&format!("chapter.{slug}.")));
+            for paragraph in &chapter.paragraphs {
+                assert!(paragraph.id.starts_with(&format!("para.{slug}.")));
+                for sentence in &paragraph.sentences {
+                    // Readers keep the original punctuation in the sentence.
+                    assert!(sentence.text.chars().next().is_some());
+                    assert!(sentence.id.starts_with(&format!("sentence.{slug}.")));
+                    for token in &sentence.tokens {
+                        assert!(token.id.starts_with(&format!("token.{slug}.")));
+                        if let Some(lexeme) = &token.lexeme_id {
+                            linked += 1;
+                            assert!(senses.contains(lexeme), "{}", lexeme);
+                        }
+                        for lexeme in &token.sense_ids {
+                            assert!(senses.contains(lexeme), "{}", lexeme);
+                        }
                     }
                 }
             }
         }
     }
-    assert!(linked > 0, "the reader links words to the starter bank");
+    assert!(linked > 0, "the readers link words to the starter bank");
     // Rebuilding the same sources gives the same bytes and version.
     write_lock(
         &opts,
         first
             .lock_update
             .as_deref()
-            .expect("new book updates the lock"),
+            .expect("new books update the lock"),
     )
     .unwrap();
     let second = build(&opts).unwrap();
     assert!(second.diagnostics.is_empty(), "{:?}", second.diagnostics);
     assert!(second.lock_update.is_none(), "the lock is current");
-    assert_eq!(second.compiled[0].bytes, compiled.bytes);
-    assert_eq!(second.compiled[0].book.version, compiled.book.version);
+    let second_lion = second
+        .compiled
+        .iter()
+        .find(|item| item.book.id.as_str() == "book.aesop-lion-mouse")
+        .expect("the A1 reader after a rebuild");
+    assert_eq!(second_lion.bytes, compiled.bytes);
+    assert_eq!(second_lion.book.version, compiled.book.version);
     // The asset round-trips as a Book with the same version.
     let parsed: Book = serde_json::from_slice(&compiled.bytes).unwrap();
-    assert_eq!(parsed, compiled.book);
+    assert_eq!(&parsed, &compiled.book);
     write(&opts, &first.compiled).unwrap();
     let index: serde_json::Value =
         serde_json::from_slice(&std::fs::read(opts.out.join("index.json")).unwrap()).unwrap();
-    assert_eq!(index["books"][0]["id"], serde_json::json!("book.first-day"));
-    assert_eq!(
-        index["books"][0]["version"],
-        serde_json::json!(compiled.book.version)
+    assert_eq!(index["books"].as_array().unwrap().len(), 3);
+    assert!(
+        index["books"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|book| book["id"] == serde_json::json!("book.aesop-lion-mouse"))
     );
     let _ = std::fs::remove_file(&bundle_path);
 }
@@ -180,7 +197,7 @@ fn a_token_index_shift_requires_an_explicit_relock() {
     });
     write_lock(&opts, &lock.render()).unwrap();
     let blocked = build(&opts).unwrap();
-    assert_eq!(blocked.compiled.len(), 1);
+    assert_eq!(blocked.compiled.len(), 3);
     assert!(
         blocked
             .diagnostics
