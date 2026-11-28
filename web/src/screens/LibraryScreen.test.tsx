@@ -6,11 +6,32 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { LearnerStorage } from "../db/storage";
+import type { Book } from "../generated/core/Book";
 import { I18nProvider } from "../i18n";
 import type { RecordStore } from "../prototype/records";
 import type { BookCoverageResult } from "../wasm/types";
+import type { LoadedBook } from "../prototype/books";
 import { LibraryScreen } from "./LibraryScreen";
 import { testContent } from "./testContent";
+import giftOfTheMagi from "./fixtures/book.ohenry-gift-magi.json";
+
+/** The app ships no built-in books; the reader is tested on a fixture. */
+const fixtureBook = giftOfTheMagi as unknown as Book;
+const books: LoadedBook[] = [
+  {
+    meta: {
+      id: "book.ohenry-gift-magi",
+      version: fixtureBook.version,
+      bytes: 0,
+      digest: "",
+      level: "B1",
+      title: fixtureBook.title,
+    },
+    book: fixtureBook,
+    json: JSON.stringify(fixtureBook),
+    coverUrl: null,
+  },
+];
 
 afterEach(cleanup);
 
@@ -53,6 +74,7 @@ function renderLibrary(storage: LearnerStorage | null = null) {
         bookCoverage={coverage}
         onPractice={() => undefined}
         storage={storage}
+        books={books}
       />
     </I18nProvider>,
   );
