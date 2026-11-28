@@ -42,7 +42,7 @@ fn a_whole_session_is_identical_through_the_context() {
         1_500_000.0,
     ))["plan"]
         .to_string();
-    let mut steps = 0;
+    let mut steps: u32 = 0;
     loop {
         let now = NOW + f64::from(steps) * 20_000.0;
         let free = refl_core_wasm::next_item(&bundle, &snapshot, &plan, now);
@@ -78,7 +78,7 @@ fn a_whole_session_is_identical_through_the_context() {
                     "kind": "answer",
                     "item": { "id": next["item"]["id"], "version": next["item"]["version"] },
                     "slot": next["slot"],
-                    "correct": steps % 3 != 0,
+                    "correct": !steps.is_multiple_of(3),
                     "rapid": false,
                     "sure": true,
                 })
@@ -118,7 +118,7 @@ fn placement_is_identical_through_the_context() {
         );
         let item = result["item"].to_string();
         let slot = u16::try_from(result["slot"].as_u64().unwrap()).unwrap();
-        let correct = answered % 2 == 0;
+        let correct = answered.is_multiple_of(2);
         let free = refl_core_wasm::placement_answer(
             &bundle, &snapshot, &placement, &item, slot, correct, NOW,
         );
