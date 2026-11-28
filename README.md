@@ -6,7 +6,7 @@ English is the first subject. From day one the core is built with a boundary bet
 
 refl does not hand out points for activity. It builds a model of what the learner knows, what they are forgetting, what they do slowly and where they make systematic mistakes, and it assembles every session from that model. Every decision the system makes can be explained: "why this task" is not marketing, it is a formula.
 
-> **Status: stage 1 prototype.** The core (domain types, answer checking, the schema-2 event set, decoding of events from newer clients), content build and validation, database schema and event log, and the React PWA are built. The PWA includes the first-run entry/placement flow, Today, lesson, summary, stats, profile and settings. Five Articles KCs are live; 27 A1 KCs and their starter bank are draft pending review. The full placement stages, full planner, extended diagnostics and quality dashboard remain specification work. Everything described below as a feature is the specification development follows; what is already built is listed under [Stages](#stages).
+> **Status: Batch 4B.** The core, content compiler, server event log, WASM bridge and React PWA are built. The PWA includes entry/placement, Today, lesson, summary, progress, profile, settings, Vocabulary, Library with the offline book reader, the layered/web knowledge graph, private notes and bookmarks, and the Iella/Sendo companion registry. Five Articles KCs are live; 27 A1 KCs and their starter bank are draft pending review. Full placement stage 2, extended diagnostics and quality dashboard remain specification work. The implementation map is [docs/ARCHITECTURE_STATUS.md](docs/ARCHITECTURE_STATUS.md); everything below as a feature is the specification development follows, and what is built is listed under [Stages](#stages).
 >
 > The specifications in [`docs/`](docs/README.md) are written in Russian and are the single source of truth. This README is their English overview.
 
@@ -332,7 +332,7 @@ flowchart LR
   W <-- events, sync --> S
 ```
 
-All learning logic lives in one Rust core. The server calls it natively, the PWA through WASM, so answer checking and the learner model work without internet and compute the same results.
+All learning logic lives in one Rust core. The server calls it natively, the PWA through WASM, so answer checking and the learner model work without internet and compute the same results. The exact module status, data flows, event limits and deferred gaps are in [docs/ARCHITECTURE_STATUS.md](docs/ARCHITECTURE_STATUS.md).
 
 **Principles** (in full in [docs/01](docs/01-architecture.md)):
 
@@ -369,6 +369,8 @@ A subject's methodology adapts through the subject's data (item kinds, input che
 | `core/` | `refl-core`: domain types, events, normalisation, pattern language, DFA, unlock model, learner model v1 with FSRS-6, the prototype session builder with its plan validator, the SplitMix64 PRNG. `no_std` + `alloc`; the `std` feature is for tests and tools, `ts` for TS type generation |
 | `server/` | `refl-server`: migrations, event writes, bundle import (including the projections of all published task versions), tests on a temporary PostgreSQL. HTTP from stage 1 |
 | `tools/content-build/` | CLI for building and checking content; keeps `content/item-versions.lock` (`--locked` in CI); test fixtures for every check |
+| `tools/book-import/` | Stage 1 importer: EPUB/text-layer PDF/TXT/Markdown to canonical `content/books/<slug>/source.md`, structural repair and optional OCR |
+| `tools/book-build/` | deterministic graded-reader compiler, license checks, `content/book-versions.lock` and web book assets |
 | `tools/sim/` | `refl-sim`: synthetic bundles and learner logs for the fold and planner tests; the native = WASM hash checks of the fold (`fold-hash`) and of planned sessions (`plan-hash`) with timings; the K5 cohort simulator (`cohort`): learners from a different model than ours, our sessions against the «only FSRS» baseline; frozen benchmark configurations in `bench/` (v1: the F2 run); measurements in `m1/` (`m1`: why the knowledge model lags) |
 | `content/` | Nickel content: schema (`lib/`) and a sample "Articles" topic (`articles/`); `item-versions.lock`, the generated append-only projections of published task versions; `bench/`, frozen content builds for the simulator benchmarks |
 | `web/` | the client; for now, TS types generated from Rust in `web/src/generated/core/` |
@@ -478,14 +480,14 @@ Server tests start a throwaway PostgreSQL cluster themselves (`initdb` in a temp
 
 Every stage has a measurable exit criterion. Value starts after stage 1, not at the end.
 
-**Next milestone: the end-to-end prototype** ([docs/15](docs/15-prototype.md)). One topic, "Articles", all the way through: content → bundle → server → offline PWA → answer check in WASM → event → sync → fold → a number in the statistics, with the first run guided by Iella. Narrow, but finished: no placeholders, every state designed, uz / ru / en, phone and desktop. Its UI follows the artboards in `design/reference/`. The specs for stages 0–1 are frozen until it is accepted.
+**Next milestone: reviewed vocabulary and reading content.** Batches 4A and 4B are implemented: the lexical layer, private notes/bookmarks, the offline library and reader, the hybrid knowledge graph, Sendo and the architecture map. The next content pass replaces the 13-word starter bank with a reviewed A1–A2 bank and promotes the 27 draft A1 KCs; server-side book delivery follows when the library grows.
 
 | Stage | Scope | Status |
 | --- | --- | --- |
 | 0. Foundation | monorepo, Nix flake, CI; domain types; content-build with checks; DB schema and event log | in progress: 0.1–0.3 done, unknown events and schema-1 additions done |
 | 1. Learning core | item kinds, checking pipeline, learner model v1 + FSRS, lessons, offline PWA, sync, Telegram bot; grammar A1–A2 (~60 KCs) | in progress: learner model v1 and the prototype session builder done |
 | 2. Placement and planner | adaptive placement, planner, knowledge map, "why this task", mentor, teams and friends, error notebook; up to B1 (~120 KCs) | — |
-| 3. Vocabulary, reading, library | vocabulary model, FSRS for words, texts, personal dictionary, notes graph, achievements, cosmetics, cards | — |
+| 3. Vocabulary, reading, library | vocabulary model, FSRS for words, texts, personal dictionary, notes graph, achievements, cosmetics, cards | in progress: lexical cards and passive credit, personal words, notes/bookmarks, graded reader, library, graph and Sendo registry done; reviewed bank, server book delivery, achievements and cosmetics pending |
 | 4. Listening | audio pipeline, player, dictation with error classification, shadowing | — |
 | 5. Writing | free answers, LanguageTool, criteria checklists, mentor review | — |
 | 6. IELTS | full timed mocks, band conversion, forecast with an interval; B2–C1 | — |
