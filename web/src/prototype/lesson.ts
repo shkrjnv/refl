@@ -6,6 +6,7 @@ import type {
   PlanSessionResult,
   ReplanSessionResult,
 } from "../wasm/types";
+import type { AnswerContext } from "../generated/core/AnswerContext";
 import type { Explanation } from "../generated/core/Explanation";
 import type { ItemRef } from "../generated/core/ItemRef";
 import type { LearnerStorage } from "../db/storage";
@@ -156,6 +157,7 @@ export class LessonRunner {
   #startedAt = 0;
   #shownAt = 0;
   #phase: LessonPhase = "practice";
+  #answerContext: AnswerContext = "practice";
   #item: ItemView | null = null;
   #explanation: LessonExplanation | null = null;
   #feedback: LessonFeedback | null = null;
@@ -263,7 +265,7 @@ export class LessonRunner {
     }
     const view = this.#item;
     const result = await this.#check(view, response);
-    await this.#logAnswer(view, response, result, "practice");
+    await this.#logAnswer(view, response, result, this.#answerContext);
     this.#feedback = this.#feedbackFor(view, result);
     this.#phase = "feedback";
     return this.view();
@@ -324,6 +326,7 @@ export class LessonRunner {
           `${this.#sessionId}:pretest`,
         );
         this.#item = view;
+        this.#answerContext = "lesson";
         this.#phase = "pretest";
       } else {
         this.#item = null;
@@ -345,6 +348,7 @@ export class LessonRunner {
         this.#locale,
         `${this.#sessionId}:${next.issued ? "item" : "session"}`,
       );
+      this.#answerContext = next.context;
       this.#phase = "practice";
       this.#shownAt = this.#clock.now();
       return;
@@ -369,7 +373,7 @@ export class LessonRunner {
     view: ItemView,
     response: JsonValue,
     result: AnswerCheckResult,
-    context: "lesson" | "practice",
+    context: AnswerContext,
   ): Promise<void> {
     const stamp = this.#clock.stamp();
     const misconception =

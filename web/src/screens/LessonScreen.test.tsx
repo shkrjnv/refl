@@ -62,6 +62,7 @@ class FakeLessonCore implements LessonCore, SyncCore {
         item: ITEM,
         slot: 0,
         issued: {},
+        context: "practice",
       };
     }
     return { kind: "finished", end: "nothing_due" };

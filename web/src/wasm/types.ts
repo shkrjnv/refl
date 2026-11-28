@@ -1,4 +1,5 @@
 import type { JsonValue } from "../types/json";
+import type { AnswerContext } from "../generated/core/AnswerContext";
 import type { ItemRef } from "../generated/core/ItemRef";
 
 export interface CoreInfo {
@@ -42,7 +43,13 @@ export interface PlanSessionResult {
 
 export type NextItemResult =
   | { kind: "lesson"; kc: string; explanation: string }
-  | { kind: "item"; item: JsonValue; slot: number; issued: JsonValue }
+  | {
+      kind: "item";
+      item: JsonValue;
+      slot: number;
+      issued: JsonValue;
+      context: AnswerContext;
+    }
   | { kind: "finished"; end: JsonValue };
 
 export interface ReplanSessionResult {
