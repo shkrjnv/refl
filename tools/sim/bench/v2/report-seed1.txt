@@ -1,5 +1,5 @@
 simulator v2
-revision: a8b48e5
+revision: cdc1877
 seed=1 learners=1000 horizon=600 steps (~30 days at 20 steps/day) + stress=200
 bootstrap: learner-cluster, SplitMix64, B=2000; 80% and 95% percentiles
 live=content/bench/v3/bundle.json (5 live KCs); full=target/bundle.json (32 learning KCs)
