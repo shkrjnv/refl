@@ -7555,9 +7555,9 @@ input:focus-visible {
 }
 
 .skill-row > div strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: break-word;
 }
 
 .skill-row > div span {
@@ -7598,9 +7598,9 @@ input:focus-visible {
 }
 
 .misconception-topline strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: break-word;
 }
 
 .misconception-row > span {
@@ -8934,10 +8934,10 @@ input:focus-visible {
 }
 
 .mastery-row-heading strong {
-  overflow: hidden;
+  min-width: 0;
+  flex: 1;
   font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: break-word;
 }
 
 .mastery-status {
@@ -9065,10 +9065,8 @@ input:focus-visible {
 }
 
 .error-notebook-copy strong {
-  overflow: hidden;
   font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: break-word;
 }
 
 .error-notebook-copy span {
@@ -9117,10 +9115,8 @@ input:focus-visible {
 }
 
 .note-row strong {
-  overflow: hidden;
   font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: break-word;
 }
 
 .note-row > span:last-child {
@@ -9500,10 +9496,8 @@ input:focus-visible {
 }
 
 .profile-error-row strong {
-  overflow: hidden;
   font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: break-word;
 }
 
 .profile-error-row > div span {
@@ -9535,10 +9529,8 @@ input:focus-visible {
 }
 
 .profile-note-row strong {
-  overflow: hidden;
   font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: break-word;
 }
 
 .profile-note-row > div span {
@@ -15499,4 +15491,27 @@ body.reader-focus .mobile-dock {
 
 .reader-word-input::placeholder {
   color: var(--reader-muted);
+}
+
+/* Long display names and translated headings wrap instead of escaping. */
+.today-identity > div,
+.profile-heading-copy {
+  min-width: 0;
+}
+
+.today-masthead h1,
+.profile-heading-copy h1 {
+  overflow-wrap: break-word;
+}
+
+/* A wide heading next to the form button leaves one-word lines on a phone. */
+@media (max-width: 560px) {
+  .vocab-form-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .vocab-form-head > .ui-button {
+    align-self: flex-start;
+  }
 }
