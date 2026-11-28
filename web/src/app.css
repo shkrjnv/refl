@@ -15529,3 +15529,10 @@ body.reader-focus .mobile-dock {
   overflow-wrap: break-word;
   white-space: normal;
 }
+
+/* Let long account ids shrink inside the settings grid instead of widening it. */
+.settings-panel,
+.settings-panel > *,
+.settings-identity-row {
+  min-width: 0;
+}
