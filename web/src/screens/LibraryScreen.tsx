@@ -10,7 +10,7 @@ import type { BookCoverRecord, LearnerStorage, PersonalBookRecord } from "../db/
 import type { Explanation } from "../generated/core/Explanation";
 import type { Locale } from "../i18n";
 import { useTranslation } from "../i18n";
-import { BOOKS, type LoadedBook } from "../prototype/books";
+import { useBuiltInBooks, type LoadedBook } from "../prototype/books";
 import type { PrototypeContent } from "../prototype/content";
 import { localizedText } from "../prototype/content";
 import { prepareCover } from "../prototype/cover";
@@ -37,6 +37,8 @@ export interface LibraryScreenProps {
   onPractice: (kcId: string) => void;
   storage?: LearnerStorage | null;
   onOpenNotes?: (noteId?: string) => void;
+  /** Built-in books; loaded lazily by the screen when not passed in. */
+  books?: LoadedBook[];
 }
 
 type Tab = "reference" | "traps" | "books" | "notes";
@@ -71,8 +73,11 @@ export function LibraryScreen({
   onPractice,
   storage = null,
   onOpenNotes,
+  books,
 }: LibraryScreenProps) {
   const { t } = useTranslation();
+  const lazyBooks = useBuiltInBooks();
+  const builtInBooks = books ?? lazyBooks;
   const records: PersonalRecords = useMemo(
     () => parseRecords(stateJson),
     [stateJson],
@@ -133,7 +138,7 @@ export function LibraryScreen({
   );
 
   const allBooks = useMemo<LoadedBook[]>(() => {
-    const builtIn = BOOKS.map((book) => ({
+    const builtIn = builtInBooks.map((book) => ({
       ...book,
       coverUrl: covers[book.meta.id] ?? book.coverUrl,
     }));
@@ -143,7 +148,7 @@ export function LibraryScreen({
         personalBook(record, covers[record.book.id] ?? null),
       ),
     ];
-  }, [covers, personalBooks]);
+  }, [builtInBooks, covers, personalBooks]);
 
   useEffect(() => {
     let cancelled = false;

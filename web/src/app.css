@@ -15338,3 +15338,9 @@ body.reader-focus .mobile-dock {
     transition: none;
   }
 }
+
+/* Placeholder while a lazily loaded screen chunk arrives; keeps the shell
+   from collapsing for the few frames the chunk needs. */
+.route-loading {
+  min-height: 60vh;
+}
