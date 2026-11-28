@@ -1,0 +1,36 @@
+Today hero asset budget
+
+Derivatives in web/src/assets (from hero-nature.jpg, 3000x1792):
+  480 px: avif 4.5KB webp 8.4KB jpg 16KB
+  768 px: avif 11KB webp 21KB jpg 33KB
+ 1120 px: avif 21KB webp 44KB jpg 64KB
+ 1600 px: avif 39KB webp 84KB jpg 121KB
+ 2048 px: avif 60KB webp 135KB jpg 192KB
+
+Largest candidates:
+  avif 60KB
+  webp 135KB
+  jpg  192KB
+  total 876K
+
+Budgets asserted by web/src/assets/hero.test.ts:
+  largest AVIF <= 70 KiB, WebP <= 150 KiB, JPEG <= 200 KiB
+  whole set <= 1 MiB
+
+Production build hero assets:
+  21K web/dist/assets/hero-nature-1120-CHW5bAOw.avif
+  64K web/dist/assets/hero-nature-1120-CNDlFhuw.jpg
+  44K web/dist/assets/hero-nature-1120-D49CV9Vn.webp
+  39K web/dist/assets/hero-nature-1600-5HTHTLgQ.avif
+  84K web/dist/assets/hero-nature-1600-BQG1p21J.webp
+  121K web/dist/assets/hero-nature-1600-MJ8PFne0.jpg
+  192K web/dist/assets/hero-nature-2048-CgP5pY7t.jpg
+  60K web/dist/assets/hero-nature-2048-DHOvo8Yf.avif
+  135K web/dist/assets/hero-nature-2048-DPDkhTIz.webp
+  4.5K web/dist/assets/hero-nature-480-BI0eFbE8.avif
+  8.4K web/dist/assets/hero-nature-480-BqATT6NW.webp
+  16K web/dist/assets/hero-nature-480-Cp-PWUXe.jpg
+  11K web/dist/assets/hero-nature-768-Baz5Ssg8.avif
+  21K web/dist/assets/hero-nature-768-BG9p5w7c.webp
+  33K web/dist/assets/hero-nature-768-D-QdnbsH.jpg
+  source hero-nature.jpg (3.9M) is not imported and is absent from dist.
