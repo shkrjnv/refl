@@ -51,7 +51,7 @@ auth-rejected-title = Ruxsat berilmadi
 auth-rejected-body = Bu akkaunt tasdiqlanmadi. Xato bo‘lsa, kuratorga yozing.
 auth-erased-title = Akkaunt o‘chirildi
 auth-erased-body = Akkaunt o‘chirildi. Unga tegishli mahalliy ma'lumotlar tozalandi.
-auth-signed-in = Siz { $name } sifatida kirgansiz.
+auth-signed-in = Kirildi
 
 sync-online = Aloqa bor
 sync-offline = Aloqa yo‘q. Yangi javoblar qurilmada qoladi.

@@ -33,6 +33,15 @@ describe("Fluent locales", () => {
     expect(formatMessage(uz, en, "lesson-exit")).toBe("Mashqdan chiqish");
   });
 
+  it("uses one concise sign-in confirmation label in every locale", () => {
+    const en = createBundle("en", enSource);
+    const ru = createBundle("ru", ruSource);
+    const uz = createBundle("uz", uzSource);
+    expect(formatMessage(en, en, "auth-signed-in")).toBe("Signed in");
+    expect(formatMessage(ru, en, "auth-signed-in")).toBe("Вход выполнен");
+    expect(formatMessage(uz, en, "auth-signed-in")).toBe("Kirildi");
+  });
+
   it("formats localized messages and falls back to English", () => {
     const en = createBundle("en", enSource);
     const ru = createBundle("ru", ruSource);

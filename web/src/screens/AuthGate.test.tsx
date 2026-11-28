@@ -36,7 +36,7 @@ function cssRule(css: string, selector: string): string {
 
 describe("auth and access flow", () => {
   it("holds the confirmation check long enough, shorter under reduced motion", () => {
-    expect(confirmationHoldMs()).toBe(550);
+    expect(confirmationHoldMs()).toBe(650);
     const original = window.matchMedia;
     window.matchMedia = ((query: string): MediaQueryList => ({
       matches: true,
@@ -49,7 +49,7 @@ describe("auth and access flow", () => {
       dispatchEvent: () => false,
     })) as typeof window.matchMedia;
     try {
-      expect(confirmationHoldMs()).toBe(220);
+      expect(confirmationHoldMs()).toBe(250);
     } finally {
       window.matchMedia = original;
     }
@@ -308,7 +308,7 @@ describe("auth and access flow", () => {
     );
 
     await waitFor(() => expect(received).toEqual(payload));
-    expect(await screen.findByLabelText("Signed in")).toBeTruthy();
+    expect(await screen.findByText("Signed in")).toBeTruthy();
     await waitFor(() => expect(authenticated).not.toBeNull(), { timeout: 2000 });
     expect(window.location.hash).toBe("");
     expect(window.location.search).toBe("?invite=INVITE-42");
@@ -524,7 +524,7 @@ describe("auth and access flow", () => {
     expect(reducedMotion).toContain(".studio-main");
   });
 
-  it("shows a brief confirmation check, then enters without an overlay", async () => {
+  it("swaps to a clean confirmation state, then enters after the hold", async () => {
     let authenticated: AuthTokens | null = null;
     const api: AuthApi = {
       requestCode: async () => ({ sent: true, expires_in: 600, code: "123456" }),
@@ -568,33 +568,45 @@ describe("auth and access flow", () => {
     fireEvent.change(screen.getByLabelText("Code from the email"), {
       target: { value: "123456" },
     });
+    expect(document.querySelector(".auth-confirm-check")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
-    const check = await screen.findByLabelText("Signed in");
-    expect(check.classList.contains("auth-confirm-check")).toBe(true);
-    const drawPath = check.querySelector(".confirmation-check-path");
+    const label = await screen.findByText("Signed in");
+    const state = label.closest(".auth-confirm-state");
+    expect(state).not.toBeNull();
+    expect(state?.getAttribute("role")).toBe("status");
+    expect(document.querySelector(".auth-form-title")).toBeNull();
+    expect(document.querySelector(".auth-form-code")).toBeNull();
+    expect(screen.queryByLabelText("Code from the email")).toBeNull();
+    expect(document.querySelector(".auth-confirm-check")).toBeNull();
+    const drawPath = state?.querySelector(".confirmation-check-path");
     expect(drawPath).not.toBeNull();
     expect(drawPath?.getAttribute("stroke-dasharray")).toBe("1");
     expect(drawPath?.getAttribute("stroke-dashoffset")).toBe("1");
     expect(document.querySelector(".pulse-confirm")).toBeNull();
-    await waitFor(() => expect(authenticated).not.toBeNull(), { timeout: 2000 });
-    expect(screen.queryByText("Signed in")).toBeNull();
+    expect(authenticated).toBeNull();
+    await waitFor(() => expect(authenticated).not.toBeNull(), { timeout: 2500 });
     expect(document.querySelector(".auth-success")).toBeNull();
 
     const css = readFileSync("src/app.css", "utf8");
-    const checkStart = css.indexOf(".auth-confirm-check {");
-    const checkRule = css.slice(
-      checkStart,
-      css.indexOf("}", checkStart) + 1,
+    expect(css).not.toContain(".auth-confirm-check");
+    const innerStart = css.indexOf(".auth-form-inner-confirmed {");
+    const innerRule = css.slice(
+      innerStart,
+      css.indexOf("}", innerStart) + 1,
     );
-    expect(checkRule).toContain("display: inline-flex");
-    expect(checkRule).toContain("align-items: center");
-    expect(checkRule).toContain("color: var(--text)");
-    expect(checkRule).toContain("flex: none");
-    expect(checkRule).toContain("animation: auth-confirm-in 140ms");
-    expect(checkRule).not.toContain("opacity: 0");
-    expect(checkRule).not.toContain("blur");
+    expect(innerRule).toContain("height: 100%");
+    expect(innerRule).toContain("place-items: center");
+    const ringStart = css.indexOf(".auth-confirm-mark {");
+    const ringRule = css.slice(
+      ringStart,
+      css.indexOf("}", ringStart) + 1,
+    );
+    expect(ringRule).toContain("width: 68px");
+    expect(ringRule).toContain("height: 68px");
+    expect(ringRule).toContain("border: 2px solid var(--accent-primary)");
+    expect(ringRule).toContain("border-radius: 50%");
     const drawStart = css.indexOf(
-      ".auth-confirm-check .confirmation-check-path {",
+      ".auth-confirm-mark .confirmation-check-path {",
     );
     const drawRule = css.slice(
       drawStart,
@@ -602,9 +614,11 @@ describe("auth and access flow", () => {
     );
     expect(drawRule).toContain("stroke-dasharray: 1");
     expect(drawRule).toContain("stroke-dashoffset: 1");
-    expect(drawRule).toContain("animation: auth-confirm-draw 320ms");
+    expect(drawRule).toContain(
+      "animation: auth-confirm-draw 280ms cubic-bezier(0.22, 1, 0.36, 1)",
+    );
     expect(css).toMatch(
-      /prefers-reduced-motion: reduce[\s\S]*?\.auth-confirm-check/,
+      /prefers-reduced-motion: reduce[\s\S]*?\.auth-confirm-mark \.confirmation-check-path/,
     );
   });
 });

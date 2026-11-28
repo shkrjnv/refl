@@ -268,3 +268,12 @@
 - The 18px auth checkmark is now a real SVG path with `pathLength=1`, `stroke-dasharray=1`, and `stroke-dashoffset=1`, drawn over 320ms (linear), followed by a 550ms total hold before entering the workspace. Reduced motion skips the draw and shows the static check for 220ms. The same confirmation path runs for email OTP and Telegram returns.
 - Coverage now includes AuthGate session ownership/restore across remounts, an actual sign-in followed by a remount, storage reopen persistence, transient-vs-401 refresh behavior, and SVG dash-draw/visibility assertions. All 107 web tests pass.
 - `just fmt-check`, `just lint`, `just test`, and `just web` pass; the commit is local and not pushed.
+
+## W22 — exclusive Apple-Pay-style sign-in confirmation
+
+- Removed the inline checkmark from `.auth-form-title`; the heading no longer carries any confirmation chrome.
+- On successful email or Telegram authentication, `.auth-form-inner` is replaced by a dedicated confirmation state inside the same fixed-height `.auth-form-region`: a 68px circular outline (2px `var(--accent-primary)`) around a 32px `ConfirmationCheck`, plus the single `auth-signed-in` label. The confirmation fills the existing measured height and is centred; the right auth visual keeps exactly the same geometry and the previous form/backdrop are never layered together.
+- The check path uses `pathLength=1`, `stroke-dasharray=1`, and `stroke-dashoffset=1`, drawing over 280ms with `cubic-bezier(0.22, 1, 0.36, 1)`. Reduced motion renders the path immediately. Confirmation holds for 650ms (250ms reduced) before `onAuthenticated`.
+- Added `auth-signed-in` to the synchronized locales as `Signed in` / `Вход выполнен` / `Kirildi`; it is the sole visible confirmation label.
+- Coverage now checks that the heading has no inline check, the form fields disappear in favour of the centred ring/path/label, the right visual geometry and form-region height remain unchanged, the path draw/hold timings, and clean entry after the hold. All 108 web tests pass.
+- `just fmt-check`, `just lint`, `just test`, and `just web` pass; the commit is local and not pushed.

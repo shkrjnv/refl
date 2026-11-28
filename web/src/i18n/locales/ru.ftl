@@ -51,7 +51,7 @@ auth-rejected-title = Доступ не одобрен
 auth-rejected-body = Этот аккаунт не одобрили. Если это ошибка, напишите куратору.
 auth-erased-title = Аккаунт удалён
 auth-erased-body = Аккаунт удалён, локальные данные для него стёрты.
-auth-signed-in = Вы вошли как { $name }.
+auth-signed-in = Вход выполнен
 
 sync-online = Есть сеть
 sync-offline = Нет сети. Новые ответы остаются на устройстве.

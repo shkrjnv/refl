@@ -51,7 +51,7 @@ auth-rejected-title = Access not granted
 auth-rejected-body = This account was not approved. If this is a mistake, contact the curator.
 auth-erased-title = Account erased
 auth-erased-body = This account has been erased. Local data for it has been removed.
-auth-signed-in = Signed in as { $name }.
+auth-signed-in = Signed in
 
 sync-online = Connected
 sync-offline = Offline. New answers stay on this device.

@@ -10889,43 +10889,50 @@ input:focus-visible {
 }
 
 /* ========================================================================== */
-/* W19 — a direct confirmation checkmark and account-first settings.         */
+/* W19/W22 — exclusive sign-in confirmation and account-first settings.       */
 /* ========================================================================== */
 
-.auth-confirm-check {
-  display: inline-flex;
-  width: 20px;
-  height: 20px;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  margin-left: 8px;
-  color: var(--text);
-  line-height: 1;
-  vertical-align: middle;
-  animation: auth-confirm-in 140ms ease-out both;
+.auth-form-inner-confirmed {
+  display: grid;
+  height: 100%;
+  min-height: 320px;
+  place-items: center;
 }
 
-.auth-confirm-check .confirmation-check-path {
+.auth-confirm-state {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  padding: 24px;
+  text-align: center;
+}
+
+.auth-confirm-state p {
+  margin: 0;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.auth-confirm-mark {
+  display: grid;
+  width: 68px;
+  height: 68px;
+  place-items: center;
+  border: 2px solid var(--accent-primary);
+  border-radius: 50%;
+  color: var(--accent-primary);
+}
+
+.auth-confirm-mark .confirmation-check-path {
   stroke-dasharray: 1;
   stroke-dashoffset: 1;
-  animation: auth-confirm-draw 320ms linear forwards;
+  animation: auth-confirm-draw 280ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 @keyframes auth-confirm-draw {
   to {
     stroke-dashoffset: 0;
-  }
-}
-
-@keyframes auth-confirm-in {
-  from {
-    opacity: 0;
-    transform: scale(0.82);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
   }
 }
 
@@ -10941,11 +10948,7 @@ input:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .auth-confirm-check {
-    animation: none;
-  }
-
-  .auth-confirm-check .confirmation-check-path {
+  .auth-confirm-mark .confirmation-check-path {
     animation: none;
     stroke-dashoffset: 0;
   }

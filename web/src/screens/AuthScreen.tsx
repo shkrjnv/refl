@@ -84,8 +84,8 @@ const TELEGRAM_QUERY_KEYS = [
   "hash",
 ] as const;
 const CODE_LENGTH = 6;
-const CONFIRMATION_HOLD_MS = 550;
-const REDUCED_MOTION_CONFIRMATION_HOLD_MS = 220;
+const CONFIRMATION_HOLD_MS = 650;
+const REDUCED_MOTION_CONFIRMATION_HOLD_MS = 250;
 
 export function confirmationHoldMs(): number {
   const reduced =
@@ -193,6 +193,9 @@ export function AuthScreen({
   const maskedEmail = maskEmail(email.trim());
 
   useLayoutEffect(() => {
+    if (confirmed) {
+      return;
+    }
     const region = formRegionRef.current;
     const content = formContentRef.current;
     if (!region || !content || typeof ResizeObserver === "undefined") {
@@ -472,150 +475,152 @@ export function AuthScreen({
           }`}
           style={formHeight !== null ? { height: formHeight } : undefined}
         >
-          <div ref={formContentRef} className="auth-form-inner">
-            <div className="auth-card-head auth-form-header">
-              <div>
-                <h2 className="auth-form-title">
-                  {stage === "code" ? t("auth-code-title") : t("auth-title")}
-                  {confirmed ? (
-                    <span
-                      className="auth-confirm-check"
-                      role="status"
-                      aria-label={t("auth-success")}
-                    >
-                      <ConfirmationCheck size={18} />
-                    </span>
-                  ) : null}
-                </h2>
-                {stage === "code" ? (
-                  <p className="auth-card-subtitle">
-                    {t("auth-code-target", { target: maskedEmail })}
-                  </p>
-                ) : null}
-              </div>
-            </div>
-
-            {inviteCode ? (
-              <div className="invite-banner">
-                <span>{t("auth-invite-label")}</span>
-                <code>{inviteCode}</code>
-              </div>
-            ) : null}
-
-            {error ? (
-              <p className="inline-alert danger" role="alert">
-                {t(error)}
-              </p>
-            ) : null}
-
-            {stage === "email" ? (
-              <form
-                className="auth-form auth-form-email"
-                onSubmit={(event) => void requestCode(event)}
-              >
-                <label htmlFor={emailId}>{t("auth-email-label")}</label>
-                <input
-                  id={emailId}
-                  type="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  onFocus={() => setThermalFocus({ x: 0.18, y: 0.58 })}
-                  onBlur={() => setThermalFocus(null)}
-                  placeholder={t("auth-email-placeholder")}
-                  required
-                />
-                <Button type="submit" variant="primary" block busy={busy}>
-                  <StudioIcon name="arrow-right" size={16} />
-                  <span className="auth-submit-label">{t("auth-send-code")}</span>
-                </Button>
-              </form>
-            ) : (
-              <form
-                className="auth-form auth-form-code"
-                onSubmit={(event) => void verifyCode(event)}
-              >
-                <label className="visually-hidden" htmlFor={codeId}>
-                  {t("auth-code-label")}
-                </label>
-                <div
-                  className="auth-code-slots"
-                  role="group"
-                  aria-label={t("auth-code-group")}
-                  onPaste={onPasteCode}
-                >
-                  {digits.map((digit, index) => (
-                    <input
-                      key={index}
-                      ref={(element) => {
-                        otpRefs.current[index] = element;
-                      }}
-                      id={index === 0 ? codeId : undefined}
-                      className="auth-code-slot"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      autoComplete={index === 0 ? "one-time-code" : "off"}
-                      maxLength={1}
-                      value={digit}
-                      aria-label={
-                        index === 0
-                          ? undefined
-                          : t("auth-code-digit", { index: index + 1 })
-                      }
-                      onChange={(event) => updateDigit(index, event.target.value)}
-                      onFocus={() => setThermalFocus({ x: 0.12, y: 0.46 })}
-                      onBlur={() => setThermalFocus(null)}
-                      onKeyDown={(event) => onDigitKeyDown(index, event)}
-                    />
-                  ))}
+          {confirmed ? (
+            <div className="auth-form-inner auth-form-inner-confirmed">
+              <div className="auth-confirm-state" role="status" aria-live="polite">
+                <div className="auth-confirm-mark" aria-hidden="true">
+                  <ConfirmationCheck size={32} />
                 </div>
-                {sent ? (
-                  <p className="auth-note">
-                    {t("auth-code-sent", {
-                      minutes: Math.max(1, Math.round(sent.expires_in / 60)),
-                    })}
-                  </p>
-                ) : null}
-                {sent?.code || sent?.dev_code ? (
-                  <p className="dev-code" role="status">
-                    {t("auth-dev-code", { code: sent.code ?? sent.dev_code ?? "" })}
-                  </p>
-                ) : null}
-                <Button
-                  type="submit"
-                  variant="primary"
-                  block
-                  busy={busy}
-                  disabled={code.length !== CODE_LENGTH || confirmed}
-                >
-                  <StudioIcon name="check" size={16} />
-                  <span className="auth-submit-label">{t("auth-verify-code")}</span>
-                </Button>
-                <Button type="button" variant="ghost" block onClick={backToEmail}>
-                  <StudioIcon name="arrow-left" size={16} />
-                  {t("auth-change-email")}
-                </Button>
-              </form>
-            )}
-
-            <div className="auth-divider">
-              <span>{t("auth-or")}</span>
+                <p>{t("auth-signed-in")}</p>
+              </div>
             </div>
-            <Button
-              type="button"
-              variant="secondary"
-              block
-              busy={busy}
-              onClick={startTelegram}
-            >
-              <StudioIcon name="arrow-right" size={16} />
-              <span className="auth-submit-label">{t("auth-telegram")}</span>
-            </Button>
-            {telegram ? (
-              <p className="auth-note">{t("auth-telegram-detected")}</p>
-            ) : null}
-            <p className="auth-legal">{t("auth-invite-only")}</p>
-          </div>
+          ) : (
+            <div ref={formContentRef} className="auth-form-inner">
+              <div className="auth-card-head auth-form-header">
+                <div>
+                  <h2 className="auth-form-title">
+                    {stage === "code" ? t("auth-code-title") : t("auth-title")}
+                  </h2>
+                  {stage === "code" ? (
+                    <p className="auth-card-subtitle">
+                      {t("auth-code-target", { target: maskedEmail })}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+
+              {inviteCode ? (
+                <div className="invite-banner">
+                  <span>{t("auth-invite-label")}</span>
+                  <code>{inviteCode}</code>
+                </div>
+              ) : null}
+
+              {error ? (
+                <p className="inline-alert danger" role="alert">
+                  {t(error)}
+                </p>
+              ) : null}
+
+              {stage === "email" ? (
+                <form
+                  className="auth-form auth-form-email"
+                  onSubmit={(event) => void requestCode(event)}
+                >
+                  <label htmlFor={emailId}>{t("auth-email-label")}</label>
+                  <input
+                    id={emailId}
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    onFocus={() => setThermalFocus({ x: 0.18, y: 0.58 })}
+                    onBlur={() => setThermalFocus(null)}
+                    placeholder={t("auth-email-placeholder")}
+                    required
+                  />
+                  <Button type="submit" variant="primary" block busy={busy}>
+                    <StudioIcon name="arrow-right" size={16} />
+                    <span className="auth-submit-label">{t("auth-send-code")}</span>
+                  </Button>
+                </form>
+              ) : (
+                <form
+                  className="auth-form auth-form-code"
+                  onSubmit={(event) => void verifyCode(event)}
+                >
+                  <label className="visually-hidden" htmlFor={codeId}>
+                    {t("auth-code-label")}
+                  </label>
+                  <div
+                    className="auth-code-slots"
+                    role="group"
+                    aria-label={t("auth-code-group")}
+                    onPaste={onPasteCode}
+                  >
+                    {digits.map((digit, index) => (
+                      <input
+                        key={index}
+                        ref={(element) => {
+                          otpRefs.current[index] = element;
+                        }}
+                        id={index === 0 ? codeId : undefined}
+                        className="auth-code-slot"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        autoComplete={index === 0 ? "one-time-code" : "off"}
+                        maxLength={1}
+                        value={digit}
+                        aria-label={
+                          index === 0
+                            ? undefined
+                            : t("auth-code-digit", { index: index + 1 })
+                        }
+                        onChange={(event) => updateDigit(index, event.target.value)}
+                        onFocus={() => setThermalFocus({ x: 0.12, y: 0.46 })}
+                        onBlur={() => setThermalFocus(null)}
+                        onKeyDown={(event) => onDigitKeyDown(index, event)}
+                      />
+                    ))}
+                  </div>
+                  {sent ? (
+                    <p className="auth-note">
+                      {t("auth-code-sent", {
+                        minutes: Math.max(1, Math.round(sent.expires_in / 60)),
+                      })}
+                    </p>
+                  ) : null}
+                  {sent?.code || sent?.dev_code ? (
+                    <p className="dev-code" role="status">
+                      {t("auth-dev-code", { code: sent.code ?? sent.dev_code ?? "" })}
+                    </p>
+                  ) : null}
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    block
+                    busy={busy}
+                    disabled={code.length !== CODE_LENGTH}
+                  >
+                    <StudioIcon name="check" size={16} />
+                    <span className="auth-submit-label">{t("auth-verify-code")}</span>
+                  </Button>
+                  <Button type="button" variant="ghost" block onClick={backToEmail}>
+                    <StudioIcon name="arrow-left" size={16} />
+                    {t("auth-change-email")}
+                  </Button>
+                </form>
+              )}
+
+              <div className="auth-divider">
+                <span>{t("auth-or")}</span>
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                block
+                busy={busy}
+                onClick={startTelegram}
+              >
+                <StudioIcon name="arrow-right" size={16} />
+                <span className="auth-submit-label">{t("auth-telegram")}</span>
+              </Button>
+              {telegram ? (
+                <p className="auth-note">{t("auth-telegram-detected")}</p>
+              ) : null}
+              <p className="auth-legal">{t("auth-invite-only")}</p>
+            </div>
+          )}
         </div>
       </section>
 
