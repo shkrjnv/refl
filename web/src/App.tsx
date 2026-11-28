@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   ApiClient,
@@ -17,11 +17,8 @@ import {
   storeSendoPreview,
   type CompanionId,
 } from "./companions/registry";
-import { BOOKS } from "./prototype/books";
+import { useBuiltInBooks } from "./prototype/books";
 import { parseRecords, RecordStore } from "./prototype/records";
-import { VocabularyScreen } from "./screens/VocabularyScreen";
-import { LibraryScreen } from "./screens/LibraryScreen";
-import { GraphScreen } from "./screens/GraphScreen";
 import { Button, Card } from "./components/ui";
 import {
   LearnerStorage,
@@ -65,10 +62,7 @@ import { AuthGate } from "./screens/AuthGate";
 import { EntryScreen } from "./screens/EntryScreen";
 import { LessonScreen } from "./screens/LessonScreen";
 import { PlacementScreen } from "./screens/PlacementScreen";
-import { ProfileScreen } from "./screens/ProfileScreen";
-import { ProgressScreen } from "./screens/ProgressScreen";
 import { SummaryScreen } from "./screens/SummaryScreen";
-import { NotesWorkspace } from "./screens/NotesWorkspace";
 import { TodayScreen } from "./screens/TodayScreen";
 import {
   clearSessionOwner,
@@ -89,6 +83,43 @@ import {
   type ThemeName,
 } from "./theme/tokens";
 import { CoreWorkerClient } from "./worker/client";
+
+// Screens outside the first-run path (sign-in, Today, a session) are split
+// from the main chunk. They are fetched in the background right after the
+// first render, so the service worker caches them and they open offline.
+const screenChunks = {
+  vocabulary: () => import("./screens/VocabularyScreen"),
+  library: () => import("./screens/LibraryScreen"),
+  graph: () => import("./screens/GraphScreen"),
+  profile: () => import("./screens/ProfileScreen"),
+  progress: () => import("./screens/ProgressScreen"),
+  notes: () => import("./screens/NotesWorkspace"),
+};
+
+function preloadScreenChunks(): void {
+  for (const load of Object.values(screenChunks)) {
+    void load().catch(() => undefined);
+  }
+}
+
+const VocabularyScreen = lazy(() =>
+  screenChunks.vocabulary().then((m) => ({ default: m.VocabularyScreen })),
+);
+const LibraryScreen = lazy(() =>
+  screenChunks.library().then((m) => ({ default: m.LibraryScreen })),
+);
+const GraphScreen = lazy(() =>
+  screenChunks.graph().then((m) => ({ default: m.GraphScreen })),
+);
+const ProfileScreen = lazy(() =>
+  screenChunks.profile().then((m) => ({ default: m.ProfileScreen })),
+);
+const ProgressScreen = lazy(() =>
+  screenChunks.progress().then((m) => ({ default: m.ProgressScreen })),
+);
+const NotesWorkspace = lazy(() =>
+  screenChunks.notes().then((m) => ({ default: m.NotesWorkspace })),
+);
 
 interface AppProps {
   initialTheme: ThemeName;
@@ -236,14 +267,26 @@ export function App({ initialTheme, initialSkin }: AppProps) {
     );
   }, [identity, storage, content]);
 
+  const books = useBuiltInBooks();
+
+  useEffect(() => {
+    const idle = (window as { requestIdleCallback?: (cb: () => void) => number })
+      .requestIdleCallback;
+    if (idle) {
+      idle(preloadScreenChunks);
+    } else {
+      window.setTimeout(preloadScreenChunks, 1500);
+    }
+  }, []);
+
   useEffect(() => {
     const core = coreRef.current;
-    if (!stateJson || !core || BOOKS.length === 0) {
+    if (!stateJson || !core || books.length === 0) {
       setSendoCoverage(null);
       return;
     }
     let cancelled = false;
-    const book = BOOKS[0];
+    const book = books[0];
     if (!book) {
       return;
     }
@@ -266,7 +309,7 @@ export function App({ initialTheme, initialSkin }: AppProps) {
     return () => {
       cancelled = true;
     };
-  }, [stateJson]);
+  }, [stateJson, books]);
 
   const bookCoverage = useCallback(
     (bookJson: string, snapshotJson: string, nowMs: number) => {
@@ -967,168 +1010,171 @@ export function App({ initialTheme, initialSkin }: AppProps) {
       lessonAvailable={runner !== null}
       companion={companion}
     >
-      {actionError ? (
-        <p className="inline-alert danger" role="alert">
-          {actionError}
-        </p>
-      ) : null}
-      {route === "vocabulary" ? (
-        recordsWriter && stateJson ? (
-          <VocabularyScreen
+      <Suspense fallback={<div className="route-loading" role="status" aria-busy="true" />}>
+        {actionError ? (
+          <p className="inline-alert danger" role="alert">
+            {actionError}
+          </p>
+        ) : null}
+        {route === "vocabulary" ? (
+          recordsWriter && stateJson ? (
+            <VocabularyScreen
+              content={content}
+              stateJson={stateJson}
+              locale={locale}
+              recordsWriter={recordsWriter}
+              onStateChange={handleStateChange}
+              onOpenNotes={(noteId) => openNotes(noteId, "vocabulary")}
+            />
+          ) : null
+        ) : null}
+        {route === "library" ? (
+          recordsWriter && stateJson ? (
+            <LibraryScreen
+              books={books}
+              content={content}
+              stateJson={stateJson}
+              locale={locale}
+              recordsWriter={recordsWriter}
+              onStateChange={handleStateChange}
+              bookCoverage={bookCoverage}
+              onPractice={practiceKc}
+              storage={storage}
+              onOpenNotes={(noteId) => openNotes(noteId, "library")}
+            />
+          ) : null
+        ) : null}
+        {route === "notes" ? (
+          recordsWriter && stateJson ? (
+            <NotesWorkspace
+              records={parseRecords(stateJson)}
+              content={content}
+              stateJson={stateJson}
+              locale={locale}
+              recordsWriter={recordsWriter}
+              onStateChange={handleStateChange}
+              books={books}
+              initialNoteId={notesTarget}
+              onBack={
+                notesReturn
+                  ? () => {
+                      setRoute(notesReturn);
+                      setNotesReturn(null);
+                    }
+                  : undefined
+              }
+              onPractice={practiceKc}
+            />
+          ) : null
+        ) : null}
+        {route === "graph" ? (
+          recordsWriter && stateJson ? (
+            <GraphScreen
+              content={content}
+              stateJson={stateJson}
+              locale={locale}
+              recordsWriter={recordsWriter}
+              onStateChange={handleStateChange}
+              onPractice={practiceKc}
+              onOpenNotes={(noteId) => openNotes(noteId, "graph")}
+            />
+          ) : null
+        ) : null}
+        {route === "today" ? (
+          <TodayScreen
             content={content}
             stateJson={stateJson}
-            locale={locale}
+            learnerLabel={learnerLabel}
+            streak={streak}
+            status={status}
+            activity={activity}
+            onStart={(minutes) => void startLesson(minutes)}
+            onOpenStats={() => setRoute("stats")}
+            tourOpen={tourOpen}
+            onTourComplete={() => setTourOpen(false)}
+            companion={companion}
             recordsWriter={recordsWriter}
             onStateChange={handleStateChange}
-            onOpenNotes={(noteId) => openNotes(noteId, "vocabulary")}
+            onOpenNotes={() => openNotes(undefined, "today")}
           />
-        ) : null
-      ) : null}
-      {route === "library" ? (
-        recordsWriter && stateJson ? (
-          <LibraryScreen
+        ) : null}
+        {route === "lesson" && runner && lessonView ? (
+          <LessonScreen
+            runner={runner}
+            initialView={lessonView}
+            onViewChange={setLessonView}
+            onComplete={handleLessonComplete}
+            recordsWriter={recordsWriter}
+            stateJson={stateJson ?? undefined}
+            onStateChange={handleStateChange}
+            onOpenNotes={(noteId) => openNotes(noteId, "lesson")}
+            onExit={() => {
+              runner?.finish();
+              coreRef.current?.updates.endSession();
+              setRoute("today");
+              setRunner(null);
+              setLessonView(null);
+              const store = storageRef.current;
+              if (store) {
+                void refreshLocalState(store);
+              }
+              void refreshContentUpdate()
+                .then(() => syncNow())
+                .then(() => applyServiceWorkerUpdate());
+            }}
+          />
+        ) : null}
+        {route === "summary" && summary ? (
+          <SummaryScreen
+            summary={summary}
+            onDone={() => {
+              setRoute("today");
+              const store = storageRef.current;
+              if (store) {
+                void refreshLocalState(store);
+              }
+              void syncNow().then(() => applyServiceWorkerUpdate());
+            }}
+          />
+        ) : null}
+        {route === "stats" ? (
+          <ProgressScreen content={content} stateJson={stateJson} />
+        ) : null}
+        {route === "profile" ? (
+          <ProfileScreen
+            learnerLabel={learnerLabel}
+            learnerId={identity.learnerId}
+            authMethod={identity.method}
             content={content}
             stateJson={stateJson}
+            streak={streak}
+            isAdmin={isAdmin}
             locale={locale}
-            recordsWriter={recordsWriter}
-            onStateChange={handleStateChange}
-            bookCoverage={bookCoverage}
-            onPractice={practiceKc}
-            storage={storage}
-            onOpenNotes={(noteId) => openNotes(noteId, "library")}
+            locales={locales}
+            onLocaleChange={setLocale}
+            theme={theme}
+            onThemeChange={changeTheme}
+            navigationPosition={layout.nav}
+            onNavigationPositionChange={changeNavigation}
+            status={status}
+            rejected={rejected}
+            minor={serverProfile?.minor ?? false}
+            serverProfile={serverProfile}
+            onExportCache={exportLocalCache}
+            onExportAccount={exportAccountData}
+            onEraseAccount={eraseAccount}
+            onResetCache={resetLocalCache}
+            adminApi={api}
+            onLogout={() => void handleLogout()}
+            onSyncNow={() => syncNow()}
+            companion={companion}
+            sendoUnlocked={sendoIsUnlocked}
+            sendoPreview={sendoPreview}
+            onCompanionChange={(next) => void changeCompanion(next)}
+            onSendoPreview={toggleSendoPreview}
           />
-        ) : null
-      ) : null}
-      {route === "notes" ? (
-        recordsWriter && stateJson ? (
-          <NotesWorkspace
-            records={parseRecords(stateJson)}
-            content={content}
-            stateJson={stateJson}
-            locale={locale}
-            recordsWriter={recordsWriter}
-            onStateChange={handleStateChange}
-            books={BOOKS}
-            initialNoteId={notesTarget}
-            onBack={
-              notesReturn
-                ? () => {
-                    setRoute(notesReturn);
-                    setNotesReturn(null);
-                  }
-                : undefined
-            }
-            onPractice={practiceKc}
-          />
-        ) : null
-      ) : null}
-      {route === "graph" ? (
-        recordsWriter && stateJson ? (
-          <GraphScreen
-            content={content}
-            stateJson={stateJson}
-            locale={locale}
-            recordsWriter={recordsWriter}
-            onStateChange={handleStateChange}
-            onPractice={practiceKc}
-            onOpenNotes={(noteId) => openNotes(noteId, "graph")}
-          />
-        ) : null
-      ) : null}
-      {route === "today" ? (
-        <TodayScreen
-          content={content}
-          stateJson={stateJson}
-          learnerLabel={learnerLabel}
-          streak={streak}
-          status={status}
-          activity={activity}
-          onStart={(minutes) => void startLesson(minutes)}
-          onOpenStats={() => setRoute("stats")}
-          tourOpen={tourOpen}
-          onTourComplete={() => setTourOpen(false)}
-          companion={companion}
-          recordsWriter={recordsWriter}
-          onStateChange={handleStateChange}
-          onOpenNotes={() => openNotes(undefined, "today")}
-        />
-      ) : null}
-      {route === "lesson" && runner && lessonView ? (
-        <LessonScreen
-          runner={runner}
-          initialView={lessonView}
-          onViewChange={setLessonView}
-          onComplete={handleLessonComplete}
-          recordsWriter={recordsWriter}
-          stateJson={stateJson ?? undefined}
-          onStateChange={handleStateChange}
-          onOpenNotes={(noteId) => openNotes(noteId, "lesson")}
-          onExit={() => {
-            runner?.finish();
-            coreRef.current?.updates.endSession();
-            setRoute("today");
-            setRunner(null);
-            setLessonView(null);
-            const store = storageRef.current;
-            if (store) {
-              void refreshLocalState(store);
-            }
-            void refreshContentUpdate()
-              .then(() => syncNow())
-              .then(() => applyServiceWorkerUpdate());
-          }}
-        />
-      ) : null}
-      {route === "summary" && summary ? (
-        <SummaryScreen
-          summary={summary}
-          onDone={() => {
-            setRoute("today");
-            const store = storageRef.current;
-            if (store) {
-              void refreshLocalState(store);
-            }
-            void syncNow().then(() => applyServiceWorkerUpdate());
-          }}
-        />
-      ) : null}
-      {route === "stats" ? (
-        <ProgressScreen content={content} stateJson={stateJson} />
-      ) : null}
-      {route === "profile" ? (
-        <ProfileScreen
-          learnerLabel={learnerLabel}
-          learnerId={identity.learnerId}
-          authMethod={identity.method}
-          content={content}
-          stateJson={stateJson}
-          streak={streak}
-          isAdmin={isAdmin}
-          locale={locale}
-          locales={locales}
-          onLocaleChange={setLocale}
-          theme={theme}
-          onThemeChange={changeTheme}
-          navigationPosition={layout.nav}
-          onNavigationPositionChange={changeNavigation}
-          status={status}
-          rejected={rejected}
-          minor={serverProfile?.minor ?? false}
-          serverProfile={serverProfile}
-          onExportCache={exportLocalCache}
-          onExportAccount={exportAccountData}
-          onEraseAccount={eraseAccount}
-          onResetCache={resetLocalCache}
-          adminApi={api}
-          onLogout={() => void handleLogout()}
-          onSyncNow={() => syncNow()}
-          companion={companion}
-          sendoUnlocked={sendoIsUnlocked}
-          sendoPreview={sendoPreview}
-          onCompanionChange={(next) => void changeCompanion(next)}
-          onSendoPreview={toggleSendoPreview}
-        />
-      ) : null}
+        ) : null}
+      </Suspense>
     </AppShell>
   );
 }
