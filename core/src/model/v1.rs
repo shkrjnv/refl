@@ -7,7 +7,7 @@
 
 use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::format;
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::fmt::Write as _;
 use serde::{Deserialize, Serialize};
@@ -16,7 +16,10 @@ use sha2::{Digest, Sha256};
 use super::fluency;
 use super::fsrs::{self, Card, Grade};
 use super::math::{self, KcTerm};
-use super::state::{KcState, MisconceptionState, State};
+use super::state::{
+    BookMarkRecord, CustomLexemeRecord, KcState, LexicalCard, LexicalDirection, LexicalSource,
+    MisconceptionState, NoteRecord, State,
+};
 use super::{
     AnswerOutcome, Applied, FoldCtx, LearnerModel, NativeLanguage, NeedsReplay, Profile, event_id,
 };
@@ -25,16 +28,18 @@ use crate::bundle::{Bundle, KcEntry};
 use crate::content::{Explanation, ExplanationTarget, Misconception};
 use crate::event::OverrideKind;
 use crate::event::{
-    AnswerContext, AnswerEvent, Confidence, Decoded, Event, EventPayload, InputDevice, Response,
-    Verdict,
+    AnswerContext, AnswerEvent, BookMarkCreatedEvent, BookMarkDeletedEvent, Confidence,
+    CustomLexemeArchivedEvent, CustomLexemeEvent, Decoded, Event, EventPayload, InputDevice,
+    NoteAnchor, NoteDeletedEvent, NoteSavedEvent, Response, Verdict,
 };
-use crate::ids::{ExplanationId, ItemRef, KcId, MisconceptionId, SubjectId};
+use crate::ids::{BookId, ExplanationId, ItemRef, KcId, LexemeId, MisconceptionId, SubjectId};
 use crate::item::KcRole;
 use crate::projection::ItemProjection;
 use crate::subject::Subject;
 use crate::value::{Finite, Timestamp};
 
 pub(super) const DAY_MS: i64 = 86_400_000;
+const DAY_MS_F: f64 = 86_400_000.0;
 
 /// Parameters of version 1 with their starting values
 /// (`docs/03-layer2-learner-model.md`, «Самопроверка и параметры»). They
@@ -211,6 +216,13 @@ pub struct Belief {
 #[allow(clippy::cast_precision_loss)] // timestamps are within 2^53
 pub(super) fn days(from: Timestamp, to: Timestamp) -> f64 {
     (to.0 - from.0).max(0) as f64 / DAY_MS as f64
+}
+
+/// When a lexical card becomes due: `at + ceil(stability)` days. FSRS caps
+/// stability, so the millisecond value fits; the cast saturates anyway.
+#[allow(clippy::cast_possible_truncation)]
+fn lexical_due(at: Timestamp, stability: f64) -> Timestamp {
+    Timestamp(at.0.saturating_add(libm::ceil(stability.max(0.0) * DAY_MS_F) as i64))
 }
 
 /// The UTC day of a timestamp: FSRS counts one answer per KC per day.
@@ -622,6 +634,351 @@ impl KnowledgeModel {
         )
     }
 
+    fn save_custom_lexeme(s: &mut State, ev: &Event, c: &CustomLexemeEvent) {
+        if s.custom_lexemes
+            .get(&c.custom_id)
+            .is_some_and(|record| record.event_id >= ev.event_id)
+        {
+            return;
+        }
+        let record = CustomLexemeRecord {
+            custom_id: c.custom_id,
+            source: c.source,
+            bundle_lexeme_id: c.bundle_lexeme_id.clone(),
+            lemma: c.lemma.clone(),
+            pos: c.pos.clone(),
+            definition_en: c.definition_en.clone(),
+            gloss_uz: c.gloss_uz.clone(),
+            gloss_ru: c.gloss_ru.clone(),
+            examples: c.examples.clone(),
+            collocations: c.collocations.clone(),
+            ipa: c.ipa.clone(),
+            audio_key: c.audio_key.clone(),
+            context: c.context.clone(),
+            archived: c.archived,
+            event_id: ev.event_id,
+            updated_at: ev.client_ts,
+        };
+        s.custom_lexemes.insert(c.custom_id, record);
+        if c.bundle_lexeme_id.is_none() {
+            let lexeme = LexemeId::new(c.custom_id.0.to_string()).expect("a UUID is a valid slug");
+            for direction in [LexicalDirection::Recognize, LexicalDirection::Produce] {
+                if !s.has_lexical_card(&lexeme, direction) {
+                    s.insert_lexical_card(
+                        &lexeme,
+                        LexicalCard {
+                            stability: 1.0,
+                            difficulty: 5.0,
+                            last_review: ev.client_ts,
+                            due: Timestamp(ev.client_ts.0 + DAY_MS),
+                            direction,
+                            source: LexicalSource::Custom,
+                            exposures: 0.0,
+                            review_count: 0,
+                            lapse_count: 0,
+                        },
+                    );
+                }
+            }
+        }
+    }
+
+    fn archive_custom_lexeme(s: &mut State, ev: &Event, c: &CustomLexemeArchivedEvent) {
+        if s.custom_lexemes
+            .get(&c.custom_id)
+            .is_some_and(|record| record.event_id >= ev.event_id)
+        {
+            return;
+        }
+        let record = s
+            .custom_lexemes
+            .entry(c.custom_id)
+            .or_insert_with(|| CustomLexemeRecord {
+                custom_id: c.custom_id,
+                source: crate::event::CustomLexemeSource::Own,
+                bundle_lexeme_id: None,
+                lemma: String::new(),
+                pos: None,
+                definition_en: String::new(),
+                gloss_uz: String::new(),
+                gloss_ru: String::new(),
+                examples: Vec::new(),
+                collocations: Vec::new(),
+                ipa: None,
+                audio_key: None,
+                context: None,
+                archived: true,
+                event_id: ev.event_id,
+                updated_at: ev.client_ts,
+            });
+        record.archived = c.archived;
+        record.event_id = ev.event_id;
+        record.updated_at = ev.client_ts;
+    }
+
+    fn save_book_mark(s: &mut State, ev: &Event, m: &BookMarkCreatedEvent) {
+        if s.book_marks
+            .get(&m.mark_id)
+            .is_some_and(|record| record.event_id >= ev.event_id)
+        {
+            return;
+        }
+        s.book_marks.insert(
+            m.mark_id,
+            BookMarkRecord {
+                mark_id: m.mark_id,
+                book_id: m.book_id.clone(),
+                book_version: m.book_version.clone(),
+                kind: m.kind,
+                chapter_id: m.chapter_id.clone(),
+                paragraph_id: m.paragraph_id.clone(),
+                sentence_id: m.sentence_id.clone(),
+                start_token: m.start_token,
+                end_token: m.end_token,
+                quote_hash: m.quote_hash.clone(),
+                color: m.color.clone(),
+                deleted: false,
+                event_id: ev.event_id,
+                updated_at: ev.client_ts,
+            },
+        );
+    }
+
+    fn delete_book_mark(s: &mut State, ev: &Event, m: &BookMarkDeletedEvent) {
+        if s.book_marks
+            .get(&m.mark_id)
+            .is_some_and(|record| record.event_id >= ev.event_id)
+        {
+            return;
+        }
+        let record = s
+            .book_marks
+            .entry(m.mark_id)
+            .or_insert_with(|| BookMarkRecord {
+                mark_id: m.mark_id,
+                book_id: BookId::new("book.deleted").expect("valid placeholder"),
+                book_version: String::new(),
+                kind: crate::event::BookMarkKind::Bookmark,
+                chapter_id: String::new(),
+                paragraph_id: String::new(),
+                sentence_id: String::new(),
+                start_token: 0,
+                end_token: 0,
+                quote_hash: String::new(),
+                color: None,
+                deleted: true,
+                event_id: ev.event_id,
+                updated_at: ev.client_ts,
+            });
+        record.deleted = true;
+        record.event_id = ev.event_id;
+        record.updated_at = ev.client_ts;
+    }
+
+    fn save_note(s: &mut State, ev: &Event, n: &NoteSavedEvent) {
+        if s.notes
+            .get(&n.note_id)
+            .is_some_and(|record| record.event_id >= ev.event_id)
+        {
+            return;
+        }
+        s.notes.insert(
+            n.note_id,
+            NoteRecord {
+                note_id: n.note_id,
+                anchor: n.anchor.clone(),
+                body: n.body.clone(),
+                deleted: false,
+                event_id: ev.event_id,
+                updated_at: ev.client_ts,
+            },
+        );
+    }
+
+    fn delete_note(s: &mut State, ev: &Event, n: &NoteDeletedEvent) {
+        if s.notes
+            .get(&n.note_id)
+            .is_some_and(|record| record.event_id >= ev.event_id)
+        {
+            return;
+        }
+        let record = s.notes.entry(n.note_id).or_insert_with(|| NoteRecord {
+            note_id: n.note_id,
+            anchor: NoteAnchor {
+                kind: crate::event::NoteAnchorKind::Standalone,
+                id: None,
+            },
+            body: String::new(),
+            deleted: true,
+            event_id: ev.event_id,
+            updated_at: ev.client_ts,
+        });
+        record.deleted = true;
+        record.event_id = ev.event_id;
+        record.updated_at = ev.client_ts;
+    }
+
+    /// Direct lexical evidence: a placement value check, a lexical review,
+    /// or an explicit "add to vocabulary".
+    pub fn review_lexeme(
+        &self,
+        s: &mut State,
+        lexeme: &LexemeId,
+        direction: LexicalDirection,
+        correct: bool,
+        at: Timestamp,
+        source: LexicalSource,
+    ) -> LexicalCard {
+        let grade = if correct { Grade::Good } else { Grade::Again };
+        let card = match s.lexical_card(lexeme, direction) {
+            Some(old) if old.review_count > 0 => {
+                let elapsed = days(old.last_review, at).max(1.0);
+                let fsrs_card = Card {
+                    stability: old.stability,
+                    difficulty: old.difficulty,
+                    last_review: old.last_review,
+                };
+                let next = fsrs::review(&self.params.fsrs, &fsrs_card, elapsed, grade, at);
+                LexicalCard {
+                    stability: next.stability,
+                    difficulty: next.difficulty,
+                    last_review: at,
+                    due: lexical_due(at, next.stability),
+                    direction,
+                    source,
+                    exposures: old.exposures,
+                    review_count: old.review_count.saturating_add(1),
+                    lapse_count: old.lapse_count + u32::from(!correct),
+                }
+            }
+            _ => {
+                let next = fsrs::start(&self.params.fsrs, grade, at);
+                LexicalCard {
+                    stability: next.stability,
+                    difficulty: next.difficulty,
+                    last_review: at,
+                    due: lexical_due(at, next.stability),
+                    direction,
+                    source,
+                    exposures: 0.0,
+                    review_count: 1,
+                    lapse_count: u32::from(!correct),
+                }
+            }
+        };
+        s.insert_lexical_card(lexeme, card.clone());
+        card
+    }
+
+    /// Placement Stage 2 hook: seed the two cards from a frequency-band
+    /// answer. Unknown claims create nothing; a checked meaning is a direct
+    /// review.
+    pub fn placement_lexeme_prior(
+        &self,
+        s: &mut State,
+        lexeme: &LexemeId,
+        frequency_band: u16,
+        known: bool,
+        at: Timestamp,
+    ) {
+        if !known {
+            return;
+        }
+        let stability = 1.0 + f64::from(frequency_band);
+        for direction in [LexicalDirection::Recognize, LexicalDirection::Produce] {
+            if s.has_lexical_card(lexeme, direction) {
+                continue;
+            }
+            s.insert_lexical_card(
+                lexeme,
+                LexicalCard {
+                    stability,
+                    difficulty: 5.0,
+                    last_review: at,
+                    due: lexical_due(at, stability),
+                    direction,
+                    source: LexicalSource::Bundle,
+                    exposures: 0.0,
+                    review_count: 1,
+                    lapse_count: 0,
+                },
+            );
+        }
+    }
+
+    /// `R` of one lexical card at `now`; 0 without a direct card.
+    pub fn lexical_recall(
+        &self,
+        s: &State,
+        lexeme: &LexemeId,
+        direction: LexicalDirection,
+        now: Timestamp,
+    ) -> f64 {
+        s.lexical_card(lexeme, direction).map_or(0.0, |card| {
+            fsrs::retrievability(
+                &self.params.fsrs,
+                days(card.last_review, now),
+                card.stability,
+            )
+        })
+    }
+
+    /// A correct, unhinted first attempt lends weak recognition evidence to
+    /// the lexemes of the item. The arguments are the fields of the answer
+    /// that decide eligibility.
+    #[allow(clippy::too_many_arguments)]
+    fn credit_lexemes(
+        s: &mut State,
+        bundle: &Bundle,
+        item: &ItemRef,
+        family: &crate::ids::FamilyId,
+        correct: bool,
+        rapid: bool,
+        hints: u8,
+        attempt: u8,
+        at: Timestamp,
+    ) {
+        if !correct || rapid || hints > 0 || attempt > 1 {
+            return;
+        }
+        let Some(lexemes) = bundle.content.item_lexemes.get(&item.id) else {
+            return;
+        };
+        for lexeme in lexemes {
+            let born = {
+                let exposure = s.lexical_exposures.entry(lexeme.clone()).or_default();
+                exposure.count = exposure.count.saturating_add(1);
+                exposure.items.insert(item.id.clone());
+                exposure.families.insert(family.clone());
+                exposure.items.len() >= 3 && exposure.families.len() >= 2
+            };
+            if let Some(card) = s
+                .lexical_cards
+                .get_mut(lexeme)
+                .and_then(|cards| cards.get_mut(&LexicalDirection::Recognize))
+            {
+                // Passive meetings never move the FSRS interval; they only
+                // add a weak 0.15 of recognition evidence.
+                card.exposures += 0.15;
+            } else if born {
+                s.insert_lexical_card(
+                    lexeme,
+                    LexicalCard {
+                        stability: 1.0,
+                        difficulty: 5.0,
+                        last_review: at,
+                        due: Timestamp(at.0 + DAY_MS),
+                        direction: LexicalDirection::Recognize,
+                        source: LexicalSource::Bundle,
+                        exposures: 0.45,
+                        review_count: 0,
+                        lapse_count: 0,
+                    },
+                );
+            }
+        }
+    }
+
     // The five updates of one answer, in order; names follow docs/03.
     #[allow(clippy::too_many_lines, clippy::many_single_char_names)]
     fn answer(&self, s: &mut State, ev: &Event, a: &AnswerEvent, ctx: &FoldCtx<'_>) -> Applied {
@@ -680,6 +1037,17 @@ impl KnowledgeModel {
             && expected_ms > 0.0
             && latency < p.rapid_share * expected_ms
             && (!item.typed_input() || a.latency_ms < p.rapid_typed_ms);
+        Self::credit_lexemes(
+            s,
+            bundle,
+            &a.item,
+            &item.family,
+            correct,
+            rapid,
+            a.hints,
+            a.attempt,
+            t,
+        );
         // Fluency: the residual r = βᶠ − ln t_ret of a counted answer, and
         // whether the slot's primary KCs were known at display, before any
         // update of this answer (bⱼ).
@@ -963,7 +1331,7 @@ impl LearnerModel for KnowledgeModel {
             let _ = write!(s, "{b:02x}");
             s
         });
-        format!("knowledge-v1.3+{short}")
+        format!("knowledge-v1.4+{short}")
     }
 
     fn init(&self, profile: &Profile) -> State {
@@ -1041,6 +1409,30 @@ impl LearnerModel for KnowledgeModel {
                         s.profile.start_level.insert(subject_id.clone(), level);
                     }
                 }
+                Applied::Skipped
+            }
+            EventPayload::CustomLexemeCreated(c) | EventPayload::CustomLexemeUpdated(c) => {
+                Self::save_custom_lexeme(s, e, c);
+                Applied::Skipped
+            }
+            EventPayload::CustomLexemeArchived(c) => {
+                Self::archive_custom_lexeme(s, e, c);
+                Applied::Skipped
+            }
+            EventPayload::BookMarkCreated(m) => {
+                Self::save_book_mark(s, e, m);
+                Applied::Skipped
+            }
+            EventPayload::BookMarkDeleted(m) => {
+                Self::delete_book_mark(s, e, m);
+                Applied::Skipped
+            }
+            EventPayload::NoteSaved(n) => {
+                Self::save_note(s, e, n);
+                Applied::Skipped
+            }
+            EventPayload::NoteDeleted(n) => {
+                Self::delete_note(s, e, n);
                 Applied::Skipped
             }
             // Applied through the corrections, in the place of the answer.

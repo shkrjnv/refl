@@ -953,3 +953,74 @@ mod review_hash {
         assert_eq!(root.codes(), []);
     }
 }
+
+/// The lexical bank and the precomputed graph layout are part of the bundle
+/// (`docs/16-vocabulary-library-notes-graph.md`, §1–3): item lexemes are
+/// sense ids, live KCs have distinct 0..=1000 coordinates, and rebuilding
+/// gives the same bytes.
+#[test]
+fn lexeme_bank_and_layout_are_compiled() {
+    let first = run(&repo().join("content"));
+    let second = run(&repo().join("content"));
+    let a = first.bundle.expect("bundle");
+    let b = second.bundle.expect("bundle");
+    assert_eq!(to_bytes(&a), to_bytes(&b), "content build is deterministic");
+    assert_eq!(a.content.lexemes.len(), 13, "the reviewed starter bank");
+    let senses: BTreeSet<_> = a
+        .content
+        .lexemes
+        .iter()
+        .flat_map(|lexeme| lexeme.senses.iter().map(|sense| sense.id.clone()))
+        .collect();
+    assert_eq!(senses.len(), a.content.lexemes.len());
+    for lexeme in &a.content.lexemes {
+        assert!(lexeme.id.as_str().starts_with("en.lex."), "{}", lexeme.id);
+        assert!(
+            (1..=10_000).contains(&lexeme.frequency_rank),
+            "{}",
+            lexeme.id
+        );
+        assert!(!lexeme.senses.is_empty(), "{}", lexeme.id);
+        for sense in &lexeme.senses {
+            assert!(
+                sense.definition_en.split_whitespace().count() <= 25,
+                "{}",
+                sense.id
+            );
+            assert!(
+                sense.review.is_shown(refl_core::value::Lang::En),
+                "{}",
+                sense.id
+            );
+        }
+    }
+    assert!(!a.content.item_lexemes.is_empty());
+    for (item, lexemes) in &a.content.item_lexemes {
+        assert!(!lexemes.is_empty(), "{item}");
+        for lexeme in lexemes {
+            assert!(
+                senses.contains(lexeme),
+                "{item}: {lexeme} is not a sense id"
+            );
+        }
+    }
+    let live: Vec<_> = a
+        .content
+        .kcs
+        .iter()
+        .filter(|entry| entry.status == KcStatus::Live)
+        .collect();
+    assert!(live.len() >= 5);
+    for entry in &live {
+        assert!(
+            entry.layout_x <= 1000 && entry.layout_y <= 1000,
+            "{}",
+            entry.kc.id
+        );
+    }
+    let positions: BTreeSet<_> = live
+        .iter()
+        .map(|entry| (entry.layout_x, entry.layout_y))
+        .collect();
+    assert_eq!(positions.len(), live.len(), "live nodes overlap");
+}

@@ -6,7 +6,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use refl_core::content::{Edge, Explanation, Instruction, Kc, Misconception};
+use refl_core::content::{Edge, Explanation, Instruction, Kc, Lexeme, Misconception};
 use refl_core::item::Item;
 use refl_core::lesson::Lesson;
 use refl_core::subject::Subject;
@@ -27,6 +27,7 @@ pub struct Sourced<T> {
 pub struct Content {
     pub subjects: Vec<Sourced<Subject>>,
     pub kcs: Vec<Sourced<Kc>>,
+    pub lexemes: Vec<Sourced<Lexeme>>,
     pub edges: Vec<Sourced<Edge>>,
     pub misconceptions: Vec<Sourced<Misconception>>,
     pub explanations: Vec<Sourced<Explanation>>,
@@ -35,9 +36,10 @@ pub struct Content {
     pub lessons: Vec<Sourced<Lesson>>,
 }
 
-const SECTIONS: [&str; 8] = [
+const SECTIONS: [&str; 9] = [
     "subjects",
     "kcs",
+    "lexemes",
     "edges",
     "misconceptions",
     "explanations",
@@ -65,7 +67,11 @@ pub fn content_files(root: &Path) -> std::io::Result<Vec<PathBuf>> {
         for entry in std::fs::read_dir(dir)? {
             let path = entry?.path();
             if path.is_dir() {
-                if path.file_name().is_some_and(|n| n != "lib") {
+                // `books/` belongs to tools/book-build, not the KC bundle.
+                if path
+                    .file_name()
+                    .is_some_and(|name| name != "lib" && name != "books")
+                {
                     walk(&path, out)?;
                 }
             } else if path.extension().is_some_and(|e| e == "ncl") {
@@ -176,6 +182,7 @@ pub fn load(root: &Path, nickel: &Path) -> std::io::Result<(Content, Vec<Diagnos
             match key.as_str() {
                 "subjects" => parse_section(&rel, &key, value, &mut content.subjects, d),
                 "kcs" => parse_section(&rel, &key, value, &mut content.kcs, d),
+                "lexemes" => parse_section(&rel, &key, value, &mut content.lexemes, d),
                 "edges" => parse_section(&rel, &key, value, &mut content.edges, d),
                 "misconceptions" => {
                     parse_section(&rel, &key, value, &mut content.misconceptions, d);

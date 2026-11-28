@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fs;
 
 use refl_core::bundle::Bundle;
@@ -391,4 +392,144 @@ fn placement_completed_updates_the_profile_and_matches_replay() {
         &[decoded],
     );
     assert_eq!(folded["snapshot"], serde_json::to_value(&expected).unwrap(),);
+}
+
+#[test]
+fn book_coverage_uses_the_folded_lexical_cards() {
+    use refl_core::book::{Book, BookChapter, BookParagraph, BookSentence, BookToken};
+    use refl_core::ids::{BookId, LexemeId};
+    use refl_core::model::{LearnerModel, LexicalDirection, LexicalSource};
+    use refl_core::subject::LevelKey;
+    use refl_core::value::Localized;
+
+    let known = LexemeId::new("en.lex.cat.animal").unwrap();
+    let unknown = LexemeId::new("en.lex.dog.animal").unwrap();
+    let model = KnowledgeModel::default();
+    let mut state = model.init(&Profile::default());
+    let now = refl_core::value::Timestamp(1_700_000_000_000);
+    model.review_lexeme(
+        &mut state,
+        &known,
+        LexicalDirection::Recognize,
+        true,
+        now,
+        LexicalSource::Bundle,
+    );
+    let token = |id: &str, lexeme: Option<&LexemeId>| BookToken {
+        id: id.into(),
+        text: "x".into(),
+        lemma: "x".into(),
+        lexeme_id: lexeme.cloned(),
+        sense_ids: Vec::new(),
+        kc_ids: Vec::new(),
+    };
+    let book = Book {
+        id: BookId::new("book.first-day").unwrap(),
+        version: "a".repeat(64),
+        title: Localized::default(),
+        level: LevelKey::new("A1").unwrap(),
+        license: "original".into(),
+        source: "test".into(),
+        chapters: vec![BookChapter {
+            id: "chapter.first-day.1".into(),
+            title: Localized::default(),
+            paragraphs: vec![BookParagraph {
+                id: "para.first-day.1.1".into(),
+                sentences: vec![BookSentence {
+                    id: "sentence.first-day.1.1.1".into(),
+                    text: "x x x".into(),
+                    tokens: vec![
+                        token("t1", Some(&known)),
+                        token("t2", Some(&unknown)),
+                        token("t3", None),
+                    ],
+                }],
+            }],
+        }],
+    };
+    let result: Value = serde_json::from_str(&refl_core_wasm::book_coverage(
+        &serde_json::to_string(&book).unwrap(),
+        &serde_json::to_string(&state).unwrap(),
+        1_700_000_000_000.0,
+    ))
+    .unwrap();
+    assert_eq!(result["book"], json!("book.first-day"));
+    assert_eq!(result["coverage"]["known_tokens"], json!(1));
+    assert_eq!(result["coverage"]["total_tokens"], json!(2));
+    assert_eq!(result["coverage"]["percent"], json!(0.5));
+}
+
+#[test]
+fn batch4_records_fold_through_the_bridge_and_match_replay() {
+    let bundle = bundle_json();
+    let note_id = "01930000-0000-7000-8000-000000000012";
+    let custom_id = "01930000-0000-7000-8000-000000000013";
+    let events = json!([
+        {
+            "schema_version": 2,
+            "event_id": note_id,
+            "learner_id": "01930000-0000-7000-8000-0000000000aa",
+            "session_id": null,
+            "client_ts": 1_700_000_000_000_i64,
+            "server_ts": null,
+            "payload": {
+                "type": "note_saved",
+                "note_id": note_id,
+                "anchor": { "kind": "standalone" },
+                "body": "mira's list\n\n- a cat",
+            },
+        },
+        {
+            "schema_version": 2,
+            "event_id": custom_id,
+            "learner_id": "01930000-0000-7000-8000-0000000000aa",
+            "session_id": null,
+            "client_ts": 1_700_000_001_000_i64,
+            "server_ts": null,
+            "payload": {
+                "type": "custom_lexeme_created",
+                "custom_id": custom_id,
+                "source": "own",
+                "lemma": "mira",
+                "pos": "noun",
+                "definition_en": "a name",
+                "gloss_uz": "ism",
+                "gloss_ru": "имя",
+                "examples": [],
+                "collocations": [],
+            },
+        },
+    ]);
+    let folded: Value = serde_json::from_str(&refl_core_wasm::fold_state(
+        &bundle,
+        "",
+        None,
+        &events.to_string(),
+    ))
+    .unwrap();
+    let snapshot: State = serde_json::from_value(folded["snapshot"].clone()).unwrap();
+    assert_eq!(snapshot.notes.len(), 1);
+    assert_eq!(snapshot.custom_lexemes.len(), 1);
+    assert_eq!(
+        snapshot
+            .lexical_cards
+            .values()
+            .map(BTreeMap::len)
+            .sum::<usize>(),
+        2
+    );
+    let parsed: Bundle = serde_json::from_str(&bundle).unwrap();
+    let decoded: Vec<Decoded> = events
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|event| decode_event(&event.to_string()).unwrap())
+        .collect();
+    let expected = replay(
+        &KnowledgeModel::default(),
+        &Profile::default(),
+        &parsed,
+        &decoded,
+    );
+    assert_eq!(folded["snapshot"], serde_json::to_value(&expected).unwrap());
 }

@@ -6,7 +6,9 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 
-use crate::ids::{DomainId, ExplanationId, InstructionId, KcId, MisconceptionId, SubjectId, Tag};
+use crate::ids::{
+    DomainId, ExplanationId, InstructionId, KcId, LexemeId, MisconceptionId, SubjectId, Tag,
+};
 use crate::subject::LevelKey;
 use crate::value::{Lang, Localized, UnitInterval};
 
@@ -35,6 +37,85 @@ pub struct Kc {
     /// never goes live, and is not listed as blocked.
     #[serde(default)]
     pub observed_only: bool,
+}
+
+/// Part of speech of a lexeme (`docs/16-vocabulary-library-notes-graph.md`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename_all = "lowercase"))]
+#[serde(rename_all = "lowercase")]
+pub enum LexemePos {
+    Noun,
+    Verb,
+    Adj,
+    Adv,
+    Prep,
+    Pron,
+    Det,
+    Conj,
+    Phrase,
+}
+
+/// A contextual example of one sense: English text and an optional audio key.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct LexemeExample {
+    pub text: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub audio_key: Option<String>,
+}
+
+/// One meaning of a lexeme; the unit of a lexical FSRS card.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct LexemeSense {
+    /// `en.lex.<lemma>.<sense>`; the id of the lexical card.
+    pub id: LexemeId,
+    /// Simple learner-facing English definition, at most 25 words.
+    pub definition_en: String,
+    #[serde(default)]
+    pub gloss_uz: String,
+    #[serde(default)]
+    pub gloss_ru: String,
+    #[serde(default)]
+    pub examples: Vec<LexemeExample>,
+    #[serde(default)]
+    pub collocations: Vec<String>,
+    #[serde(default)]
+    pub ipa_uk: String,
+    #[serde(default)]
+    pub ipa_us: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub audio_key: Option<String>,
+    /// Review of the definition and glosses per language.
+    #[serde(default)]
+    pub review: LangReviews,
+}
+
+/// A lexical lemma and its senses (`docs/16-vocabulary-library-notes-graph.md`).
+/// Lexemes are intentionally outside the KC prerequisite graph.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct Lexeme {
+    /// `en.lex.<lemma>`.
+    pub id: LexemeId,
+    pub lemma: String,
+    pub pos: LexemePos,
+    /// Frequency band, 1..=10 000.
+    pub frequency_rank: u32,
+    pub level: LevelKey,
+    #[serde(default)]
+    pub forms: Vec<String>,
+    pub senses: Vec<LexemeSense>,
+    #[serde(default)]
+    pub kc_ids: Vec<KcId>,
+    #[serde(default)]
+    pub source: String,
+    #[serde(default)]
+    pub license: String,
+    #[serde(default)]
+    pub review: LangReviews,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]

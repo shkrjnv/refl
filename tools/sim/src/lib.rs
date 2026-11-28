@@ -29,13 +29,16 @@ use refl_core::content::{
     LangReviews, Misconception, MisconceptionOrigin, Review, ReviewStatus,
 };
 use refl_core::event::{
-    AnswerContext, AnswerEvent, CURRENT_SCHEMA_VERSION, Confidence, Decoded, Event, EventPayload,
-    InputDevice, PlanAction, PlanCandidate, PlanIssuedEvent, PlanScope, ReclassifiedEvent,
-    Response, UnknownEvent, Verdict,
+    AnswerContext, AnswerEvent, BookMarkCreatedEvent, BookMarkDeletedEvent, BookMarkKind,
+    CURRENT_SCHEMA_VERSION, Confidence, CustomLexemeArchivedEvent, CustomLexemeEvent,
+    CustomLexemeSource, Decoded, Event, EventPayload, InputDevice, NoteAnchor, NoteAnchorKind,
+    NoteDeletedEvent, NoteSavedEvent, PlanAction, PlanCandidate, PlanIssuedEvent, PlanScope,
+    ReclassifiedEvent, Response, UnknownEvent, Verdict,
 };
 use refl_core::ids::{
-    ContentVersion, DomainId, EventId, ExplanationId, FamilyId, InstructionId, ItemId, ItemRef,
-    ItemVersion, KcId, LearnerId, LessonId, MisconceptionId, SessionId, SubjectId,
+    BookId, BookMarkId, ContentVersion, CustomLexemeId, DomainId, EventId, ExplanationId, FamilyId,
+    InstructionId, ItemId, ItemRef, ItemVersion, KcId, LearnerId, LessonId, MisconceptionId,
+    NoteId, SessionId, SubjectId,
 };
 use refl_core::item::{
     AnswerPattern, AuthorDifficulty, ChoiceBody, ChoiceOption, EnglishCheck, ExpectedWrong,
@@ -140,6 +143,8 @@ pub fn synthetic_bundle(spec: BundleSpec) -> Bundle {
         },
         status: KcStatus::Live,
         level_rank: rank,
+        layout_x: 0,
+        layout_y: 0,
     };
 
     let mut kcs = vec![kc_entry(kc(SPELLING_KC), &orthography, 1, 0.5)];
@@ -331,6 +336,8 @@ pub fn synthetic_bundle(spec: BundleSpec) -> Bundle {
             },
             subjects: vec![subject],
             kcs,
+            lexemes: Vec::new(),
+            item_lexemes: BTreeMap::new(),
             edges,
             requires_closure,
             misconceptions,
@@ -641,6 +648,71 @@ pub fn synthetic_log(bundle: &Bundle, spec: LogSpec) -> Vec<Decoded> {
                     content_version: ContentVersion("synthetic".into()),
                 }),
             ));
+            continue;
+        }
+        // Batch 4 personal records: notes, custom words and book marks. Their
+        // ids are the event's own UUIDv7 so the log stays deterministic.
+        if (11..20).contains(&roll) {
+            let id = *event_id(at, tail).as_uuid();
+            let custom = || CustomLexemeEvent {
+                custom_id: CustomLexemeId(id),
+                source: CustomLexemeSource::Own,
+                bundle_lexeme_id: None,
+                lemma: "mira".into(),
+                pos: Some("noun".into()),
+                definition_en: "a name for a girl".into(),
+                gloss_uz: "ism".into(),
+                gloss_ru: "имя".into(),
+                examples: vec!["Mira has a book.".into()],
+                collocations: Vec::new(),
+                ipa: None,
+                audio_key: None,
+                context: None,
+                archived: false,
+            };
+            let payload = match roll {
+                11 | 12 => EventPayload::NoteSaved(NoteSavedEvent {
+                    note_id: NoteId(id),
+                    anchor: if roll == 11 {
+                        NoteAnchor {
+                            kind: NoteAnchorKind::Standalone,
+                            id: None,
+                        }
+                    } else {
+                        NoteAnchor {
+                            kind: NoteAnchorKind::Kc,
+                            id: Some(kc_id(focus).to_string()),
+                        }
+                    },
+                    body: "Mira's first day.\n\n- a cat\n- a red book".into(),
+                }),
+                13 => EventPayload::NoteDeleted(NoteDeletedEvent {
+                    note_id: NoteId(id),
+                }),
+                14 | 15 => EventPayload::CustomLexemeCreated(custom()),
+                16 => EventPayload::CustomLexemeUpdated(custom()),
+                17 => EventPayload::CustomLexemeArchived(CustomLexemeArchivedEvent {
+                    custom_id: CustomLexemeId(id),
+                    archived: true,
+                }),
+                18 => EventPayload::BookMarkCreated(BookMarkCreatedEvent {
+                    mark_id: BookMarkId(id),
+                    book_id: BookId::new("book.synthetic").expect("valid book id"),
+                    book_version: "a".repeat(64),
+                    kind: BookMarkKind::Bookmark,
+                    chapter_id: "chapter.synthetic.1".into(),
+                    paragraph_id: "para.synthetic.1.1".into(),
+                    sentence_id: "sentence.synthetic.1.1.1".into(),
+                    start_token: 0,
+                    end_token: tail % 8,
+                    quote_hash: "b".repeat(64),
+                    color: None,
+                }),
+                _ => EventPayload::BookMarkDeleted(BookMarkDeletedEvent {
+                    mark_id: BookMarkId(id),
+                }),
+            };
+            log.push(event(at, tail, payload));
             continue;
         }
         if one_in(&mut rng, 5) {

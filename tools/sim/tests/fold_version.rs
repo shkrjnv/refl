@@ -5,8 +5,10 @@
 //! family's instruction or βᶠ prior changes it.
 
 use refl_core::bundle::{Bundle, Required};
-use refl_core::content::{Example, Refutation, Representation};
-use refl_core::ids::{InstructionId, ItemId, ItemVersion, KcId};
+use refl_core::content::{
+    Example, LangReviews, Lexeme, LexemePos, LexemeSense, Refutation, Representation,
+};
+use refl_core::ids::{InstructionId, ItemId, ItemVersion, KcId, LexemeId};
 use refl_core::item::ItemBody;
 use refl_core::model::fold_version;
 use refl_core::projection::{ItemProjection, ItemVersionEntry};
@@ -199,4 +201,61 @@ fn adding_a_kc_or_an_explanation_target_changes_it() {
     e.id = refl_core::ids::ExplanationId::new("expl.extra").unwrap();
     b.content.explanations.push(e);
     assert_ne!(fold_version(&b), fold_version(&base));
+}
+
+fn sample_lexeme() -> Lexeme {
+    Lexeme {
+        id: LexemeId::new("en.lex.cat").unwrap(),
+        lemma: "cat".into(),
+        pos: LexemePos::Noun,
+        frequency_rank: 100,
+        level: refl_core::subject::LevelKey::new("A1").unwrap(),
+        forms: vec!["cats".into()],
+        senses: vec![LexemeSense {
+            id: LexemeId::new("en.lex.cat.animal").unwrap(),
+            definition_en: "a small animal".into(),
+            gloss_uz: String::new(),
+            gloss_ru: String::new(),
+            examples: Vec::new(),
+            collocations: Vec::new(),
+            ipa_uk: String::new(),
+            ipa_us: String::new(),
+            audio_key: None,
+            review: LangReviews::default(),
+        }],
+        kc_ids: Vec::new(),
+        source: "test".into(),
+        license: "original".into(),
+        review: LangReviews::default(),
+    }
+}
+
+#[test]
+fn the_lexeme_bank_and_item_index_change_it() {
+    let base = bundle();
+    let mut b = base.clone();
+    b.content.lexemes.push(sample_lexeme());
+    assert_ne!(fold_version(&b), fold_version(&base));
+    // The frequency rank is part of the placement prior, so it matters.
+    let mut b = base.clone();
+    let mut lexeme = sample_lexeme();
+    lexeme.frequency_rank += 1;
+    b.content.lexemes.push(lexeme);
+    assert_ne!(fold_version(&b), fold_version(&base));
+    // The item→sense index is what passive credit reads.
+    let mut b = base.clone();
+    b.content.item_lexemes.insert(
+        b.content.items[0].item.id.clone(),
+        vec![LexemeId::new("en.lex.cat.animal").unwrap()],
+    );
+    assert_ne!(fold_version(&b), fold_version(&base));
+}
+
+#[test]
+fn graph_layout_does_not_change_it() {
+    let base = bundle();
+    let mut b = base.clone();
+    b.content.kcs[0].layout_x = 1000;
+    b.content.kcs[1].layout_y = 1000;
+    assert_eq!(fold_version(&b), fold_version(&base));
 }

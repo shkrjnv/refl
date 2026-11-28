@@ -4,6 +4,7 @@
 //! the `ts-rs` types used by the web client and avoids `serde-wasm-bindgen`'s
 //! map and bigint conversion rules.
 
+use refl_core::book::{Book, coverage};
 use refl_core::bundle::{BUNDLE_FORMAT_VERSION, Bundle};
 use refl_core::event::{CURRENT_SCHEMA_VERSION, Decoded, Response, decode_event};
 use refl_core::ids::{ItemRef, SubjectId};
@@ -637,6 +638,32 @@ pub fn placement_answer(
         correct,
         now_ms,
     ))
+}
+
+fn book_coverage_inner(
+    book_json: &str,
+    snapshot_json: &str,
+    now_ms: f64,
+) -> Result<Value, BridgeError> {
+    let book: Book = serde_json::from_str(book_json)
+        .map_err(|error| BridgeError::json(&error, "invalid_book"))?;
+    let state = parse_state(snapshot_json)?;
+    let now = timestamp(now_ms)?;
+    let model = KnowledgeModel::default();
+    let coverage = coverage(&book, &state, &model, now);
+    Ok(json!({
+        "book": book.id,
+        "version": book.version,
+        "coverage": to_value(&coverage)?,
+    }))
+}
+
+/// Personalized lexical coverage of a compiled book
+/// (`docs/16-vocabulary-library-notes-graph.md`, §2). The book is the
+/// `book-build` asset; the snapshot is a folded learner state.
+#[wasm_bindgen]
+pub fn book_coverage(book_json: &str, snapshot_json: &str, now_ms: f64) -> String {
+    export(book_coverage_inner(book_json, snapshot_json, now_ms))
 }
 
 fn next_value(

@@ -14,6 +14,7 @@
 extern crate alloc;
 
 pub mod answer;
+pub mod book;
 pub mod bundle;
 pub mod content;
 pub mod event;

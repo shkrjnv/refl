@@ -7,14 +7,17 @@ use refl_core::content::{
     Edge, EdgeKind, Kc, L1Prior, L1Set, LangReviews, Misconception, MisconceptionOrigin,
 };
 use refl_core::event::{
-    AnswerContext, AnswerEvent, Confidence, CriterionScore, EventPayload, HalfBands, InputDevice,
-    MentorOverrideEvent, OverrideKind, OverrideReason, PlacementCompletedEvent, PlacementSource,
-    PlanAction, PlanCandidate, PlanFactor, PlanIssuedEvent, PlanScope, ReclassifiedEvent, Response,
-    Verdict, WritingScoredEvent,
+    AnswerContext, AnswerEvent, BookMarkCreatedEvent, BookMarkDeletedEvent, BookMarkKind,
+    Confidence, CriterionScore, CustomLexemeArchivedEvent, CustomLexemeEvent, CustomLexemeSource,
+    EventPayload, HalfBands, InputDevice, MentorOverrideEvent, NoteAnchor, NoteAnchorKind,
+    NoteDeletedEvent, NoteSavedEvent, OverrideKind, OverrideReason, PlacementCompletedEvent,
+    PlacementSource, PlanAction, PlanCandidate, PlanFactor, PlanIssuedEvent, PlanScope,
+    ReclassifiedEvent, Response, Verdict, WritingScoredEvent,
 };
 use refl_core::ids::{
-    AchievementId, ContentVersion, DomainId, EventId, ExplanationId, ItemId, ItemRef, ItemVersion,
-    KcId, LearnerId, LessonId, MisconceptionId, PackageKey, SessionId, SubjectId, Tag, UserId,
+    AchievementId, BookId, BookMarkId, ContentVersion, CustomLexemeId, DomainId, EventId,
+    ExplanationId, ItemId, ItemRef, ItemVersion, KcId, LearnerId, LessonId, LexemeId,
+    MisconceptionId, NoteId, PackageKey, SessionId, SubjectId, Tag, UserId,
 };
 use refl_core::item::{
     AnswerPattern, AuthorDifficulty, ChoiceBody, ChoiceOption, Contractions, DictationBody,
@@ -150,6 +153,179 @@ fn placement_payload() -> impl Strategy<Value = EventPayload> {
     })
 }
 
+/// Lexical, note and book-mark payloads added in Batch 4 (docs/16).
+fn small_text() -> impl Strategy<Value = String> {
+    proptest::string::string_regex("[a-zA-Z0-9 .,'!?-]{0,40}").unwrap()
+}
+
+fn sha_hex() -> impl Strategy<Value = String> {
+    proptest::string::string_regex("[0-9a-f]{64}").unwrap()
+}
+
+/// One strategy for each Batch 4 payload, in order.
+#[allow(clippy::too_many_lines)]
+fn batch4_payload() -> impl Strategy<Value = EventPayload> {
+    let runtime = any::<u128>().prop_map(|bits| {
+        let b = (bits & !(0xF << 76) & !(0b11 << 62)) | (0x7 << 76) | (0b10 << 62);
+        Uuid::from_u128(b)
+    });
+    let custom = (
+        (
+            runtime.clone(),
+            prop_oneof![
+                Just(CustomLexemeSource::Own),
+                Just(CustomLexemeSource::Book),
+                Just(CustomLexemeSource::Lesson),
+                Just(CustomLexemeSource::Placement)
+            ],
+            proptest::option::of(slug(LexemeId::new)),
+            small_text(),
+            proptest::option::of(small_text()),
+        ),
+        (
+            small_text(),
+            small_text(),
+            small_text(),
+            proptest::collection::vec(small_text(), 0..3),
+            proptest::collection::vec(small_text(), 0..3),
+        ),
+        (
+            proptest::option::of(small_text()),
+            proptest::option::of(small_text()),
+            proptest::option::of((
+                small_text(),
+                proptest::option::of(slug(BookId::new)),
+                proptest::option::of(small_text()),
+            )),
+            any::<bool>(),
+        ),
+    )
+        .prop_map(
+            |(
+                (custom_id, source, bundle_lexeme_id, lemma, pos),
+                (definition_en, gloss_uz, gloss_ru, examples, collocations),
+                (ipa, audio_key, context, archived),
+            )| {
+                EventPayload::CustomLexemeCreated(CustomLexemeEvent {
+                    custom_id: CustomLexemeId(custom_id),
+                    source,
+                    bundle_lexeme_id,
+                    lemma,
+                    pos,
+                    definition_en,
+                    gloss_uz,
+                    gloss_ru,
+                    examples,
+                    collocations,
+                    ipa,
+                    audio_key,
+                    context: context.map(|(text, book_id, sentence_id)| {
+                        refl_core::event::CustomLexemeContext {
+                            text,
+                            book_id,
+                            sentence_id,
+                        }
+                    }),
+                    archived,
+                })
+            },
+        );
+    let note = (
+        runtime.clone(),
+        prop_oneof![
+            Just(NoteAnchorKind::Kc),
+            Just(NoteAnchorKind::Misconception),
+            Just(NoteAnchorKind::Lexeme),
+            Just(NoteAnchorKind::Item),
+            Just(NoteAnchorKind::BookMark)
+        ],
+        slug(Tag::new),
+        small_text(),
+    )
+        .prop_map(|(id, kind, anchor, body)| {
+            EventPayload::NoteSaved(NoteSavedEvent {
+                note_id: NoteId(id),
+                anchor: NoteAnchor {
+                    kind,
+                    id: Some(anchor.to_string()),
+                },
+                body,
+            })
+        });
+    let standalone = (runtime.clone(), small_text()).prop_map(|(id, body)| {
+        EventPayload::NoteSaved(NoteSavedEvent {
+            note_id: NoteId(id),
+            anchor: NoteAnchor {
+                kind: NoteAnchorKind::Standalone,
+                id: None,
+            },
+            body,
+        })
+    });
+    let mark = (
+        runtime.clone(),
+        slug(BookId::new),
+        sha_hex(),
+        prop_oneof![Just(BookMarkKind::Highlight), Just(BookMarkKind::Bookmark)],
+        small_text(),
+        small_text(),
+        small_text(),
+        0u64..=100,
+        0u64..=100,
+        sha_hex(),
+        proptest::option::of(small_text()),
+    )
+        .prop_map(
+            |(
+                id,
+                book_id,
+                book_version,
+                kind,
+                chapter_id,
+                paragraph_id,
+                sentence_id,
+                a,
+                b,
+                quote_hash,
+                color,
+            )| {
+                EventPayload::BookMarkCreated(BookMarkCreatedEvent {
+                    mark_id: BookMarkId(id),
+                    book_id,
+                    book_version,
+                    kind,
+                    chapter_id,
+                    paragraph_id,
+                    sentence_id,
+                    start_token: a.min(b),
+                    end_token: a.max(b),
+                    quote_hash,
+                    color,
+                })
+            },
+        );
+    prop_oneof![
+        custom,
+        note,
+        standalone,
+        mark,
+        (runtime.clone(), any::<bool>()).prop_map(|(id, archived)| {
+            EventPayload::CustomLexemeArchived(CustomLexemeArchivedEvent {
+                custom_id: CustomLexemeId(id),
+                archived,
+            })
+        }),
+        runtime
+            .clone()
+            .prop_map(|id| EventPayload::NoteDeleted(NoteDeletedEvent {
+                note_id: NoteId(id)
+            })),
+        runtime.prop_map(|id| EventPayload::BookMarkDeleted(BookMarkDeletedEvent {
+            mark_id: BookMarkId(id)
+        })),
+    ]
+}
+
 fn payload() -> impl Strategy<Value = EventPayload> {
     let answer = (
         (item_ref(), any::<u16>(), any::<u8>(), any::<bool>()),
@@ -226,10 +402,12 @@ fn payload() -> impl Strategy<Value = EventPayload> {
             })
         });
     let placement = placement_payload();
+    let batch4 = batch4_payload();
     prop_oneof![
         answer,
         reclassified,
         placement,
+        batch4,
         slug(LessonId::new).prop_map(|lesson| EventPayload::LessonStarted { lesson }),
         slug(LessonId::new).prop_map(|lesson| EventPayload::LessonFinished { lesson }),
         (slug(ExplanationId::new), any::<u32>()).prop_map(|(explanation, seconds)| {
@@ -1364,4 +1542,80 @@ fn showcase_holds_at_most_five_cards() {
         decode_event(&showcase(6)),
         Err(DecodeError::Json(_))
     ));
+}
+
+fn note_payload(id: &str, body: &str) -> serde_json::Value {
+    serde_json::json!({
+        "type": "note_saved",
+        "note_id": id,
+        "anchor": { "kind": "standalone" },
+        "body": body,
+    })
+}
+
+#[test]
+fn note_body_and_id_are_validated_on_decode() {
+    let id = "019aa5b4-0000-7000-8000-000000000001";
+    let at_limit = "a".repeat(4096);
+    assert!(matches!(
+        decode_event(&sample_with_payload(2, &note_payload(id, &at_limit))),
+        Ok(Decoded::Known(_))
+    ));
+    let too_long = "a".repeat(4097);
+    let error = decode_event(&sample_with_payload(2, &note_payload(id, &too_long))).unwrap_err();
+    assert!(error.to_string().contains("4096"), "{error}");
+    let v4 = "019aa5b4-0000-4000-8000-000000000001";
+    let error = decode_event(&sample_with_payload(2, &note_payload(v4, "hi"))).unwrap_err();
+    assert!(error.to_string().contains("UUIDv7"), "{error}");
+}
+
+fn mark_payload(start: u64, end: u64, hash: &str) -> serde_json::Value {
+    serde_json::json!({
+        "type": "book_mark_created",
+        "mark_id": "019aa5b4-0000-7000-8000-000000000002",
+        "book_id": "book.first-day",
+        "book_version": "a".repeat(64),
+        "kind": "highlight",
+        "chapter_id": "chapter.first-day.1",
+        "paragraph_id": "para.first-day.1.1",
+        "sentence_id": "sentence.first-day.1.1.1",
+        "start_token": start,
+        "end_token": end,
+        "quote_hash": hash,
+    })
+}
+
+#[test]
+fn book_mark_token_bounds_and_hashes_are_checked() {
+    let hash = "b".repeat(64);
+    assert!(matches!(
+        decode_event(&sample_with_payload(2, &mark_payload(0, 2, &hash))),
+        Ok(Decoded::Known(_))
+    ));
+    let reversed = decode_event(&sample_with_payload(2, &mark_payload(3, 2, &hash))).unwrap_err();
+    assert!(reversed.to_string().contains("start_token"), "{reversed}");
+    let unsafe_index = MAX_SAFE_INTEGER + 1;
+    let out_of_range = decode_event(&sample_with_payload(
+        2,
+        &mark_payload(0, unsafe_index, &hash),
+    ))
+    .unwrap_err();
+    assert!(out_of_range.to_string().contains("2^53"), "{out_of_range}");
+    let bad_hash = decode_event(&sample_with_payload(2, &mark_payload(0, 2, "abc"))).unwrap_err();
+    assert!(bad_hash.to_string().contains("SHA-256"), "{bad_hash}");
+}
+
+#[test]
+fn custom_lexeme_json_is_capped() {
+    let payload = serde_json::json!({
+        "type": "custom_lexeme_created",
+        "custom_id": "019aa5b4-0000-7000-8000-000000000003",
+        "source": "own",
+        "lemma": "cat",
+        "definition_en": "a".repeat(5000),
+        "gloss_uz": "",
+        "gloss_ru": "",
+    });
+    let error = decode_event(&sample_with_payload(2, &payload)).unwrap_err();
+    assert!(error.to_string().contains("4096"), "{error}");
 }

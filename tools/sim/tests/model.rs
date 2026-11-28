@@ -725,7 +725,7 @@ fn process_noise_widens_the_belief_before_the_update_and_changes_the_version() {
         },
     };
     let v11 = KnowledgeModel::default();
-    assert!(v11.version().starts_with("knowledge-v1.3+"));
+    assert!(v11.version().starts_with("knowledge-v1.4+"));
     assert_ne!(v1.version(), v11.version());
     let first = ev(at(0, 0), 1, chosen(0, 0));
     let shown = Timestamp(at(0, 0).0 - 8_000);
