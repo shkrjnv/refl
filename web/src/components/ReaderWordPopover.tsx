@@ -148,55 +148,59 @@ export function ReaderWordPopover({
         aria-hidden="true"
         style={{ left: layout?.arrowLeft ?? 20 }}
       />
-      <header className="reader-word-head">
-        <h3>{word}</h3>
-        <button
+      <div className="reader-word-body">
+        <header className="reader-word-head">
+          <h3>{word}</h3>
+          <button
+            type="button"
+            className="reader-word-close"
+            aria-label={t("reader-word-card-close")}
+            onClick={onClose}
+          >
+            <StudioIcon name="close" size={18} />
+          </button>
+        </header>
+        {sense ? (
+          <>
+            {sense.ipa_us || sense.ipa_uk ? (
+              <p className="vocab-ipa">/{sense.ipa_us || sense.ipa_uk}/</p>
+            ) : null}
+            <p>{sense.definition_en}</p>
+            {locale === "uz" && sense.gloss_uz ? (
+              <p className="vocab-gloss">{sense.gloss_uz}</p>
+            ) : null}
+            {locale === "ru" && sense.gloss_ru ? (
+              <p className="vocab-gloss">{sense.gloss_ru}</p>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <p className="bento-note">{t("reader-not-in-dictionary")}</p>
+            <label className="field">
+              <span>{t("vocab-form-definition")}</span>
+              <textarea
+                className="reader-word-input"
+                rows={2}
+                value={customDefinition}
+                onChange={(event) =>
+                  onCustomDefinitionChange(event.currentTarget.value)
+                }
+              />
+            </label>
+          </>
+        )}
+        <p className="bento-note">{sentenceText}</p>
+        <Button
           type="button"
-          className="reader-word-close"
-          aria-label={t("reader-word-card-close")}
-          onClick={onClose}
+          variant="primary"
+          disabled={busy || inVocabulary}
+          onClick={onAdd}
         >
-          <StudioIcon name="close" size={18} />
-        </button>
-      </header>
-      {sense ? (
-        <>
-          {sense.ipa_us || sense.ipa_uk ? (
-            <p className="vocab-ipa">/{sense.ipa_us || sense.ipa_uk}/</p>
-          ) : null}
-          <p>{sense.definition_en}</p>
-          {locale === "uz" && sense.gloss_uz ? (
-            <p className="vocab-gloss">{sense.gloss_uz}</p>
-          ) : null}
-          {locale === "ru" && sense.gloss_ru ? (
-            <p className="vocab-gloss">{sense.gloss_ru}</p>
-          ) : null}
-        </>
-      ) : (
-        <>
-          <p className="bento-note">{t("reader-not-in-dictionary")}</p>
-          <label className="field">
-            <span>{t("vocab-form-definition")}</span>
-            <textarea
-              className="reader-word-input"
-              rows={2}
-              value={customDefinition}
-              onChange={(event) =>
-                onCustomDefinitionChange(event.currentTarget.value)
-              }
-            />
-          </label>
-        </>
-      )}
-      <p className="bento-note">{sentenceText}</p>
-      <Button
-        type="button"
-        variant="primary"
-        disabled={busy || inVocabulary}
-        onClick={onAdd}
-      >
-        {inVocabulary ? t("reader-in-vocabulary") : t("reader-add-vocabulary")}
-      </Button>
+          {inVocabulary
+            ? t("reader-in-vocabulary")
+            : t("reader-add-vocabulary")}
+        </Button>
+      </div>
     </aside>
   );
 }

@@ -15409,14 +15409,17 @@ body.reader-focus .mobile-dock {
   position: fixed;
   z-index: 240;
   width: min(320px, calc(100vw - 16px));
-  max-height: min(60vh, 420px);
-  overflow-y: auto;
   border: 1px solid var(--reader-border);
   border-radius: var(--radius-md);
   background: var(--reader-panel);
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.22);
   color: var(--reader-text);
   padding: 16px;
+}
+
+.reader-word-body {
+  max-height: min(calc(60vh - 32px), 420px);
+  overflow-y: auto;
 }
 
 .reader-word-head {
