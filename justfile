@@ -162,9 +162,12 @@ v2 learners="1000" seed="1": content
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p tools/sim/bench/v2
+    tmp="$(mktemp)"
+    trap 'rm -f "$tmp"' EXIT
     cargo run --locked --release --quiet -p refl-sim --bin v2 -- \
-        content/bench/v3/bundle.json target/bundle.json {{learners}} {{seed}} \
-        | tee tools/sim/bench/v2/report-seed{{seed}}.txt
+        content/bench/v3/bundle.json target/bundle.json {{learners}} {{seed}} > "$tmp"
+    mv "$tmp" tools/sim/bench/v2/report-seed{{seed}}.txt
+    trap - EXIT
 
 # W24: 1,000 learners x 200 steps on the live and full 32-KC bundles (writes the report)
 hetero learners="1000" steps="200" seed="1": content
