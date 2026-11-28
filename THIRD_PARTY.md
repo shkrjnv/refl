@@ -24,3 +24,14 @@ Every dataset, dictionary, voice or model that refl uses but did not write is li
 | License | SCOWL copyright: permissive, MIT-like; it collects notices of its sources (Moby, UKACD, WordNet, Ispell and others). Full text: [`licenses/SCOWL.txt`](licenses/SCOWL.txt), copied verbatim from the package |
 | What it requires | the copyright and permission notices appear with every copy of the word list and in supporting documentation; the UKACD notice must be displayed prominently with the text of its license. Nothing restricts commercial use, and the lexicon does not make our content a derivative work |
 | How we comply | `licenses/SCOWL.txt` lives in the repository; the server serves it next to every lexicon file, and the client shows it on its licenses screen (both from stage 1, when the lexicon is first shipped to devices) |
+
+## Graded readers
+
+| | |
+| --- | --- |
+| What | "The First Day" (`book.first-day`), an original A1 graded reader, and every other manifest under `content/books/` |
+| Used for | the offline reader and personalized lexical coverage ([docs/16](docs/16-vocabulary-library-notes-graph.md), «Компилятор книг») |
+| Where from | written for refl; each book names its own author, edition or URL in `source` |
+| License | original work of the refl author for the starter reader; public-domain and attribution licenses are accepted by `book-build`, copyleft is not |
+| What it requires | original and public-domain books carry no third-party attribution; a `cc-by` book must name its author and source in the manifest and here |
+| How we comply | `book-build` refuses a book whose id has no record here and in `content/LICENSE`; `just books` compiles only checked manifests |

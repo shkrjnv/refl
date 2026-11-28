@@ -137,6 +137,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "book-build"
+version = "0.0.0"
+dependencies = [
+ "content-build",
+ "refl-core",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "borsh"
 version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

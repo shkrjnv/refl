@@ -13,3 +13,8 @@ or service, requires prior written permission from the copyright holder.
 The schema files in content/lib/ are part of the software and are licensed
 under the GNU Affero General Public License v3.0 only, like the rest of the
 repository.
+
+Graded readers under content/books/, including book.first-day ("The First
+Day"), are original works by the copyright holder and are covered by the
+terms above. Third-party public-domain or attribution-licensed readers are
+listed in THIRD_PARTY.md together with their license and attribution.

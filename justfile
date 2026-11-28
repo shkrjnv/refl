@@ -256,6 +256,10 @@ missing:
 content:
     cargo run --locked --quiet -p content-build -- content --out target/bundle.json
 
+# Compile indexed graded readers into target/books/ (after `just content`)
+books: content
+    cargo run --locked --quiet -p book-build -- content/books --bundle target/bundle.json --out target/books
+
 # Build the bundle + SCOWL dictionary and make that pair the active content.
 # Idempotent; `just dev` runs it before starting the server so a fresh database
 # can serve /v1/content/active and /v1/content/lexicon/{version}.
