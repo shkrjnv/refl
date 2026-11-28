@@ -654,6 +654,11 @@ input:focus-visible {
   color: var(--bg);
 }
 
+.hero-picture {
+  position: absolute;
+  inset: 0;
+}
+
 .hero-illustration {
   position: absolute;
   inset: 0;
