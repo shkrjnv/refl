@@ -274,15 +274,24 @@ fn fold(
     events_json: &str,
 ) -> Result<Value, BridgeError> {
     let bundle = parse_bundle(bundle_json)?;
+    let families = Families::of(&bundle);
+    fold_with(&bundle, &families, snapshot_json_opt, events_json)
+}
+
+fn fold_with(
+    bundle: &Bundle,
+    families: &Families,
+    snapshot_json_opt: Option<&str>,
+    events_json: &str,
+) -> Result<Value, BridgeError> {
     let snapshot = parse_snapshot(snapshot_json_opt)?;
     let mut events = parse_events(events_json)?;
     let model = KnowledgeModel::default();
     let state = match snapshot {
-        None => replay(&model, &Profile::default(), &bundle, &events),
+        None => replay(&model, &Profile::default(), bundle, &events),
         Some(mut state) => {
             events.sort_by(|a, b| event_id(a).cmp(event_id(b)));
-            let families = Families::of(&bundle);
-            let context = FoldCtx::new(&bundle, &families);
+            let context = FoldCtx::new(bundle, families);
             for event in &events {
                 model
                     .apply(&mut state, event, &context)
@@ -478,6 +487,15 @@ fn plan(
     budget_ms: f64,
 ) -> Result<Value, BridgeError> {
     let bundle = parse_bundle(bundle_json)?;
+    plan_with(&bundle, snapshot_json, now_ms, budget_ms)
+}
+
+fn plan_with(
+    bundle: &Bundle,
+    snapshot_json: &str,
+    now_ms: f64,
+    budget_ms: f64,
+) -> Result<Value, BridgeError> {
     let state = parse_state(snapshot_json)?;
     let now = timestamp(now_ms)?;
     let budget = budget(budget_ms)?;
@@ -487,7 +505,7 @@ fn plan(
     let history = History::default();
     let plan_seed =
         Seed::new(0).ok_or_else(|| BridgeError::new("invalid_seed", "seed is unsafe"))?;
-    let planner = Planner::new(&model, &bundle, &params, &reading_speed);
+    let planner = Planner::new(&model, bundle, &params, &reading_speed);
     let session = planner.build_session(&state, &history, now, budget, Lang::En, plan_seed);
     Ok(json!({
         "plan": to_value(&session.plan)?,
@@ -540,6 +558,15 @@ fn placement_start_inner(
     now_ms: f64,
 ) -> Result<Value, BridgeError> {
     let bundle = parse_bundle(bundle_json)?;
+    placement_start_with(&bundle, snapshot_json, subject, now_ms)
+}
+
+fn placement_start_with(
+    bundle: &Bundle,
+    snapshot_json: &str,
+    subject: &str,
+    now_ms: f64,
+) -> Result<Value, BridgeError> {
     let state = parse_state(snapshot_json)?;
     let now = timestamp(now_ms)?;
     let subject = SubjectId::new(subject)
@@ -549,7 +576,7 @@ fn placement_start_inner(
         asked: Vec::new(),
         correct: 0,
     };
-    placement_value(&bundle, &state, &placement, now)
+    placement_value(bundle, &state, &placement, now)
 }
 
 #[wasm_bindgen]
@@ -574,10 +601,19 @@ fn placement_next_inner(
     now_ms: f64,
 ) -> Result<Value, BridgeError> {
     let bundle = parse_bundle(bundle_json)?;
+    placement_next_with(&bundle, snapshot_json, placement_json, now_ms)
+}
+
+fn placement_next_with(
+    bundle: &Bundle,
+    snapshot_json: &str,
+    placement_json: &str,
+    now_ms: f64,
+) -> Result<Value, BridgeError> {
     let state = parse_state(snapshot_json)?;
     let now = timestamp(now_ms)?;
     let placement = parse_placement(placement_json)?;
-    placement_value(&bundle, &state, &placement, now)
+    placement_value(bundle, &state, &placement, now)
 }
 
 #[wasm_bindgen]
@@ -605,18 +641,38 @@ fn placement_answer_inner(
     now_ms: f64,
 ) -> Result<Value, BridgeError> {
     let bundle = parse_bundle(bundle_json)?;
+    placement_answer_with(
+        &bundle,
+        snapshot_json,
+        placement_json,
+        item_ref_json,
+        slot,
+        correct,
+        now_ms,
+    )
+}
+
+fn placement_answer_with(
+    bundle: &Bundle,
+    snapshot_json: &str,
+    placement_json: &str,
+    item_ref_json: &str,
+    slot: u16,
+    correct: bool,
+    now_ms: f64,
+) -> Result<Value, BridgeError> {
     let state = parse_state(snapshot_json)?;
     let now = timestamp(now_ms)?;
     let mut placement = parse_placement(placement_json)?;
     let item: ItemRef = serde_json::from_str(item_ref_json)
         .map_err(|error| BridgeError::json(&error, "invalid_item"))?;
-    if !placement::record(&bundle, &mut placement, item, slot, correct) {
+    if !placement::record(bundle, &mut placement, item, slot, correct) {
         return Err(BridgeError::new(
             "invalid_placement_answer",
             "item was already asked or is not an eligible checked item",
         ));
     }
-    placement_value(&bundle, &state, &placement, now)
+    placement_value(bundle, &state, &placement, now)
 }
 
 #[wasm_bindgen]
@@ -703,10 +759,19 @@ fn next(
     now_ms: f64,
 ) -> Result<Value, BridgeError> {
     let bundle = parse_bundle(bundle_json)?;
+    next_with(&bundle, snapshot_json, plan_json, now_ms)
+}
+
+fn next_with(
+    bundle: &Bundle,
+    snapshot_json: &str,
+    plan_json: &str,
+    now_ms: f64,
+) -> Result<Value, BridgeError> {
     let state = parse_state(snapshot_json)?;
     let plan = parse_plan(plan_json)?;
     let now = timestamp(now_ms)?;
-    next_value(&bundle, &state, &plan, now)
+    next_value(bundle, &state, &plan, now)
 }
 
 #[wasm_bindgen]
@@ -756,6 +821,16 @@ fn replan(
     now_ms: f64,
 ) -> Result<Value, BridgeError> {
     let bundle = parse_bundle(bundle_json)?;
+    replan_with(&bundle, snapshot_json, plan_json, outcome_json, now_ms)
+}
+
+fn replan_with(
+    bundle: &Bundle,
+    snapshot_json: &str,
+    plan_json: &str,
+    outcome_json: &str,
+    now_ms: f64,
+) -> Result<Value, BridgeError> {
     let state = parse_state(snapshot_json)?;
     let plan = parse_plan(plan_json)?;
     let outcome: OutcomeInput = serde_json::from_str(outcome_json)
@@ -764,7 +839,7 @@ fn replan(
     let model = KnowledgeModel::default();
     let params = Params::default();
     let reading_speed = ReadingSpeed::default();
-    let planner = Planner::new(&model, &bundle, &params, &reading_speed);
+    let planner = Planner::new(&model, bundle, &params, &reading_speed);
     let adapted = planner.adapt(&state, &plan, &outcome.into(), now);
     Ok(json!({
         "plan": to_value(&adapted.plan)?,
@@ -813,6 +888,22 @@ fn answer(
     }
     let bundle = parse_bundle(bundle_json)?;
     let lexicon = parse_lexicon(lexicon_json)?;
+    answer_with(&bundle, &lexicon, item_ref_json, response_json, elapsed_ms)
+}
+
+fn answer_with(
+    bundle: &Bundle,
+    lexicon: &Lexicon,
+    item_ref_json: &str,
+    response_json: &str,
+    elapsed_ms: f64,
+) -> Result<Value, BridgeError> {
+    if !elapsed_ms.is_finite() || elapsed_ms < 0.0 {
+        return Err(BridgeError::new(
+            "invalid_elapsed",
+            "elapsed_ms must be finite and non-negative",
+        ));
+    }
     let target: CheckTarget = serde_json::from_str(item_ref_json)
         .map_err(|error| BridgeError::json(&error, "invalid_item_ref"))?;
     let response = parse_response(response_json)?;
@@ -826,10 +917,7 @@ fn answer(
         slots: &entry.slots,
         tokens: &bundle.content.tokens,
     };
-    let context = CheckCtx {
-        compiled,
-        lexicon: &lexicon,
-    };
+    let context = CheckCtx { compiled, lexicon };
     let outcome = entry.item.body.check(target.slot, &response, &context);
     match outcome {
         CheckOutcome::Checked {
@@ -867,4 +955,147 @@ pub fn check_answer(
         response_json,
         elapsed_ms,
     ))
+}
+
+/// Parsed content kept in WASM memory for the lifetime of one content
+/// version. Every free function above parses the bundle (and, for answer
+/// checks, the whole lexicon) on each call; a browser session calls them
+/// per answer, so the parse dominates the cost. `CoreContext` parses once
+/// and answers the same calls with identical output.
+#[derive(Debug)]
+#[wasm_bindgen]
+pub struct CoreContext {
+    bundle: Bundle,
+    families: Families,
+    lexicon: Option<Lexicon>,
+}
+
+impl CoreContext {
+    fn lexicon(&self) -> Result<&Lexicon, BridgeError> {
+        self.lexicon.as_ref().ok_or_else(|| {
+            BridgeError::new("no_lexicon", "the context was created without a lexicon")
+        })
+    }
+}
+
+#[wasm_bindgen]
+impl CoreContext {
+    /// Parse a bundle and, optionally, its lexicon once.
+    ///
+    /// # Errors
+    /// Returns the bridge error as a JavaScript string when the bundle or
+    /// lexicon is invalid.
+    #[allow(clippy::needless_pass_by_value)] // wasm-bindgen owns the JS string
+    #[wasm_bindgen(constructor)]
+    pub fn new(bundle_json: &str, lexicon_json: Option<String>) -> Result<CoreContext, JsValue> {
+        let bundle = parse_bundle(bundle_json).map_err(|error| js_error(&error))?;
+        let lexicon = match lexicon_json.as_deref() {
+            Some(json) => Some(parse_lexicon(json).map_err(|error| js_error(&error))?),
+            None => None,
+        };
+        let families = Families::of(&bundle);
+        Ok(Self {
+            bundle,
+            families,
+            lexicon,
+        })
+    }
+
+    /// Same result as [`fold_state`].
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn fold_state(&self, snapshot_json_opt: Option<String>, events_json: &str) -> String {
+        export(fold_with(
+            &self.bundle,
+            &self.families,
+            snapshot_json_opt.as_deref(),
+            events_json,
+        ))
+    }
+
+    /// Same result as [`plan_session`].
+    pub fn plan_session(&self, snapshot_json: &str, now_ms: f64, budget_ms: f64) -> String {
+        export(plan_with(&self.bundle, snapshot_json, now_ms, budget_ms))
+    }
+
+    /// Same result as [`next_item`].
+    pub fn next_item(&self, snapshot_json: &str, plan_json: &str, now_ms: f64) -> String {
+        export(next_with(&self.bundle, snapshot_json, plan_json, now_ms))
+    }
+
+    /// Same result as [`replan_session`].
+    pub fn replan_session(
+        &self,
+        snapshot_json: &str,
+        plan_json: &str,
+        outcome_json: &str,
+        now_ms: f64,
+    ) -> String {
+        export(replan_with(
+            &self.bundle,
+            snapshot_json,
+            plan_json,
+            outcome_json,
+            now_ms,
+        ))
+    }
+
+    /// Same result as [`check_answer`].
+    pub fn check_answer(
+        &self,
+        item_ref_json: &str,
+        response_json: &str,
+        elapsed_ms: f64,
+    ) -> String {
+        export(self.lexicon().and_then(|lexicon| {
+            answer_with(
+                &self.bundle,
+                lexicon,
+                item_ref_json,
+                response_json,
+                elapsed_ms,
+            )
+        }))
+    }
+
+    /// Same result as [`placement_start`].
+    pub fn placement_start(&self, snapshot_json: &str, subject: &str, now_ms: f64) -> String {
+        export(placement_start_with(
+            &self.bundle,
+            snapshot_json,
+            subject,
+            now_ms,
+        ))
+    }
+
+    /// Same result as [`placement_next`].
+    pub fn placement_next(&self, snapshot_json: &str, placement_json: &str, now_ms: f64) -> String {
+        export(placement_next_with(
+            &self.bundle,
+            snapshot_json,
+            placement_json,
+            now_ms,
+        ))
+    }
+
+    /// Same result as [`placement_answer`].
+    #[allow(clippy::too_many_arguments)]
+    pub fn placement_answer(
+        &self,
+        snapshot_json: &str,
+        placement_json: &str,
+        item_ref_json: &str,
+        slot: u16,
+        correct: bool,
+        now_ms: f64,
+    ) -> String {
+        export(placement_answer_with(
+            &self.bundle,
+            snapshot_json,
+            placement_json,
+            item_ref_json,
+            slot,
+            correct,
+            now_ms,
+        ))
+    }
 }

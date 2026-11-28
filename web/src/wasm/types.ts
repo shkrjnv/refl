@@ -113,7 +113,38 @@ export interface BookCoverageResult {
   };
 }
 
+/**
+ * Parsed content kept in WASM memory (`CoreContext` in core-wasm). The same
+ * calls as the stateless functions, without re-parsing the bundle and the
+ * lexicon on every call.
+ */
+export interface WasmContext {
+  foldState(snapshotJson: string | null, eventsJson: string): string;
+  planSession(snapshotJson: string, nowMs: number, budgetMs: number): string;
+  nextItem(snapshotJson: string, planJson: string, nowMs: number): string;
+  replanSession(
+    snapshotJson: string,
+    planJson: string,
+    outcomeJson: string,
+    nowMs: number,
+  ): string;
+  checkAnswer(itemRefJson: string, responseJson: string, elapsedMs: number): string;
+  placementStart(snapshotJson: string, subject: string, nowMs: number): string;
+  placementNext(snapshotJson: string, placementJson: string, nowMs: number): string;
+  placementAnswer(
+    snapshotJson: string,
+    placementJson: string,
+    itemRefJson: string,
+    slot: number,
+    correct: boolean,
+    nowMs: number,
+  ): string;
+  free(): void;
+}
+
 export interface WasmCore {
+  /** Throws a string error when the bundle or lexicon is invalid. */
+  createContext(bundleJson: string, lexiconJson: string | null): WasmContext;
   coreInfo(): string;
   checkBundleCompatibility(bundleJson: string): string;
   decodeEvent(eventJson: string): string;
