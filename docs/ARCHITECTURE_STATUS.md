@@ -1,6 +1,6 @@
 # Architecture status
 
-**2026-11-28 · Batch 4B.** This is the single technical reference for what is
+**2026-11-28 · Batch 4B, W31 UI pass.** This is the single technical reference for what is
 implemented, how the pieces fit, and what is deliberately deferred. The
 normative product rules stay in the numbered specifications; this document
 describes the running system and links each module to its spec.
@@ -157,12 +157,16 @@ unless `just book-relock` is run explicitly.
 | --- | --- |
 | Today | first-run entry, placement, Iella tour, level, session, activity, error notebook, private notes |
 | Vocabulary | search, FSRS status filters, senses, glosses, IPA, examples, focused review, personal words |
-| Library | live grammar reference (short/why/deep + L1 contrast), L1 traps & refutations, cover-first bookshelf with personal EPUB/PDF/TXT/Markdown uploads and compressed covers, full-screen themed reader with annotations |
-| Notes | full Markdown workspace with reader/editor, wiki links, outline, backlinks and a local graph; opened from Today, Library or an anchored drawer |
-| Graph | layered mobile map and web explorer, neighbourhood focus, model numbers, notes, practice |
+| Library | live grammar reference (short/why/deep + L1 contrast), L1 traps & refutations, cover-first bookshelf with personal EPUB/PDF/TXT/Markdown uploads and compressed covers, full-screen themed reader with Pages (CSS-column pagination, page turns by button, arrow keys and swipe, `Page X of Y`) or Scroll mode, a chapters-and-sections contents drawer, and annotations |
+| Notes | top-level section: explorer (search, anchor filters), tabbed Markdown editor/preview with a formatting toolbar and status bar, inspector with outline, backlinks & properties and a radial local graph; also opened from Today, Library, Graph or an anchored drawer, which adds a Back button |
+| Graph | layered map and web explorer on one pixel stage (text-sized cards, pan/zoom, legend), neighbourhood focus, back trail, model numbers, notes, practice |
 | Practice | lesson runner |
 | Progress | isometric CEFR chart, stats |
 | Profile / Settings | level, milestones, companion picker, appearance, sync, export/erase |
+
+Navigation: the desktop sidebar lists Today, Vocabulary, Library, Notes, Graph, Practice and Progress, with Profile on the learner card. The phone dock has five equal slots — Today, Vocabulary, Library, Notes and More — so labels fit whole from 360 px in all three locales; More opens Graph, Practice, Progress and Profile.
+
+Layout engines are pure modules with tests: `prototype/graphLayout.ts` sizes graph cards from their text and lays out both graph modes and the notes local graph in CSS pixels with one rectangle-collision solver; `prototype/readerToc.ts` derives contents sections; `prototype/noteFormat.ts` implements the notes toolbar.
 
 All screens use semantic `var(--...)` tokens from Live Studio and the other
 palettes, self-hosted fonts and no external requests. The first paint is a
