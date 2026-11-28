@@ -12,6 +12,8 @@ use refl_core::Event;
 use refl_core::content::{Edge, Explanation, Instruction, Kc, Misconception};
 use refl_core::item::Item;
 use refl_core::lesson::Lesson;
+use refl_core::quality::QualityReport;
+use refl_core::stats::PeriodStats;
 use refl_core::subject::Subject;
 use ts_rs::{Config, TS};
 
@@ -30,6 +32,8 @@ fn export_all(dir: &Path) {
     Instruction::export_all(&cfg).unwrap();
     Lesson::export_all(&cfg).unwrap();
     Subject::export_all(&cfg).unwrap();
+    QualityReport::export_all(&cfg).unwrap();
+    PeriodStats::export_all(&cfg).unwrap();
 }
 
 fn read_tree(dir: &Path) -> BTreeMap<PathBuf, String> {

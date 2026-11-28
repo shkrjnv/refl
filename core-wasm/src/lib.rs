@@ -648,9 +648,8 @@ fn next_value(
     let model = KnowledgeModel::default();
     let params = Params::default();
     let reading_speed = ReadingSpeed::default();
-    let history = History::default();
     let planner = Planner::new(&model, bundle, &params, &reading_speed);
-    match planner.next_item(state, plan, &history, now, plan.seed) {
+    match planner.next_item(state, plan, &plan.history, now, plan.seed) {
         Next::Lesson { kc, explanation } => Ok(json!({
             "kind": "lesson",
             "kc": kc,
@@ -661,6 +660,7 @@ fn next_value(
             "item": to_value(&choice.item)?,
             "slot": choice.slot,
             "issued": to_value(&choice.issued)?,
+            "context": to_value(&choice.context)?,
         })),
         Next::Finished { end } => Ok(json!({
             "kind": "finished",

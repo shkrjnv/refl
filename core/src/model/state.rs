@@ -32,6 +32,11 @@ pub struct State {
     /// Time of the last answer per subject: the break threshold.
     pub last_answer: BTreeMap<SubjectId, Timestamp>,
     pub rapid: RapidStats,
+    /// When each KC first crossed the mastery criterion. Audit probes use
+    /// the 7/30/90-day milestones (`docs/11-quality.md`, «К4»); a state
+    /// written before this field existed simply has no dates yet.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub mastered_at: BTreeMap<KcId, Timestamp>,
     /// The session of the latest answer and the instructions shown in it
     /// (`docs/03-layer2-learner-model.md`, «Беглость»).
     pub session: Option<SessionId>,
@@ -113,6 +118,7 @@ impl State {
             misconceptions: BTreeMap::new(),
             last_answer: BTreeMap::new(),
             rapid: RapidStats::default(),
+            mastered_at: BTreeMap::new(),
             session: None,
             session_instructions: BTreeSet::new(),
             timing_inconsistent: 0,

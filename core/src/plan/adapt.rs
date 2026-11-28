@@ -89,6 +89,9 @@ impl Planner<'_> {
     fn fired(&self, s: &State, plan: &Plan, now: Timestamp) -> Option<Rule> {
         let p = self.params;
         let last = plan.done.last()?;
+        if last.step.phase.is_probe() {
+            return None;
+        }
         let shown = last.shown.as_ref()?;
         let kc = &last.step.kc;
         // Non-rapid answers on the KC in this session, oldest first.

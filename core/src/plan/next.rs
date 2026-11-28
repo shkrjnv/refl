@@ -41,7 +41,7 @@ impl<'a> Planner<'a> {
             Phase::Block => Some(p.p_block),
             Phase::Interleaved | Phase::Final => Some(p.p_interleaved),
             Phase::Prerequisite => Some(p.p_prerequisite),
-            Phase::Review | Phase::Lesson => None,
+            Phase::Review | Phase::Lesson | Phase::Audit | Phase::ReturnCheck => None,
         }
     }
 
@@ -82,6 +82,17 @@ impl<'a> Planner<'a> {
                     .is_none_or(|f| &c.projection.family == f)
             })
             .collect();
+        let session_families: BTreeSet<_> = plan.shown().map(|(_, sh)| &sh.family).collect();
+        if step.phase.is_probe() {
+            let stale = Timestamp(now.0 - 30 * 86_400_000);
+            slots.retain(|c| {
+                c.projection.is_production()
+                    && !session_families.contains(&c.projection.family)
+                    && history
+                        .last_shown(&c.projection.family)
+                        .is_none_or(|t| t <= stale)
+            });
+        }
         if step.production {
             slots.retain(|c| c.projection.is_production());
         } else if step.phase == Phase::Review {
@@ -102,7 +113,6 @@ impl<'a> Planner<'a> {
                 .any(|m| active.contains(m))
         });
 
-        let session_families: BTreeSet<_> = plan.shown().map(|(_, sh)| &sh.family).collect();
         #[allow(clippy::cast_possible_truncation)] // days fit i64 ms
         let window = Timestamp(now.0 - (p.seen_days * DAY_MS) as i64);
         let target = self.target(step.phase);
@@ -209,6 +219,7 @@ impl<'a> Planner<'a> {
             .collect();
         let item = chosen.slot.item.clone();
         let slot = chosen.slot.slot;
+        let context = step.phase.context();
         let issued = PlanIssuedEvent {
             planner_version: self.version(),
             model_version: self.model.version(),
@@ -222,7 +233,12 @@ impl<'a> Planner<'a> {
             trigger: None,
             end: None,
         };
-        Next::Item(Choice { item, slot, issued })
+        Next::Item(Choice {
+            item,
+            slot,
+            issued,
+            context,
+        })
     }
 
     /// The factor «Почему это задание» names for an item choice.
@@ -238,6 +254,8 @@ impl<'a> Planner<'a> {
             Phase::Review => return "memory",
             Phase::Prerequisite => return "root_cause",
             Phase::Final => return "session_error",
+            Phase::Audit => return "audit",
+            Phase::ReturnCheck => return "return_check",
             Phase::Lesson | Phase::Block | Phase::Interleaved => {}
         }
         let active = self.active_misconceptions(s, now);

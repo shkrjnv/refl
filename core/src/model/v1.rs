@@ -942,9 +942,11 @@ impl KnowledgeModel {
         }
 
         for kc in &touched {
-            if s.kcs.get(kc).is_some_and(|k| !k.ever_mastered) && self.is_mastered(s, bundle, kc, t)
-            {
+            let newly_mastered = s.kcs.get(kc).is_some_and(|k| !k.ever_mastered)
+                && self.is_mastered(s, bundle, kc, t);
+            if newly_mastered {
                 s.kcs.get_mut(kc).expect("present").ever_mastered = true;
+                s.mastered_at.entry(kc.clone()).or_insert(t);
             }
         }
         Applied::Answer(outcome)
