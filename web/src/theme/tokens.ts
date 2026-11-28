@@ -33,6 +33,20 @@ export type SkinName = (typeof skinNames)[number];
 export const DEFAULT_SKIN: SkinName = "living-studio";
 export const DEFAULT_THEME: PaletteName = "deep-umber";
 
+/** The prototype exposes only the light and dark base schemes (docs/15). */
+export const LIGHT_PALETTE: PaletteName = "cream-paper";
+export const DARK_PALETTE: PaletteName = "deep-umber";
+
+export type ThemeMode = "light" | "dark";
+
+export function themeMode(theme: PaletteName): ThemeMode {
+  return isDarkPalette(theme) ? "dark" : "light";
+}
+
+export function paletteForMode(mode: ThemeMode): PaletteName {
+  return mode === "dark" ? DARK_PALETTE : LIGHT_PALETTE;
+}
+
 export const skinLabelKeys: Record<SkinName, string> = {
   "living-studio": "skin-living-studio",
   "soft-bento": "skin-soft-bento",

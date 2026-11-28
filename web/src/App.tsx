@@ -73,7 +73,6 @@ import {
   type SkinName,
   type ThemeName,
 } from "./theme/tokens";
-import type { JsonObject } from "./types/json";
 import { CoreWorkerClient } from "./worker/client";
 
 interface AppProps {
@@ -140,9 +139,6 @@ export function App({ initialTheme, initialSkin }: AppProps) {
   const [activity, setActivity] = useState<ActivitySummary>(() =>
     activitySummary([], null),
   );
-  const skinRef = useRef<SkinName>(skin);
-  skinRef.current = skin;
-  const appearanceDirtyRef = useRef(false);
   const placementAvailable = useMemo(
     () =>
       content !== null &&
@@ -392,10 +388,6 @@ export function App({ initialTheme, initialSkin }: AppProps) {
       }));
       await refreshLocalState(store);
       setStreak(noteActiveDay());
-      if (appearanceDirtyRef.current) {
-        appearanceDirtyRef.current = false;
-        enqueueThemeSelection(store, learnerId, skinRef.current);
-      }
       setTourOpen(!isTourComplete());
       void api
         .profile()
@@ -699,67 +691,6 @@ export function App({ initialTheme, initialSkin }: AppProps) {
     changeLayout({ nav: next });
   };
 
-  const changeAuthTheme = (next: ThemeName) => {
-    appearanceDirtyRef.current = true;
-    changeTheme(next);
-  };
-
-  const enqueueThemeSelection = (
-    store: LearnerStorage,
-    learnerId: string,
-    next: SkinName,
-  ) => {
-    const stamp = clockRef.current.stamp();
-    const payload: JsonObject = { type: "theme_selected", theme: next };
-    const event: JsonObject = {
-      schema_version: 2,
-      event_id: stamp.event_id,
-      learner_id: learnerId,
-      session_id: null,
-      client_ts: stamp.client_ts,
-      server_ts: null,
-      payload,
-    };
-    void store
-      .rememberThemeSelection({
-        theme: next,
-        event_id: stamp.event_id,
-      })
-      .then(() =>
-        store.queueOutbox({
-          learner_id: learnerId,
-          event_id: stamp.event_id,
-          event,
-          confirmed: false,
-        }),
-      )
-      .then(() => refreshLocalState(store))
-      .then(() => syncNow())
-      .catch(() => undefined);
-  };
-
-  const rememberSkinOnServer = (next: SkinName) => {
-    const store = storageRef.current;
-    const currentIdentity = identity;
-    if (!store || !currentIdentity) {
-      return;
-    }
-    enqueueThemeSelection(store, currentIdentity.learnerId, next);
-  };
-
-  const changeSkin = (next: SkinName) => {
-    if (next === skin) {
-      return;
-    }
-    if (!identity) {
-      appearanceDirtyRef.current = true;
-    }
-    setSkin(next);
-    storeSkin(next);
-    applySkin(next);
-    rememberSkinOnServer(next);
-  };
-
   const exportLocalCache = async () => {
     const store = storageRef.current;
     if (!store) {
@@ -831,7 +762,7 @@ export function App({ initialTheme, initialSkin }: AppProps) {
         locale={locale}
         locales={locales}
         onLocaleChange={setLocale}
-        onThemeChange={changeAuthTheme}
+        onThemeChange={changeTheme}
         onAuthenticated={(tokens, method) => {
           void handleAuthenticated(tokens, method).catch(() =>
             setContentError(true),
@@ -917,8 +848,6 @@ export function App({ initialTheme, initialSkin }: AppProps) {
       onLocaleChange={setLocale}
       theme={theme}
       onThemeChange={changeTheme}
-      skin={skin}
-      onSkinChange={changeSkin}
       navigationPosition={layout.nav}
       onIellaActivate={replayTour}
       lessonAvailable={runner !== null}
@@ -994,8 +923,6 @@ export function App({ initialTheme, initialSkin }: AppProps) {
           onLocaleChange={setLocale}
           theme={theme}
           onThemeChange={changeTheme}
-          skin={skin}
-          onSkinChange={changeSkin}
           navigationPosition={layout.nav}
           onNavigationPositionChange={changeNavigation}
           status={status}

@@ -14,14 +14,10 @@ import { SOURCE_CODE_URL, SOURCE_LICENSE } from "../pwa/links";
 import type { NavigationPosition } from "../prototype/layout";
 import type { AppStatus } from "../prototype/status";
 import {
-  paletteLabelKeys,
-  paletteNames,
-  paletteNoteKeys,
-  skinDescriptionKeys,
-  skinLabelKeys,
-  skinNames,
+  paletteForMode,
+  themeMode,
   type PaletteName,
-  type SkinName,
+  type ThemeMode,
 } from "../theme/tokens";
 import { AdminAccessSection } from "./AdminAccessSection";
 
@@ -33,8 +29,6 @@ export interface SettingsScreenProps {
   onLocaleChange: (locale: Locale) => void;
   theme: PaletteName;
   onThemeChange: (theme: PaletteName) => void;
-  skin: SkinName;
-  onSkinChange: (skin: SkinName) => void;
   navigationPosition: NavigationPosition;
   onNavigationPositionChange: (position: NavigationPosition) => void;
   status: AppStatus;
@@ -85,8 +79,6 @@ export function SettingsScreen({
   onLocaleChange,
   theme,
   onThemeChange,
-  skin,
-  onSkinChange,
   navigationPosition,
   onNavigationPositionChange,
   status,
@@ -291,69 +283,45 @@ export function SettingsScreen({
           <div className="settings-panel-heading">
             <div>
               <h2>{t("profile-appearance")}</h2>
-              <p>{t("profile-palette-note")}</p>
+              <p>{t("profile-appearance-note")}</p>
             </div>
           </div>
 
-          <div className="palette-options" role="group" aria-label={t("app-palette")}>
-            {paletteNames.map((candidate) => (
-              <button
-                key={candidate}
-                type="button"
-                className={`palette-option${theme === candidate ? " selected" : ""}`}
-                aria-pressed={theme === candidate}
-                onClick={() => onThemeChange(candidate)}
-              >
-                <span
-                  className={`palette-preview palette-preview-${candidate}`}
-                  aria-hidden="true"
-                >
-                  <span />
-                  <span />
-                </span>
-                <span className="skin-option-copy">
-                  <strong>{t(paletteLabelKeys[candidate])}</strong>
-                  <span>{t(paletteNoteKeys[candidate])}</span>
-                </span>
-                <CrossfadeIcon
-                  name="palette"
-                  activeName="check"
-                  active={theme === candidate}
-                  size={16}
-                  className="appearance-check"
-                />
-              </button>
-            ))}
-          </div>
-
-          <div className="settings-panel-heading settings-panel-heading-spaced">
-            <div>
-              <h2>{t("profile-skin")}</h2>
-              <p>{t("profile-skin-note")}</p>
-            </div>
-          </div>
-          <div className="skin-options skin-options-wide">
-            {skinNames.map((candidate) => (
-              <button
-                key={candidate}
-                type="button"
-                className={`skin-option${skin === candidate ? " selected" : ""}`}
-                aria-pressed={skin === candidate}
-                onClick={() => onSkinChange(candidate)}
-              >
-                <span
-                  className={`skin-preview skin-preview-${candidate}`}
-                  aria-hidden="true"
-                >
-                  <span />
-                  <span />
-                </span>
-                <span className="skin-option-copy">
-                  <strong>{t(skinLabelKeys[candidate])}</strong>
-                  <span>{t(skinDescriptionKeys[candidate])}</span>
-                </span>
-              </button>
-            ))}
+          <div className="palette-options" role="group" aria-label={t("app-theme")}>
+            {(["light", "dark"] as const satisfies readonly ThemeMode[]).map(
+              (mode) => {
+                const candidate = paletteForMode(mode);
+                const selected = themeMode(theme) === mode;
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    className={`palette-option${selected ? " selected" : ""}`}
+                    aria-pressed={selected}
+                    onClick={() => onThemeChange(candidate)}
+                  >
+                    <span
+                      className={`palette-preview palette-preview-${candidate}`}
+                      aria-hidden="true"
+                    >
+                      <span />
+                      <span />
+                    </span>
+                    <span className="skin-option-copy">
+                      <strong>{t(`theme-${mode}`)}</strong>
+                      <span>{t(`theme-${mode}-note`)}</span>
+                    </span>
+                    <CrossfadeIcon
+                      name="palette"
+                      activeName="check"
+                      active={selected}
+                      size={16}
+                      className="appearance-check"
+                    />
+                  </button>
+                );
+              },
+            )}
           </div>
 
           <Card tone="plain" className="settings-card">

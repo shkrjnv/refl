@@ -19,9 +19,9 @@ import {
   type TelegramLoginPayload,
 } from "../api/client";
 import { AuthBackdrop } from "../components/AuthBackdrop";
-import { PaletteToggle } from "../components/AppearanceMenu";
 import { IellaSprite, type IellaMood } from "../components/IellaSprite";
 import { LanguageMenu } from "../components/LanguageMenu";
+import { ThemeToggle } from "../components/ThemeToggle";
 import {
   BrandLogo,
   ConfirmationCheck,
@@ -464,7 +464,7 @@ export function AuthScreen({
             />
           </div>
           <div className="auth-header-controls">
-            <PaletteToggle theme={theme} onThemeChange={onThemeChange} />
+            <ThemeToggle theme={theme} onThemeChange={onThemeChange} />
           </div>
         </div>
 

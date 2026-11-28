@@ -8,6 +8,13 @@ app-offline = Нет сети
 app-language = Язык
 app-theme = Тема
 app-skin = Оформление
+theme-switch-to-light = Включить светлую тему
+theme-switch-to-dark = Включить тёмную тему
+theme-light = Светлая
+theme-light-note = Кремовая бумага, бирюзовые чернила и светлый фон.
+theme-dark = Тёмная
+theme-dark-note = Тёплая умбра, мягкие чернила и приглушённый фон.
+profile-appearance-note = В прототипе базовая «Живая Студия» работает в светлой и тёмной схеме.
 
 nav-today = Сегодня
 nav-practice = Занятие

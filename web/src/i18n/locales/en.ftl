@@ -8,6 +8,13 @@ app-offline = Offline
 app-language = Language
 app-theme = Theme
 app-skin = Skin
+theme-switch-to-light = Switch to light theme
+theme-switch-to-dark = Switch to dark theme
+theme-light = Light
+theme-light-note = Cream paper, teal ink, and a bright canvas.
+theme-dark = Dark
+theme-dark-note = Warm umber, soft ink, and a low-light canvas.
+profile-appearance-note = The prototype uses the base Living Studio scheme in light or dark.
 
 nav-today = Today
 nav-practice = Practice

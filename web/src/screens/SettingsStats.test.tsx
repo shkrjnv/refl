@@ -61,8 +61,6 @@ function profileProps(): ProfileScreenProps {
     onLocaleChange: () => undefined,
     theme: "deep-umber",
     onThemeChange: () => undefined,
-    skin: "living-studio",
-    onSkinChange: () => undefined,
     navigationPosition: "left",
     onNavigationPositionChange: () => undefined,
     status: initialStatus(true),
@@ -259,10 +257,9 @@ describe("statistics, profile, and settings", () => {
     ).toBeTruthy();
   });
 
-  it("switches language, palette, skin, navigation, and sign-out from settings", async () => {
+  it("switches language, light/dark scheme, navigation, and sign-out from settings", async () => {
     let locale = "en";
     let selectedPalette = "cream-paper";
-    let selectedSkin = "living-studio";
     let navigation: NavigationPosition = "left";
     let signedOut = false;
     render(
@@ -276,10 +273,6 @@ describe("statistics, profile, and settings", () => {
           theme="cream-paper"
           onThemeChange={(next) => {
             selectedPalette = next;
-          }}
-          skin="living-studio"
-          onSkinChange={(next) => {
-            selectedSkin = next;
           }}
           navigationPosition={navigation}
           onNavigationPositionChange={(next) => {
@@ -322,13 +315,14 @@ describe("statistics, profile, and settings", () => {
     fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
     expect(signedOut).toBe(true);
     fireEvent.click(screen.getByRole("tab", { name: "Appearance" }));
-    fireEvent.click(screen.getByRole("button", { name: /Sand & Forest/ }));
-    fireEvent.click(screen.getByRole("button", { name: /Laboratory/ }));
-    fireEvent.click(screen.getByRole("button", { name: /Neo-brutalism/ }));
+    expect(
+      screen.queryByRole("button", { name: /Burgundy Studio/ }),
+    ).toBeNull();
+    expect(screen.getByRole("button", { name: /^Light/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^Dark/ }));
     fireEvent.click(screen.getByRole("button", { name: "Right rail" }));
     expect(locale).toBe("ru");
-    expect(selectedPalette).toBe("sand-forest");
-    expect(selectedSkin).toBe("neo-brutalism");
+    expect(selectedPalette).toBe("deep-umber");
     expect(navigation).toBe("right");
     expect(screen.getByText("Settings")).toBeTruthy();
     fireEvent.click(screen.getByRole("tab", { name: "Offline & Data" }));
@@ -342,8 +336,6 @@ describe("statistics, profile, and settings", () => {
       onLocaleChange: () => undefined,
       theme: "deep-umber" as const,
       onThemeChange: () => undefined,
-      skin: "living-studio" as const,
-      onSkinChange: () => undefined,
       navigationPosition: "left" as const,
       onNavigationPositionChange: () => undefined,
       status: initialStatus(true),

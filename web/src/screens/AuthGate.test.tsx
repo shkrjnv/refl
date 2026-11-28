@@ -354,7 +354,9 @@ describe("auth and access flow", () => {
       );
     }
     render(<Harness />);
-    fireEvent.click(screen.getByRole("button", { name: "Cream Paper" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Switch to light theme" }),
+    );
     expect(selected).toBe("cream-paper");
     expect(window.localStorage.getItem("refl.theme")).toBe("cream-paper");
     expect(window.localStorage.getItem("refl.palette")).toBe("cream-paper");
@@ -362,7 +364,7 @@ describe("auth and access flow", () => {
     expect(document.documentElement.dataset["theme"]).toBe("light");
   });
 
-  it("renders the editorial studio copy and all five palette chips", () => {
+  it("renders the editorial studio copy and one scheme toggle", () => {
     render(
       <I18nProvider initialLocale="en">
         <AuthGate
@@ -406,51 +408,17 @@ describe("auth and access flow", () => {
     expect(title?.classList.contains("auth-title-liquid")).toBe(false);
     expect(title?.classList.contains("auth-form-title")).toBe(true);
     expect(document.querySelector(".auth-form-header .auth-card-subtitle")).toBeNull();
-    for (const name of [
-      "Deep Umber",
-      "Burgundy Studio",
-      "Midnight Cobalt",
-      "Cream Paper",
-      "Sand & Forest",
-    ]) {
-      expect(screen.getByRole("button", { name })).toBeTruthy();
-    }
-
-    const choices = Array.from(
-      document.querySelectorAll<HTMLButtonElement>(
-        ".auth-panel-topbar .palette-choice",
-      ),
-    );
-    expect(choices).toHaveLength(5);
     expect(
-      document.querySelectorAll(".auth-panel-topbar .appearance-chip-swatch"),
-    ).toHaveLength(5);
-    expect(choices.filter((choice) => choice.classList.contains("active"))).toHaveLength(
-      1,
-    );
+      screen.getByRole("button", { name: "Switch to light theme" }),
+    ).toBeTruthy();
+    expect(document.querySelectorAll(".auth-panel-topbar .palette-choice"))
+      .toHaveLength(0);
     expect(
-      choices
-        .find((choice) => choice.classList.contains("active"))
-        ?.querySelector(".palette-swatch-burgundy"),
-    ).not.toBeNull();
-
-    const css = readFileSync("src/app.css", "utf8");
-    const toggle = cssRule(css, ".auth-panel-topbar .palette-toggle {");
-    expect(toggle).toContain("gap: 6px");
-    expect(toggle).toContain("padding: 4px");
-    const choice = cssRule(
-      css,
-      ".auth-panel-topbar .palette-choice,\n.auth-panel-topbar .palette-choice.active {",
-    );
-    expect(choice).toContain("width: 28px");
-    expect(choice).toContain("min-height: 28px");
-    const activeSwatch = cssRule(
-      css,
-      ".auth-panel-topbar .palette-choice.active .appearance-chip-swatch {",
-    );
-    expect(activeSwatch).toContain("outline: 2px solid var(--text)");
-    expect(activeSwatch).toContain("outline-offset: 2px");
-    expect(activeSwatch).not.toContain("0 0 0 3.5px");
+      screen.queryByRole("button", { name: "Burgundy Studio" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Sand & Forest" }),
+    ).toBeNull();
   });
 
   it("renders one clean email input with a single inset focus ring", () => {

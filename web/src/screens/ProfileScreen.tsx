@@ -20,7 +20,7 @@ import {
   weakestKcs,
 } from "../prototype/progress";
 import type { AppStatus } from "../prototype/status";
-import type { PaletteName, SkinName } from "../theme/tokens";
+import type { PaletteName } from "../theme/tokens";
 import { SettingsScreen } from "./SettingsScreen";
 
 export type ProfileVisibility = "self" | "team" | "friends" | "everyone";
@@ -38,8 +38,6 @@ export interface ProfileScreenProps {
   onLocaleChange: (locale: Locale) => void;
   theme: PaletteName;
   onThemeChange: (theme: PaletteName) => void;
-  skin: SkinName;
-  onSkinChange: (skin: SkinName) => void;
   navigationPosition: NavigationPosition;
   onNavigationPositionChange: (position: NavigationPosition) => void;
   status: AppStatus;
@@ -82,8 +80,6 @@ export function ProfileScreen({
   onLocaleChange,
   theme,
   onThemeChange,
-  skin,
-  onSkinChange,
   navigationPosition,
   onNavigationPositionChange,
   status,
@@ -247,8 +243,6 @@ export function ProfileScreen({
           onLocaleChange={onLocaleChange}
           theme={theme}
           onThemeChange={onThemeChange}
-          skin={skin}
-          onSkinChange={onSkinChange}
           navigationPosition={navigationPosition}
           onNavigationPositionChange={onNavigationPositionChange}
           status={status}

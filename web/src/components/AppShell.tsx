@@ -4,11 +4,11 @@ import type { Locale } from "../i18n";
 import { useTranslation } from "../i18n";
 import { SOURCE_CODE_URL, SOURCE_LICENSE } from "../pwa/links";
 import type { NavigationPosition } from "../prototype/layout";
-import type { SkinName, ThemeName } from "../theme/tokens";
-import { AppearanceMenu, PaletteToggle } from "./AppearanceMenu";
+import type { ThemeName } from "../theme/tokens";
 import { IellaSprite } from "./IellaSprite";
 import { LanguageMenu } from "./LanguageMenu";
 import { BrandLogo, StudioIcon, type StudioIconName } from "./StudioIcons";
+import { ThemeToggle } from "./ThemeToggle";
 
 export type AppRoute = "today" | "lesson" | "stats" | "profile";
 
@@ -22,8 +22,6 @@ export interface AppShellProps {
   onLocaleChange: (locale: Locale) => void;
   theme: ThemeName;
   onThemeChange: (theme: ThemeName) => void;
-  skin: SkinName;
-  onSkinChange: (skin: SkinName) => void;
   navigationPosition: NavigationPosition;
   onIellaActivate?: () => void;
   lessonAvailable?: boolean;
@@ -46,8 +44,6 @@ export function AppShell({
   onLocaleChange,
   theme,
   onThemeChange,
-  skin,
-  onSkinChange,
   navigationPosition,
   onIellaActivate,
   lessonAvailable = false,
@@ -145,11 +141,7 @@ export function AppShell({
               locales={locales}
               onLocaleChange={onLocaleChange}
             />
-            <PaletteToggle
-              theme={theme}
-              onThemeChange={onThemeChange}
-            />
-            <AppearanceMenu skin={skin} onSkinChange={onSkinChange} />
+            <ThemeToggle theme={theme} onThemeChange={onThemeChange} />
           </div>
         </header>
         <main className="studio-content">{children}</main>

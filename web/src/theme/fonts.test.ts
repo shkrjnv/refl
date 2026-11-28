@@ -55,5 +55,17 @@ describe("self-hosted fonts", () => {
     expect(css).toContain('font-family: "Geologica"');
     expect(css).toContain('font-family: "Pixelify Sans"');
   });
+
+  it("keeps the brand wordmark in Geologica, not the pixel accent face", () => {
+    const css = readFileSync(new URL("../app.css", import.meta.url), "utf8");
+    const brandRules = [...css.matchAll(/\.brand-name \{[^}]*\}/gs)]
+      .map((match) => match[0])
+      .filter((rule) => rule.includes("font-family"));
+    expect(brandRules.length).toBeGreaterThan(0);
+    for (const rule of brandRules) {
+      expect(rule).toContain("font-family: var(--font-family)");
+      expect(rule).not.toContain("var(--font-pixel)");
+    }
+  });
 });
 

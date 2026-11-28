@@ -8,6 +8,13 @@ app-offline = Aloqa yo‘q
 app-language = Til
 app-theme = Mavzu
 app-skin = Uslub
+theme-switch-to-light = Yorug‘ mavzuni yoqish
+theme-switch-to-dark = Tungi mavzuni yoqish
+theme-light = Yorug‘
+theme-light-note = Krem qog‘oz, feruza siyoh va yorug‘ fon.
+theme-dark = Tungi
+theme-dark-note = Iliq umbra, yumshoq siyoh va xira fon.
+profile-appearance-note = Prototipda asosiy «Tirik studiya» yorug‘ va tungi sxemada ishlaydi.
 
 nav-today = Bugun
 nav-practice = Mashq

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { I18nProvider } from "../i18n";
 import type { NavigationPosition } from "../prototype/layout";
+import type { ThemeName } from "../theme/tokens";
 import { AppShell, type AppRoute } from "./AppShell";
 
 afterEach(cleanup);
@@ -13,6 +14,7 @@ function renderShell(
   navigationPosition: NavigationPosition,
   onNavigate: (route: AppRoute) => void = () => undefined,
   active: AppRoute = "today",
+  onThemeChange: (theme: ThemeName) => void = () => undefined,
 ) {
   return render(
     <I18nProvider initialLocale="en">
@@ -24,9 +26,7 @@ function renderShell(
         locales={["en", "ru", "uz"]}
         onLocaleChange={() => undefined}
         theme="deep-umber"
-        onThemeChange={() => undefined}
-        skin="living-studio"
-        onSkinChange={() => undefined}
+        onThemeChange={onThemeChange}
         navigationPosition={navigationPosition}
         lessonAvailable
       >
@@ -70,41 +70,24 @@ describe("adaptive studio shell", () => {
     expect(routes).toEqual(["profile"]);
   });
 
-  it("exposes all five palettes directly and only the four kept skins", () => {
-    const { container } = renderShell("left");
-    const paletteButtons = container.querySelectorAll(
-      ".topbar-actions .palette-choice",
+  it("exposes one light/dark toggle and no palette or skin swatches", () => {
+    const selected: ThemeName[] = [];
+    const { container } = renderShell(
+      "left",
+      () => undefined,
+      "today",
+      (theme) => selected.push(theme),
     );
-    expect(paletteButtons).toHaveLength(5);
-    for (const name of [
-      "Deep Umber",
-      "Burgundy Studio",
-      "Midnight Cobalt",
-      "Cream Paper",
-      "Sand & Forest",
-    ]) {
-      expect(screen.getByRole("button", { name })).toBeTruthy();
-    }
-
-    fireEvent.click(screen.getByRole("button", { name: "Skin" }));
-    const skinDialog = screen.getByRole("dialog", { name: "Skin" });
-    for (const name of [
-      /Living Studio/,
-      /Soft Bento/,
-      /Laboratory/,
-      /Neo-brutalism/,
-    ]) {
-      expect(within(skinDialog).getByRole("button", { name })).toBeTruthy();
-    }
+    expect(container.querySelectorAll(".palette-choice")).toHaveLength(0);
+    expect(screen.queryByRole("button", { name: "Skin" })).toBeNull();
     expect(
-      within(skinDialog).queryByRole("button", { name: /Pixel World/ }),
+      screen.queryByRole("button", { name: /Burgundy Studio/ }),
     ).toBeNull();
-    expect(
-      within(skinDialog).queryByRole("button", { name: /Soft neo-brutalism/ }),
-    ).toBeNull();
-    expect(
-      within(skinDialog).queryByRole("button", { name: /Deep Umber/ }),
-    ).toBeNull();
+    const toggle = screen.getByRole("button", {
+      name: "Switch to light theme",
+    });
+    fireEvent.click(toggle);
+    expect(selected).toEqual(["cream-paper"]);
   });
 
   it("marks the bottom learner card active on the Profile route", () => {
