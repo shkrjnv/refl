@@ -9724,15 +9724,41 @@ input:focus-visible {
   color: var(--micro-accent);
 }
 
+/* The streak and the sync cues are separate rows: a long rejected-event
+   message can never run into the streak string at any width or locale. */
+.today-masthead-side {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
 .today-status {
   display: flex;
+  min-width: 0;
+  max-width: 100%;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 10px;
 }
 
 .today-status .status-meta {
+  max-width: 100%;
   font-size: 11px;
+  overflow-wrap: break-word;
+  white-space: normal;
+}
+
+@media (max-width: 820px) {
+  .today-masthead-side {
+    align-items: flex-start;
+  }
+
+  .today-status {
+    justify-content: flex-start;
+  }
 }
 
 .profile-review-meta {
