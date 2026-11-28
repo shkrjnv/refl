@@ -38,7 +38,9 @@ fn wire(v: &impl Serialize) -> Result<String, sqlx::Error> {
     })
 }
 
-fn sha256_hex(bytes: &[u8]) -> String {
+/// Hex SHA-256 of a lexicon or bundle file; also the wire digest format.
+#[must_use]
+pub fn sha256_hex(bytes: &[u8]) -> String {
     Sha256::digest(bytes)
         .iter()
         .fold(String::new(), |mut s, b| {
@@ -396,6 +398,17 @@ pub async fn activate(
     }
 }
 
+/// The SCOWL notice served with every dictionary file (`THIRD_PARTY.md`).
+pub const SCOWL_LICENSE: &str = include_str!("../../licenses/SCOWL.txt");
+
+/// A stored checker lexicon, keyed by the SHA-256 of its exact bytes.
+#[derive(Debug, Clone)]
+pub struct StoredLexicon {
+    pub version: String,
+    pub words: i32,
+    pub body: String,
+}
+
 /// The active content version and the bytes served by `GET /v1/content/active`.
 #[derive(Debug, Clone)]
 pub struct ActiveBundle {
@@ -403,6 +416,26 @@ pub struct ActiveBundle {
     /// SHA-256 of the complete serialized bundle.
     pub digest: String,
     pub bundle: Value,
+}
+
+/// The lexicon file for `version`, if it was imported with a bundle.
+///
+/// # Errors
+/// Database errors.
+pub async fn lexicon(
+    db: impl PgExecutor<'_>,
+    version: &str,
+) -> Result<Option<StoredLexicon>, sqlx::Error> {
+    let row: Option<(String, i32, String)> =
+        sqlx::query_as("SELECT version, words, body FROM content_lexicons WHERE version = $1")
+            .bind(version)
+            .fetch_optional(db)
+            .await?;
+    Ok(row.map(|(version, words, body)| StoredLexicon {
+        version,
+        words,
+        body,
+    }))
 }
 
 /// The active bundle, or `None` if no version is active or it predates bundle

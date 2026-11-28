@@ -132,6 +132,18 @@ async fn post(app: Router, uri: &str, body: Value, token: Option<&str>) -> (Stat
     (status, serde_json::from_slice(&bytes).unwrap())
 }
 
+async fn get(app: Router, uri: &str, token: Option<&str>) -> (StatusCode, Value) {
+    let mut builder = Request::builder().method("GET").uri(uri);
+    if let Some(token) = token {
+        builder = builder.header(header::AUTHORIZATION, format!("Bearer {token}"));
+    }
+    let request = builder.body(Body::empty()).unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    let status = response.status();
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    (status, serde_json::from_slice(&bytes).unwrap())
+}
+
 async fn request_code(app: &Router, email: &str) -> (StatusCode, Value) {
     post(
         app.clone(),
@@ -332,6 +344,116 @@ async fn non_dev_never_returns_code(c: &Cluster) {
     db.close().await;
 }
 
+fn lesson_event(learner: Uuid) -> Value {
+    json!({
+        "schema_version": 2,
+        "event_id": "01930000-0000-7000-8000-000000000001",
+        "learner_id": learner,
+        "session_id": null,
+        "client_ts": 1_700_000_000_000_i64,
+        "server_ts": null,
+        "payload": { "type": "lesson_started", "lesson": "lesson.articles" },
+    })
+}
+
+async fn export_and_erase_account(c: &Cluster) {
+    let db = migrated(c, "auth_export_erase").await;
+    let app = test_app(db.clone(), true);
+    let email = "export@example.com";
+    let (learner, access, _refresh) = login(&app, email).await;
+
+    let mut sync = sync_body(learner);
+    sync["events"] = json!([lesson_event(learner)]);
+    let (status, _) = post(app.clone(), "/v1/sync", sync, Some(&access)).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, profile) = get(app.clone(), "/v1/profile", Some(&access)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(profile["minor"], json!(false));
+    assert_eq!(profile["chat"]["personal_messages"], json!(true));
+    assert_eq!(profile["chat"]["team_chat"], json!(true));
+
+    let (status, export) = get(app.clone(), "/v1/export", Some(&access)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(export["format"], json!("refl-export-v1"));
+    assert_eq!(export["profile"]["learner_id"], json!(learner.to_string()));
+    assert_eq!(export["login_methods"][0]["identifier"], json!(email));
+    assert_eq!(export["events"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        export["events"][0]["payload"]["type"],
+        json!("lesson_started")
+    );
+    assert!(export.get("auth_sessions").is_none());
+
+    let (status, erased) = post(app.clone(), "/v1/erase", json!({}), Some(&access)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(erased["erased"], json!(true));
+    assert_eq!(erased["status"], json!("erased"));
+    assert!(erased["erased_at"].as_i64().is_some());
+
+    let users: i64 = sqlx::query_scalar("SELECT count(*) FROM users WHERE id = $1")
+        .bind(learner)
+        .fetch_one(&db)
+        .await
+        .unwrap();
+    assert_eq!(users, 0);
+    let methods: i64 = sqlx::query_scalar("SELECT count(*) FROM login_methods WHERE user_id = $1")
+        .bind(learner)
+        .fetch_one(&db)
+        .await
+        .unwrap();
+    assert_eq!(methods, 0);
+    let events: i64 = sqlx::query_scalar("SELECT count(*) FROM events WHERE learner_id = $1")
+        .bind(learner)
+        .fetch_one(&db)
+        .await
+        .unwrap();
+    assert_eq!(events, 0);
+    let tokens: i64 = sqlx::query_scalar("SELECT count(*) FROM login_tokens WHERE email = $1")
+        .bind(email)
+        .fetch_one(&db)
+        .await
+        .unwrap();
+    assert_eq!(tokens, 0);
+    let audit: Vec<Uuid> = sqlx::query_scalar("SELECT learner_id FROM erasures")
+        .fetch_all(&db)
+        .await
+        .unwrap();
+    assert_eq!(audit, [learner]);
+
+    let (status, _) = get(app, "/v1/profile", Some(&access)).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    db.close().await;
+}
+
+async fn minor_policy_is_exposed(c: &Cluster) {
+    let db = migrated(c, "auth_minor").await;
+    let app = test_app(db.clone(), true);
+    let (learner, access, _refresh) = login(&app, "minor@example.com").await;
+    sqlx::query("UPDATE users SET minor = true WHERE id = $1")
+        .bind(learner)
+        .execute(&db)
+        .await
+        .unwrap();
+    sqlx::query(
+        "UPDATE privacy_settings SET profile_visibility = 'private', \
+         friend_requests_from = 'team' WHERE user_id = $1",
+    )
+    .bind(learner)
+    .execute(&db)
+    .await
+    .unwrap();
+
+    let (status, profile) = get(app, "/v1/profile", Some(&access)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(profile["minor"], json!(true));
+    assert_eq!(profile["privacy"]["profile_visibility"], json!("private"));
+    assert_eq!(profile["privacy"]["friend_requests_from"], json!("team"));
+    assert_eq!(profile["chat"]["personal_messages"], json!(false));
+    assert_eq!(profile["chat"]["team_chat"], json!(true));
+    db.close().await;
+}
+
 async fn erased_account(c: &Cluster) {
     let db = migrated(c, "auth_erased").await;
     let app = test_app(db.clone(), true);
@@ -379,6 +501,8 @@ fn auth_api() {
         code_rejections(&cluster).await;
         access_expiry_and_refresh(&cluster).await;
         non_dev_never_returns_code(&cluster).await;
+        export_and_erase_account(&cluster).await;
+        minor_policy_is_exposed(&cluster).await;
         erased_account(&cluster).await;
     });
 }

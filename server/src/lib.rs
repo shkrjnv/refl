@@ -6,6 +6,7 @@ pub mod auth;
 pub mod content;
 pub mod error;
 pub mod events;
+pub mod privacy;
 pub mod routes;
 pub mod sync;
 pub mod telegram_bot;

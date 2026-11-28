@@ -413,7 +413,7 @@ async fn active_content(c: &Cluster) {
     tx.commit().await.unwrap();
 
     let app = test_app(db.clone());
-    let (status, response) = get(app, "/v1/content/active").await;
+    let (status, response) = get(app.clone(), "/v1/content/active").await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         response["content_version"].as_str(),
@@ -428,8 +428,39 @@ async fn active_content(c: &Cluster) {
         response["bundle"]["content_version"].as_str(),
         Some(bundle.content_version.0.as_str())
     );
-    let expected = sha256_hex(&serde_json::to_vec(&bundle).unwrap());
-    assert_eq!(response["digest"], json!(expected));
+    let bundle_json = response["bundle_json"].as_str().unwrap();
+    let parsed: Value = serde_json::from_str(bundle_json).unwrap();
+    assert_eq!(parsed, response["bundle"]);
+    assert_eq!(
+        response["digest"],
+        json!(sha256_hex(bundle_json.as_bytes()))
+    );
+
+    let version = bundle.content.lexicon.version.clone();
+    let (status, lexicon_response) =
+        get(app.clone(), &format!("/v1/content/lexicon/{version}")).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(lexicon_response["version"], json!(version));
+    assert_eq!(lexicon_response["sha256"], json!(version));
+    assert_eq!(lexicon_response["words"], json!(lexicon.len()));
+    assert_eq!(lexicon_response["text"].as_str(), Some(lexicon.as_str()));
+    assert_eq!(
+        lexicon_response["bytes"].as_u64(),
+        Some(u64::try_from(lexicon.as_str().len()).unwrap())
+    );
+    assert!(
+        lexicon_response["license"]
+            .as_str()
+            .unwrap()
+            .contains("SCOWL")
+    );
+
+    let (status, _) = get(
+        app.clone(),
+        "/v1/content/lexicon/0000000000000000000000000000000000000000000000000000000000000000",
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
 
     let empty = migrated(c, "sync_content_empty").await;
     let (status, _) = get(test_app(empty.clone()), "/v1/content/active").await;
