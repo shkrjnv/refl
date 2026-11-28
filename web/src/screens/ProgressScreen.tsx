@@ -80,11 +80,11 @@ function ForgettingCurve({
     }, 340);
   };
   const chartWidth = 560;
-  const chartHeight = 210;
+  const chartHeight = 228;
   const left = 42;
   const right = 14;
   const top = 14;
-  const bottom = 32;
+  const bottom = 46;
   const plotWidth = chartWidth - left - right;
   const plotHeight = chartHeight - top - bottom;
   const xAt = (day: number) => left + (day / maxDays) * plotWidth;
@@ -147,17 +147,22 @@ function ForgettingCurve({
           <text x={left - 9} y={yAt(0) + 4} textAnchor="end">
             0%
           </text>
-          <text x={left} y={chartHeight - 8}>
+          <text x={left} y={chartHeight - 24}>
             0
           </text>
-          <text x={xAt(maxDays / 2)} y={chartHeight - 8} textAnchor="middle">
+          <text x={xAt(maxDays / 2)} y={chartHeight - 24} textAnchor="middle">
             {Math.round(maxDays / 2)}
           </text>
-          <text x={xAt(maxDays)} y={chartHeight - 8} textAnchor="end">
+          <text x={xAt(maxDays)} y={chartHeight - 24} textAnchor="end">
             {maxDays}
           </text>
         </g>
-        <text className="chart-axis-title" x={left} y={top - 3}>
+        <text
+          className="chart-axis-title"
+          x={left + plotWidth / 2}
+          y={chartHeight - 6}
+          textAnchor="middle"
+        >
           {t("progress-days")}
         </text>
       </svg>

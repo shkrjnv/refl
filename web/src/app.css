@@ -7555,9 +7555,9 @@ input:focus-visible {
 }
 
 .skill-row > div strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: break-word;
 }
 
 .skill-row > div span {
@@ -7598,9 +7598,9 @@ input:focus-visible {
 }
 
 .misconception-topline strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: break-word;
 }
 
 .misconception-row > span {
@@ -8934,10 +8934,10 @@ input:focus-visible {
 }
 
 .mastery-row-heading strong {
-  overflow: hidden;
+  min-width: 0;
+  flex: 1;
   font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: break-word;
 }
 
 .mastery-status {
@@ -9065,10 +9065,8 @@ input:focus-visible {
 }
 
 .error-notebook-copy strong {
-  overflow: hidden;
   font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: break-word;
 }
 
 .error-notebook-copy span {
@@ -9117,10 +9115,8 @@ input:focus-visible {
 }
 
 .note-row strong {
-  overflow: hidden;
   font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: break-word;
 }
 
 .note-row > span:last-child {
@@ -9233,6 +9229,23 @@ input:focus-visible {
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.settings-identity-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 12px;
+}
+
+.settings-identity-row .settings-identity {
+  min-width: 0;
+  flex: 1;
+  margin: 0;
+}
+
+.settings-identity-row .ui-button {
+  flex: none;
 }
 
 .settings-sync-status {
@@ -9483,10 +9496,8 @@ input:focus-visible {
 }
 
 .profile-error-row strong {
-  overflow: hidden;
   font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: break-word;
 }
 
 .profile-error-row > div span {
@@ -9518,10 +9529,8 @@ input:focus-visible {
 }
 
 .profile-note-row strong {
-  overflow: hidden;
   font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: break-word;
 }
 
 .profile-note-row > div span {
@@ -9707,15 +9716,41 @@ input:focus-visible {
   color: var(--micro-accent);
 }
 
+/* The streak and the sync cues are separate rows: a long rejected-event
+   message can never run into the streak string at any width or locale. */
+.today-masthead-side {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
 .today-status {
   display: flex;
+  min-width: 0;
+  max-width: 100%;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 10px;
 }
 
 .today-status .status-meta {
+  max-width: 100%;
   font-size: 11px;
+  overflow-wrap: break-word;
+  white-space: normal;
+}
+
+@media (max-width: 820px) {
+  .today-masthead-side {
+    align-items: flex-start;
+  }
+
+  .today-status {
+    justify-content: flex-start;
+  }
 }
 
 .profile-review-meta {
@@ -14174,16 +14209,26 @@ body.reader-focus .studio-content {
   z-index: 70;
   right: 12px;
   bottom: calc(92px + env(safe-area-inset-bottom));
+  left: 12px;
   display: flex;
-  width: min(300px, calc(100vw - 24px));
+  width: auto;
+  max-height: min(60dvh, 420px);
   flex-direction: column;
   gap: 2px;
+  overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--surface);
   box-shadow: var(--shadow-card);
   padding: 8px;
+  transform-origin: bottom center;
   animation: mobile-more-in 160ms ease-out;
+}
+
+.mobile-more-sheet > nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .mobile-more-title {
@@ -15343,4 +15388,151 @@ body.reader-focus .mobile-dock {
    from collapsing for the few frames the chunk needs. */
 .route-loading {
   min-height: 60vh;
+}
+
+/* The phone dock floats over the page: reserve its height plus the
+   safe-area inset after both the last content block and the footer. */
+@media (max-width: 820px) {
+  .studio-content,
+  .studio-shell[data-nav-position="bottom"] .studio-content {
+    padding-bottom: calc(96px + env(safe-area-inset-bottom));
+  }
+
+  .studio-footer,
+  .studio-shell:not([data-nav-position="bottom"]) .studio-footer {
+    padding-bottom: calc(96px + env(safe-area-inset-bottom));
+  }
+}
+
+/* Reader word card: a reader-theme popover that points at the tapped word. */
+.reader-word-popover {
+  position: fixed;
+  z-index: 240;
+  width: min(320px, calc(100vw - 16px));
+  border: 1px solid var(--reader-border);
+  border-radius: var(--radius-md);
+  background: var(--reader-panel);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.22);
+  color: var(--reader-text);
+  padding: 16px;
+}
+
+.reader-word-body {
+  max-height: min(calc(60vh - 32px), 420px);
+  overflow-y: auto;
+}
+
+.reader-word-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.reader-word-popover h3 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.reader-word-close {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--reader-text);
+  margin: -8px -8px 0 0;
+  padding: 0;
+}
+
+.reader-word-close:hover,
+.reader-word-close:focus-visible {
+  background: var(--reader-panel-2);
+}
+
+.reader-word-arrow {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-top: 1px solid var(--reader-border);
+  border-left: 1px solid var(--reader-border);
+  background: var(--reader-panel);
+  transform: rotate(45deg);
+}
+
+.reader-word-popover[data-placement="below"] .reader-word-arrow {
+  top: -6px;
+}
+
+.reader-word-popover[data-placement="above"] .reader-word-arrow {
+  bottom: -6px;
+  border-top: 0;
+  border-left: 0;
+  border-right: 1px solid var(--reader-border);
+  border-bottom: 1px solid var(--reader-border);
+}
+
+.reader-word-popover .field {
+  color: var(--reader-muted);
+}
+
+.reader-word-popover .bento-note {
+  color: var(--reader-muted);
+}
+
+.reader-word-input {
+  width: 100%;
+  min-height: var(--tap);
+  border: 1px solid var(--reader-border);
+  border-radius: var(--radius-md);
+  background: var(--reader-bg);
+  color: var(--reader-text);
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 1rem;
+  resize: vertical;
+}
+
+.reader-word-input::placeholder {
+  color: var(--reader-muted);
+}
+
+/* Long display names and translated headings wrap instead of escaping. */
+.today-identity > div,
+.profile-heading-copy {
+  min-width: 0;
+}
+
+.today-masthead h1,
+.profile-heading-copy h1 {
+  overflow-wrap: break-word;
+}
+
+/* A wide heading next to the form button leaves one-word lines on a phone. */
+@media (max-width: 560px) {
+  .vocab-form-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .vocab-form-head > .ui-button {
+    align-self: flex-start;
+  }
+}
+
+/* The Sendo unlock hint is a sentence, not a chip label. */
+.companion-card .status-meta {
+  max-width: 100%;
+  overflow-wrap: break-word;
+  white-space: normal;
+}
+
+/* Let long account ids shrink inside the settings grid instead of widening it. */
+.settings-panel,
+.settings-panel > *,
+.settings-identity-row {
+  min-width: 0;
 }

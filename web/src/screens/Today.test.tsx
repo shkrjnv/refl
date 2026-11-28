@@ -144,13 +144,14 @@ function renderToday(
   stateJson: string | null = learnerState(),
   activity: ActivitySummary = activityWithAnswers(),
   onStart: (minutes: number) => void = () => undefined,
+  learnerLabel = "Learner",
 ) {
   render(
     <I18nProvider initialLocale="en">
       <TodayScreen
         content={bentoContent()}
         stateJson={stateJson}
-        learnerLabel="Learner"
+        learnerLabel={learnerLabel}
         streak={6}
         status={status}
         activity={activity}
@@ -167,6 +168,20 @@ function renderToday(
 }
 
 describe("Today fixed bento", () => {
+  it("greets a learner without a display name without showing an account id", () => {
+    renderToday(
+      initialStatus(true),
+      learnerState(),
+      activityWithAnswers(),
+      () => undefined,
+      "",
+    );
+
+    expect(screen.getByText("Good to see you")).toBeTruthy();
+    expect(screen.queryByText(/[0-9a-f]{8}-[0-9a-f]{4}/i)).toBeNull();
+    expect(document.querySelector(".today-avatar")).toBeNull();
+  });
+
   it("shows the four destinations' greeting without synced diagnostics", () => {
     renderToday({
       ...initialStatus(true),

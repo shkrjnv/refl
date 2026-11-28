@@ -6,6 +6,8 @@ export interface Companion {
   id: CompanionId;
   nameKey: string;
   kickerKey: string;
+  /** Role shown on the card that is not the learner's current companion. */
+  roleKey: string;
   descriptionKey: string;
   base: boolean;
   /** The library milestone opens Sendo; the starter book reaches it. */
@@ -17,6 +19,7 @@ export const COMPANIONS: Companion[] = [
     id: "iella",
     nameKey: "iella-name",
     kickerKey: "iella-companion",
+    roleKey: "companion-role-iella",
     descriptionKey: "companion-iella-note",
     base: true,
     unlockKey: "companion-iella-unlock",
@@ -25,6 +28,7 @@ export const COMPANIONS: Companion[] = [
     id: "sendo",
     nameKey: "sendo-name",
     kickerKey: "sendo-companion",
+    roleKey: "companion-role-sendo",
     descriptionKey: "companion-sendo-note",
     base: false,
     unlockKey: "companion-sendo-unlock",
@@ -75,9 +79,9 @@ export function storeSendoPreview(on: boolean): void {
   }
 }
 
-/** Dev builds and VITE_SENDO_UNLOCKED preview Sendo without a milestone. */
+/** Only the explicit dev flag previews Sendo without the library milestone. */
 export function sendoUnlocked(coveragePercent: number | null): boolean {
-  if (import.meta.env.DEV || import.meta.env.VITE_SENDO_UNLOCKED === "1") {
+  if (import.meta.env.VITE_SENDO_UNLOCKED === "1") {
     return true;
   }
   return coveragePercent !== null && coveragePercent >= 80;

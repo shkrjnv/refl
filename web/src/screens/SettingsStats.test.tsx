@@ -8,7 +8,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ProfileResponse } from "../api/client";
 import { I18nProvider } from "../i18n";
@@ -138,7 +138,8 @@ describe("statistics, profile, and settings", () => {
     );
 
     expect(screen.getByRole("heading", { name: "Learner" })).toBeTruthy();
-    expect(screen.getByText("learner-42")).toBeTruthy();
+    // The account ID belongs to Settings, not to the profile heading.
+    expect(screen.queryByText("learner-42")).toBeNull();
     expect(screen.getByText("Learner", { selector: ".status-meta" })).toBeTruthy();
     expect(screen.getByText("Milestones")).toBeTruthy();
     expect(screen.getByText("Level progress")).toBeTruthy();
@@ -164,7 +165,7 @@ describe("statistics, profile, and settings", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Exit preview" }));
     expect(screen.getByRole("heading", { name: "Error notebook" })).toBeTruthy();
-    expect(screen.getByText("learner-42")).toBeTruthy();
+    expect(screen.queryByText("learner-42")).toBeNull();
   });
 
   it("opens the embedded settings tabs from the Profile header", () => {
@@ -184,11 +185,31 @@ describe("statistics, profile, and settings", () => {
     expect(tabs[0]?.getAttribute("aria-selected")).toBe("true");
     expect(screen.queryByRole("tab", { name: "Admin" })).toBeNull();
     expect(screen.getByText("Learner identity")).toBeTruthy();
+    expect(screen.getByText("learner-42")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Copy ID" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
     fireEvent.click(screen.getByRole("tab", { name: "Appearance" }));
     expect(screen.getByRole("heading", { name: "Appearance" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Back to profile" }));
     expect(screen.getByRole("heading", { name: "Learner" })).toBeTruthy();
+  });
+
+  it("copies the account id from settings", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    render(
+      <I18nProvider initialLocale="en">
+        <ProfileScreen {...profileProps()} />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy ID" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("learner-42"));
+    expect(screen.getByText("Copied")).toBeTruthy();
   });
 
   it("offers account export, erasure and the AGPL source link", async () => {

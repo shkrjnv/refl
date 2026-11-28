@@ -1,6 +1,13 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { I18nProvider } from "../i18n";
@@ -15,13 +22,14 @@ function renderShell(
   onNavigate: (route: AppRoute) => void = () => undefined,
   active: AppRoute = "today",
   onThemeChange: (theme: ThemeName) => void = () => undefined,
+  learnerLabel = "Learner",
 ) {
   return render(
     <I18nProvider initialLocale="en">
       <AppShell
         active={active}
         onNavigate={onNavigate}
-        learnerLabel="Learner"
+        learnerLabel={learnerLabel}
         locale="en"
         locales={["en", "ru", "uz"]}
         onLocaleChange={() => undefined}
@@ -105,6 +113,54 @@ describe("adaptive studio shell", () => {
     );
     expect(routes).toEqual(["profile"]);
     expect(screen.queryByRole("navigation", { name: "More sections" })).toBeNull();
+  });
+
+  it("traps focus in the More sheet and returns it to the button", async () => {
+    renderShell("left");
+    const more = screen.getByRole("button", { name: "More" });
+    more.focus();
+    fireEvent.click(more);
+
+    const sheet = screen.getByRole("dialog", { name: "More sections" });
+    const items = within(sheet).getAllByRole("button");
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (!first || !last) {
+      throw new Error("More sheet has no items");
+    }
+    await waitFor(() => expect(document.activeElement).toBe(first));
+
+    last.focus();
+    fireEvent.keyDown(sheet, { key: "Tab" });
+    expect(document.activeElement).toBe(first);
+
+    fireEvent.keyDown(sheet, { key: "Tab", shiftKey: true });
+    expect(document.activeElement).toBe(last);
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "More sections" })).toBeNull();
+    expect(document.activeElement).toBe(more);
+  });
+
+  it("closes the More sheet on an outside click and returns focus", () => {
+    renderShell("left");
+    const more = screen.getByRole("button", { name: "More" });
+    fireEvent.click(more);
+    expect(screen.getByRole("dialog", { name: "More sections" })).toBeTruthy();
+
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole("dialog", { name: "More sections" })).toBeNull();
+    expect(document.activeElement).toBe(more);
+  });
+
+  it("uses a neutral learner name when no display name is set", () => {
+    const { container } = renderShell("left", undefined, "today", undefined, "");
+    expect(
+      container.querySelector(".learner-copy strong")?.textContent,
+    ).toBe("Learner");
+    expect(container.textContent).not.toMatch(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}/i,
+    );
   });
 
   it("keeps a compact palette menu with all palettes and no slug labels", () => {
