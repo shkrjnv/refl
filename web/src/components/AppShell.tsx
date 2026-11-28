@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import type { Locale } from "../i18n";
 import { useTranslation } from "../i18n";
@@ -37,6 +37,13 @@ export interface AppShellProps {
   companion: CompanionId;
 }
 
+const DOCK_ROUTES: ReadonlySet<AppRoute> = new Set([
+  "today",
+  "vocabulary",
+  "library",
+  "notes",
+]);
+
 interface NavItem {
   route: AppRoute;
   label: string;
@@ -65,6 +72,7 @@ export function AppShell({
     { route: "today", label: t("nav-today"), glyph: "today" },
     { route: "vocabulary", label: t("nav-vocabulary"), glyph: "vocabulary" },
     { route: "library", label: t("nav-library"), glyph: "library" },
+    { route: "notes", label: t("nav-notes"), glyph: "note" },
     { route: "graph", label: t("nav-graph"), glyph: "graph" },
     {
       route: "lesson",
@@ -80,8 +88,42 @@ export function AppShell({
     glyph: "profile",
   };
 
+  // The phone dock holds five equal slots so every label fits at 360 px;
+  // the remaining sections live in the More sheet.
+  const dockItems = primaryItems.filter((item) => DOCK_ROUTES.has(item.route));
+  const moreItems = [
+    ...primaryItems.filter((item) => !DOCK_ROUTES.has(item.route)),
+    profileItem,
+  ];
+  const moreActive = moreItems.some((item) => item.route === active);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!moreOpen) {
+      return;
+    }
+    const onPointer = (event: PointerEvent) => {
+      if (!moreRef.current?.contains(event.target as Node)) {
+        setMoreOpen(false);
+      }
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMoreOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [moreOpen]);
+
   const navigate = (item: NavItem) => {
     if (!item.disabled) {
+      setMoreOpen(false);
       onNavigate(item.route);
     }
   };
@@ -174,21 +216,51 @@ export function AppShell({
         </footer>
       </div>
 
-      <nav className="mobile-nav" aria-label={t("nav-label")}>
-        {[...primaryItems, profileItem].map((item) => (
+      <div className="mobile-dock" ref={moreRef}>
+        {moreOpen ? (
+          <nav className="mobile-more-sheet" aria-label={t("nav-more-title")}>
+            <p className="mobile-more-title">{t("nav-more-title")}</p>
+            {moreItems.map((item) => (
+              <button
+                key={item.route}
+                type="button"
+                className={`mobile-more-item${active === item.route ? " active" : ""}`}
+                aria-current={active === item.route ? "page" : undefined}
+                disabled={item.disabled}
+                onClick={() => navigate(item)}
+              >
+                <StudioIcon name={item.glyph} size={20} />
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </nav>
+        ) : null}
+        <nav className="mobile-nav" aria-label={t("nav-label")}>
+          {dockItems.map((item) => (
+            <button
+              key={item.route}
+              type="button"
+              className={`mobile-nav-item${active === item.route ? " active" : ""}`}
+              aria-current={active === item.route ? "page" : undefined}
+              disabled={item.disabled}
+              onClick={() => navigate(item)}
+            >
+              <StudioIcon name={item.glyph} />
+              <span>{item.label}</span>
+            </button>
+          ))}
           <button
-            key={item.route}
             type="button"
-            className={`mobile-nav-item${active === item.route ? " active" : ""}`}
-            aria-current={active === item.route ? "page" : undefined}
-            disabled={item.disabled}
-            onClick={() => navigate(item)}
+            className={`mobile-nav-item${moreActive || moreOpen ? " active" : ""}`}
+            aria-expanded={moreOpen}
+            aria-haspopup="true"
+            onClick={() => setMoreOpen((open) => !open)}
           >
-            <StudioIcon name={item.glyph} />
-            <span>{item.label}</span>
+            <StudioIcon name="more" />
+            <span>{t("nav-more")}</span>
           </button>
-        ))}
-      </nav>
+        </nav>
+      </div>
     </div>
   );
 }

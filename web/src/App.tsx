@@ -122,7 +122,9 @@ export function App({ initialTheme, initialSkin }: AppProps) {
   const [skin, setSkin] = useState<SkinName>(initialSkin);
   const [route, setRoute] = useState<VisibleRoute>("today");
   const [notesTarget, setNotesTarget] = useState<string | null>(null);
-  const [notesReturn, setNotesReturn] = useState<AppRoute>("library");
+  // Where "Back" leads when Notes was opened from another surface; null when
+  // the learner chose Notes in the navigation.
+  const [notesReturn, setNotesReturn] = useState<AppRoute | null>(null);
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [storage, setStorage] = useState<LearnerStorage | null>(null);
   const [content, setContent] = useState<PrototypeContent | null>(null);
@@ -939,18 +941,17 @@ export function App({ initialTheme, initialSkin }: AppProps) {
     );
   }
 
-  const activeRoute: AppRoute =
-    route === "summary"
-      ? "today"
-      : route === "notes"
-        ? "library"
-        : route;
+  const activeRoute: AppRoute = route === "summary" ? "today" : route;
   const learnerLabel = identity.label;
 
   return (
     <AppShell
       active={activeRoute}
       onNavigate={(next) => {
+        if (next === "notes") {
+          setNotesTarget(null);
+          setNotesReturn(null);
+        }
         if (next !== "lesson") {
           setRoute(next);
         }
@@ -1009,7 +1010,14 @@ export function App({ initialTheme, initialSkin }: AppProps) {
             onStateChange={handleStateChange}
             books={BOOKS}
             initialNoteId={notesTarget}
-            onBack={() => setRoute(notesReturn)}
+            onBack={
+              notesReturn
+                ? () => {
+                    setRoute(notesReturn);
+                    setNotesReturn(null);
+                  }
+                : undefined
+            }
             onPractice={practiceKc}
           />
         ) : null

@@ -1,3 +1,12 @@
+import {
+  boxExit,
+  estimateTextWidth,
+  separateBoxes,
+  wrapWords,
+  type Box,
+  type Point,
+  type TextMeasure,
+} from "./graphLayout";
 import type { BookMarkView, NoteView, PersonalRecords } from "./records";
 
 export type WikiKind = "note" | "kc" | "lexeme" | "book" | "highlight";
@@ -413,4 +422,168 @@ export function activeWikiQuery(
     return null;
   }
   return { start: open, end: caret, query: between };
+}
+
+export type NoteFilter = "all" | "grammar" | "books" | "vocabulary" | "standalone";
+
+export const NOTE_FILTERS: readonly NoteFilter[] = [
+  "all",
+  "grammar",
+  "books",
+  "vocabulary",
+  "standalone",
+];
+
+/** Explorer group for an anchor: rules, book passages, words or free notes. */
+export function noteFilterOf(note: Pick<NoteView, "anchor">): Exclude<NoteFilter, "all"> {
+  switch (note.anchor.kind) {
+    case "book_mark":
+      return "books";
+    case "lexeme":
+      return "vocabulary";
+    case "standalone":
+      return "standalone";
+    default:
+      // `kc`, `misconception` and `item` all belong to the grammar course.
+      return "grammar";
+  }
+}
+
+/** First prose line after the title, without Markdown, for the explorer. */
+export function noteSnippet(body: string, limit = 96): string {
+  let titleSeen = false;
+  for (const line of body.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("```")) {
+      continue;
+    }
+    if (!titleSeen) {
+      titleSeen = true;
+      continue;
+    }
+    const text = stripMarkdown(
+      trimmed
+        .replace(/^>\s?/, "")
+        .replace(/^#{1,6}\s+/, "")
+        .replace(/^\[![a-z-]+\]\s*/i, ""),
+    );
+    if (text) {
+      return text.length > limit ? `${text.slice(0, limit - 1).trimEnd()}…` : text;
+    }
+  }
+  return "";
+}
+
+export interface LocalGraphPlacement {
+  boxes: Map<string, Box>;
+  /** Label lines per node, wrapped at spaces. */
+  lines: Map<string, string[]>;
+  edges: { from: string; to: string; start: Point; end: Point }[];
+  width: number;
+  height: number;
+}
+
+/** Pill metrics shared with the `.notes-graph-node` CSS. */
+export const LOCAL_GRAPH_PILL = {
+  fontSize: 12,
+  weight: 600,
+  lineHeight: 1.3,
+  padX: 10,
+  padY: 6,
+  icon: 14,
+  iconGap: 6,
+  border: 1,
+  maxText: 112,
+  centerMaxText: 150,
+  margin: 8,
+  gap: 10,
+} as const;
+
+/**
+ * Radial neighbourhood around the active note. Neighbours start on an
+ * ellipse; overlapping pills are pushed apart inside the panel width (the
+ * centre stays fixed), and the panel grows downwards when it needs room, so
+ * no label is clipped or covered.
+ */
+export function localGraphLayout(
+  graph: { nodes: readonly LocalGraphNode[]; edges: readonly LocalGraphEdge[] },
+  labels: ReadonlyMap<string, string>,
+  width: number,
+  measure: TextMeasure = estimateTextWidth,
+): LocalGraphPlacement {
+  const pill = LOCAL_GRAPH_PILL;
+  const boxes = new Map<string, Box>();
+  const lines = new Map<string, string[]>();
+  const [center, ...others] = graph.nodes;
+  if (!center) {
+    return { boxes, lines, edges: [], width, height: 0 };
+  }
+  const size = (id: string, maxText: number) => {
+    const label = labels.get(id) ?? id;
+    const wrapped = wrapWords(label, maxText, pill.fontSize, pill.weight, measure);
+    lines.set(id, wrapped);
+    const textWidth = Math.max(
+      ...wrapped.map((line) => measure(line, pill.fontSize, pill.weight)),
+    );
+    return {
+      width: Math.ceil(
+        Math.min(maxText, textWidth) + pill.icon + pill.iconGap + 2 * pill.padX + 2 * pill.border,
+      ),
+      height: Math.ceil(
+        wrapped.length * pill.fontSize * pill.lineHeight + 2 * pill.padY + 2 * pill.border,
+      ),
+    };
+  };
+  const chrome = pill.icon + pill.iconGap + 2 * pill.padX + 2 * pill.border;
+  // Two neighbour pills fit side by side, so the ring can spread sideways
+  // instead of stacking into one column in a narrow inspector.
+  const sideBySide = Math.floor((width - 3 * pill.margin) / 2) - chrome;
+  const centerSize = size(
+    center.id,
+    Math.max(48, Math.min(pill.centerMaxText, width - 2 * pill.margin - chrome)),
+  );
+  const sizes = others.map((node) =>
+    size(node.id, Math.max(48, Math.min(pill.maxText, sideBySide))),
+  );
+  const widest = Math.max(0, ...sizes.map((entry) => entry.width));
+  const radiusX = Math.max(0, (width - widest) / 2 - pill.margin);
+  const radiusY = Math.max(70, radiusX * 0.8, others.length * 14);
+  const centerX = width / 2;
+  const centerY = radiusY + widest;
+  boxes.set(center.id, { x: centerX, y: centerY, ...centerSize });
+  others.forEach((node, index) => {
+    const angle = -Math.PI / 2 + (index / Math.max(1, others.length)) * Math.PI * 2;
+    const entry = sizes[index] ?? { width: 80, height: 28 };
+    boxes.set(node.id, {
+      x: centerX + Math.cos(angle) * radiusX,
+      y: centerY + Math.sin(angle) * radiusY,
+      ...entry,
+    });
+  });
+  separateBoxes(boxes, {
+    gap: pill.gap,
+    minX: pill.margin,
+    maxX: width - pill.margin,
+    fixed: new Set([center.id]),
+  });
+  const all = [...boxes.values()];
+  const top = Math.min(...all.map((box) => box.y - box.height / 2));
+  const bottom = Math.max(...all.map((box) => box.y + box.height / 2));
+  for (const box of all) {
+    box.y += pill.margin - top;
+  }
+  const edges = graph.edges.flatMap((edge) => {
+    const from = boxes.get(edge.from);
+    const to = boxes.get(edge.to);
+    return from && to
+      ? [{ from: edge.from, to: edge.to, start: boxExit(from, to, 2), end: boxExit(to, from, 2) }]
+      : [];
+  });
+  return {
+    boxes,
+    lines,
+    edges,
+    width,
+    height: Math.ceil(bottom - top + 2 * pill.margin),
+  };
 }

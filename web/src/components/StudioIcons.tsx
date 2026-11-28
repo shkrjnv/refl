@@ -4,31 +4,43 @@ import {
   ArrowRight,
   ArrowUp,
   BarChart3,
+  Bold,
   BookMarked,
   BookOpen,
   Bookmark,
+  Brackets,
   Camera,
   Check,
   ChevronDown,
   ChevronUp,
   Cog,
   Copy,
+  Ellipsis,
+  Eye,
   Flame,
   Globe,
   Image as ImageIcon,
   GripVertical,
+  Heading1,
+  Heading2,
+  Heading3,
+  Italic,
   LibraryBig,
   Link2,
   List,
+  MessageSquareQuote,
   Minus,
   Moon,
   Network,
   NotebookPen,
   Palette,
+  PanelLeft,
   PanelRight,
   Pencil,
   Plus,
+  Quote,
   RefreshCw,
+  Search,
   Settings,
   Sparkles,
   Sun,
@@ -79,7 +91,19 @@ export type StudioIconName =
   | "link"
   | "list"
   | "pencil"
-  | "trash";
+  | "trash"
+  | "panel-left"
+  | "heading-1"
+  | "heading-2"
+  | "heading-3"
+  | "bold"
+  | "italic"
+  | "quote"
+  | "callout"
+  | "wiki-link"
+  | "preview"
+  | "more"
+  | "search";
 
 export interface StudioIconProps {
   name: StudioIconName;
@@ -128,6 +152,18 @@ const ICONS: Record<StudioIconName, LucideIcon> = {
   list: List,
   pencil: Pencil,
   trash: Trash2,
+  "panel-left": PanelLeft,
+  "heading-1": Heading1,
+  "heading-2": Heading2,
+  "heading-3": Heading3,
+  bold: Bold,
+  italic: Italic,
+  quote: Quote,
+  callout: MessageSquareQuote,
+  "wiki-link": Brackets,
+  preview: Eye,
+  more: Ellipsis,
+  search: Search,
 };
 
 export interface BrandLogoProps {

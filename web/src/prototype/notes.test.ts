@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 
+import { boxesOverlap, type Box } from "./graphLayout";
 import type { BookMarkView, NoteView, PersonalRecords } from "./records";
 import {
   activeWikiQuery,
   buildBacklinks,
   headingId,
+  localGraphLayout,
   localNoteGraph,
+  noteFilterOf,
+  noteSnippet,
   noteOutline,
   noteTitle,
   noteWordCount,
@@ -133,5 +137,62 @@ describe("notes workspace model", () => {
     };
     const backlinks = buildBacklinks(anchored, withMark, context);
     expect(backlinks.highlights.map((entry) => entry.mark_id)).toEqual(["m1"]);
+  });
+});
+
+describe("notes explorer helpers", () => {
+  it("groups anchors into the explorer filters", () => {
+    expect(noteFilterOf(note("a", "x", { kind: "kc", id: "en.gram.a" }))).toBe("grammar");
+    expect(noteFilterOf(note("b", "x", { kind: "misconception", id: "m" }))).toBe("grammar");
+    expect(noteFilterOf(note("c", "x", { kind: "book_mark", id: "m" }))).toBe("books");
+    expect(noteFilterOf(note("d", "x", { kind: "lexeme", id: "en.lex.cat" }))).toBe("vocabulary");
+    expect(noteFilterOf(note("e", "x"))).toBe("standalone");
+  });
+
+  it("shows the first prose line after the title as a snippet", () => {
+    expect(noteSnippet("# Title\n\n> [!note] Remember\n> the rule")).toBe("Remember");
+    expect(noteSnippet("# Title\n\nUse **a** before [[kc:x|a sound]].")).toBe(
+      "Use a before a sound.",
+    );
+    expect(noteSnippet("Only a title")).toBe("");
+    expect(noteSnippet(`# T\n\n${"word ".repeat(40)}`, 20).endsWith("…")).toBe(true);
+  });
+});
+
+describe("local graph layout", () => {
+  it("keeps every pill inside the panel and apart from the others", () => {
+    const nodes = [
+      { id: "note:center", kind: "note" as const, label: "Articles in my own words" },
+      ...Array.from({ length: 9 }, (_, index) => ({
+        id: `note:n${index}`,
+        kind: "note" as const,
+        label: index % 2 ? "Second mention and the listener" : "a/an",
+      })),
+    ];
+    const labels = new Map(nodes.map((node) => [node.id, node.label]));
+    for (const width of [264, 320]) {
+      const placed = localGraphLayout(
+        { nodes, edges: nodes.slice(1).map((node) => ({ from: "note:center", to: node.id })) },
+        labels,
+        width,
+      );
+      const boxes = [...placed.boxes.values()];
+      expect(boxes).toHaveLength(nodes.length);
+      for (const box of boxes) {
+        expect(box.x - box.width / 2).toBeGreaterThanOrEqual(0);
+        expect(box.x + box.width / 2).toBeLessThanOrEqual(width);
+        expect(box.y - box.height / 2).toBeGreaterThanOrEqual(0);
+        expect(box.y + box.height / 2).toBeLessThanOrEqual(placed.height);
+      }
+      for (let i = 0; i < boxes.length; i += 1) {
+        for (let j = i + 1; j < boxes.length; j += 1) {
+          expect(boxesOverlap(boxes[i] as Box, boxes[j] as Box, 4)).toBe(false);
+        }
+      }
+      expect(placed.edges).toHaveLength(9);
+      for (const lines of placed.lines.values()) {
+        expect(lines.join(" ")).not.toMatch(/\S-\S$/);
+      }
+    }
   });
 });

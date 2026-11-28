@@ -38,7 +38,7 @@ function renderShell(
 }
 
 describe("adaptive studio shell", () => {
-  it("keeps the six study destinations in the rail and Profile on the dock", () => {
+  it("lists Notes as a study destination in the rail and on the dock", () => {
     const routes: AppRoute[] = [];
     const { container } = renderShell("left", (route) => routes.push(route));
 
@@ -55,26 +55,56 @@ describe("adaptive studio shell", () => {
       "Today",
       "Vocabulary",
       "Library",
+      "Notes",
       "Graph",
       "Practice",
       "Progress",
     ]);
+    // Five equal slots keep every label whole at 360 px.
     expect(mobileItems.map((item) => item.textContent)).toEqual([
       "Today",
       "Vocabulary",
       "Library",
-      "Graph",
-      "Practice",
-      "Progress",
-      "Profile",
+      "Notes",
+      "More",
     ]);
     expect(screen.queryByText("Settings")).toBeNull();
     expect(container.querySelector(".learner-settings-button")).toBeNull();
 
+    fireEvent.click(within(mobileNav as HTMLElement).getByRole("button", { name: "Notes" }));
+    expect(routes).toEqual(["notes"]);
+  });
+
+  it("opens the rest of the sections from the More sheet", () => {
+    const routes: AppRoute[] = [];
+    const { container } = renderShell("left", (route) => routes.push(route), "graph");
+    const more = within(container.querySelector(".mobile-nav") as HTMLElement).getByRole(
+      "button",
+      { name: "More" },
+    );
+    // The current section lives in the sheet, so More shows as active.
+    expect(more.classList.contains("active")).toBe(true);
+    expect(more.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(more);
+    const sheet = screen.getByRole("navigation", { name: "More sections" });
+    expect(
+      within(sheet)
+        .getAllByRole("button")
+        .map((item) => item.textContent),
+    ).toEqual(["Graph", "Practice", "Progress", "Profile"]);
+    expect(within(sheet).getByRole("button", { name: "Graph" }).getAttribute("aria-current")).toBe(
+      "page",
+    );
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("navigation", { name: "More sections" })).toBeNull();
+    fireEvent.click(more);
     fireEvent.click(
-      within(mobileNav as HTMLElement).getByRole("button", { name: "Profile" }),
+      within(screen.getByRole("navigation", { name: "More sections" })).getByRole("button", {
+        name: "Profile",
+      }),
     );
     expect(routes).toEqual(["profile"]);
+    expect(screen.queryByRole("navigation", { name: "More sections" })).toBeNull();
   });
 
   it("keeps a compact palette menu with all palettes and no slug labels", () => {
