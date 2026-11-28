@@ -157,7 +157,7 @@ unless `just book-relock` is run explicitly.
 | --- | --- |
 | Today | first-run entry, placement, Iella tour, level, session, activity, error notebook, private notes |
 | Vocabulary | search, FSRS status filters, senses, glosses, IPA, examples, focused review, personal words |
-| Library | live grammar reference (short/why/deep + L1 contrast), L1 traps & refutations, cover-first bookshelf with personal EPUB/PDF/TXT/Markdown uploads and compressed covers, clean reader |
+| Library | live grammar reference (short/why/deep + L1 contrast), L1 traps & refutations, cover-first bookshelf with personal EPUB/PDF/TXT/Markdown uploads and compressed covers, full-screen themed reader with annotations |
 | Notes | full Markdown workspace with reader/editor, wiki links, outline, backlinks and a local graph; opened from Today, Library or an anchored drawer |
 | Graph | layered mobile map and web explorer, neighbourhood focus, model numbers, notes, practice |
 | Practice | lesson runner |
@@ -165,7 +165,9 @@ unless `just book-relock` is run explicitly.
 | Profile / Settings | level, milestones, companion picker, appearance, sync, export/erase |
 
 All screens use semantic `var(--...)` tokens from Live Studio and the other
-palettes, self-hosted fonts and no external requests. Iella and Sendo share a
+palettes, self-hosted fonts and no external requests. The first paint is a
+borderless boot screen with the brand mark, active companion and a single
+progress line; it avoids internal bundle jargon. Iella and Sendo share a
 whole-number pixel scaling contract; Sendo supplies idle, happy, celebrate,
 thinking, sleep and surprised states. Companion choice is a
 `companion_selected` event plus a local preference; Sendo is unlocked by a
