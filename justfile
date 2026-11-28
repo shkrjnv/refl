@@ -256,9 +256,17 @@ missing:
 content:
     cargo run --locked --quiet -p content-build -- content --out target/bundle.json
 
+# Import an EPUB, text-layer PDF, TXT or Markdown into content/books/<slug>/source.md
+book-import *args:
+    cargo run --locked --quiet -p book-import -- {{args}}
+
 # Compile indexed graded readers into target/books/ (after `just content`)
 books: content
-    cargo run --locked --quiet -p book-build -- content/books --bundle target/bundle.json --out target/books
+    cargo run --locked --quiet -p book-build -- content/books --bundle target/bundle.json --out target/books --web-out web/src/generated/books
+
+# Explicitly accept a token-index change for published books (shifts book-mark offsets)
+book-relock:
+    cargo run --locked --quiet -p book-build -- content/books --bundle target/bundle.json --out target/books --web-out web/src/generated/books --relock
 
 # Build the bundle + SCOWL dictionary and make that pair the active content.
 # Idempotent; `just dev` runs it before starting the server so a fresh database

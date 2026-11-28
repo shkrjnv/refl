@@ -5,7 +5,7 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use book_build::{Options, build, write};
+use book_build::{Options, build, write, write_lock};
 use refl_core::book::Book;
 use refl_core::ids::LexemeId;
 
@@ -50,11 +50,12 @@ fn the_starter_reader_is_deterministic_and_linked() {
         .iter()
         .flat_map(|lexeme| lexeme.senses.iter().map(|sense| sense.id.clone()))
         .collect();
-    let opts = options(&bundle_path, "linked");
-    let (first, diagnostics) = build(&opts).unwrap();
-    assert!(diagnostics.is_empty(), "{diagnostics:?}");
-    assert_eq!(first.len(), 1, "the starter A1 reader");
-    let compiled = &first[0];
+    let mut opts = options(&bundle_path, "linked");
+    opts.lock = unique("linked-lock").with_extension("lock");
+    let first = build(&opts).unwrap();
+    assert!(first.diagnostics.is_empty(), "{:?}", first.diagnostics);
+    assert_eq!(first.compiled.len(), 1, "the starter A1 reader");
+    let compiled = &first.compiled[0];
     assert_eq!(compiled.book.id.as_str(), "book.first-day");
     assert_eq!(compiled.book.level.as_str(), "A1");
     assert_eq!(compiled.book.version.len(), 64);
@@ -82,14 +83,23 @@ fn the_starter_reader_is_deterministic_and_linked() {
     }
     assert!(linked > 0, "the reader links words to the starter bank");
     // Rebuilding the same sources gives the same bytes and version.
-    let (second, diagnostics) = build(&opts).unwrap();
-    assert!(diagnostics.is_empty(), "{diagnostics:?}");
-    assert_eq!(second[0].bytes, compiled.bytes);
-    assert_eq!(second[0].book.version, compiled.book.version);
+    write_lock(
+        &opts,
+        first
+            .lock_update
+            .as_deref()
+            .expect("new book updates the lock"),
+    )
+    .unwrap();
+    let second = build(&opts).unwrap();
+    assert!(second.diagnostics.is_empty(), "{:?}", second.diagnostics);
+    assert!(second.lock_update.is_none(), "the lock is current");
+    assert_eq!(second.compiled[0].bytes, compiled.bytes);
+    assert_eq!(second.compiled[0].book.version, compiled.book.version);
     // The asset round-trips as a Book with the same version.
     let parsed: Book = serde_json::from_slice(&compiled.bytes).unwrap();
     assert_eq!(parsed, compiled.book);
-    write(&opts, &first).unwrap();
+    write(&opts, &first.compiled).unwrap();
     let index: serde_json::Value =
         serde_json::from_slice(&std::fs::read(opts.out.join("index.json")).unwrap()).unwrap();
     assert_eq!(index["books"][0]["id"], serde_json::json!("book.first-day"));
@@ -103,19 +113,90 @@ fn the_starter_reader_is_deterministic_and_linked() {
 #[test]
 fn a_book_without_a_license_record_fails() {
     let bundle_path = content_bundle(&repo().join("content"), "license");
-    let opts = options(&bundle_path, "license");
+    let mut opts = options(&bundle_path, "license");
+    opts.lock = unique("license-lock").with_extension("lock");
     let empty = unique("empty-third-party").with_extension("md");
     std::fs::write(&empty, "# no records\n").unwrap();
-    let mut opts = opts;
     opts.third_party = empty.clone();
-    let (compiled, diagnostics) = build(&opts).unwrap();
-    assert!(compiled.is_empty());
+    let output = build(&opts).unwrap();
+    assert!(output.compiled.is_empty());
     assert!(
-        diagnostics
+        output
+            .diagnostics
             .iter()
             .any(|d| d.message.contains("THIRD_PARTY.md")),
-        "{diagnostics:?}"
+        "{:?}",
+        output.diagnostics
     );
     let _ = std::fs::remove_file(&empty);
+    let _ = std::fs::remove_file(&bundle_path);
+}
+
+/// The committed web assets and the version lock are exactly what the current
+/// sources compile to (`just books` regenerates both).
+#[test]
+fn committed_web_assets_and_lock_are_current() {
+    let bundle_path = content_bundle(&repo().join("content"), "web");
+    let mut opts = options(&bundle_path, "web");
+    opts.lock = repo().join("content/book-versions.lock");
+    let output = build(&opts).unwrap();
+    assert!(output.diagnostics.is_empty(), "{:?}", output.diagnostics);
+    assert!(
+        output.lock_update.is_none(),
+        "content/book-versions.lock is stale; run `just books`"
+    );
+    let web = repo().join("web/src/generated/books");
+    for item in &output.compiled {
+        let committed = std::fs::read(web.join(format!("{}.json", item.book.id))).unwrap();
+        assert_eq!(
+            committed, item.bytes,
+            "{} is stale; run `just books`",
+            item.book.id
+        );
+    }
+    let index = std::fs::read(web.join("index.json")).unwrap();
+    assert_eq!(
+        index,
+        book_build::index_bytes(&output.compiled),
+        "web book index is stale; run `just books`"
+    );
+    let _ = std::fs::remove_file(&bundle_path);
+}
+
+#[test]
+fn a_token_index_shift_requires_an_explicit_relock() {
+    let bundle_path = content_bundle(&repo().join("content"), "relock");
+    let mut opts = options(&bundle_path, "relock");
+    opts.lock = unique("relock-lock").with_extension("lock");
+    let first = build(&opts).unwrap();
+    assert!(first.diagnostics.is_empty(), "{:?}", first.diagnostics);
+    write_lock(&opts, first.lock_update.as_deref().unwrap()).unwrap();
+    let mut lock =
+        book_build::book_lock::Lock::parse(&std::fs::read_to_string(&opts.lock).unwrap()).unwrap();
+    let entry = lock.entries().next().unwrap().clone();
+    lock.insert(book_build::book_lock::LockEntry {
+        token_index: "0".repeat(64),
+        ..entry
+    });
+    write_lock(&opts, &lock.render()).unwrap();
+    let blocked = build(&opts).unwrap();
+    assert_eq!(blocked.compiled.len(), 1);
+    assert!(
+        blocked
+            .diagnostics
+            .iter()
+            .any(|d| d.message.contains("token index changed")),
+        "{:?}",
+        blocked.diagnostics
+    );
+    assert!(blocked.lock_update.is_none());
+    opts.relock = true;
+    let relocked = build(&opts).unwrap();
+    assert!(
+        relocked.diagnostics.is_empty(),
+        "{:?}",
+        relocked.diagnostics
+    );
+    assert!(relocked.lock_update.is_some());
     let _ = std::fs::remove_file(&bundle_path);
 }

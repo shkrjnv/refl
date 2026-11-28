@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["core", "core-wasm", "server", "tools/book-build", "tools/content-build", "tools/sim"]
+members = ["core", "core-wasm", "server", "tools/book-build", "tools/book-import", "tools/content-build", "tools/sim"]
 
 [workspace.package]
 edition = "2024"

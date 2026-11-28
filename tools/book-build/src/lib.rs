@@ -1,8 +1,10 @@
 //! The graded-reader compiler (`docs/16-vocabulary-library-notes-graph.md`,
-//! §2). It reads a Nickel manifest and its text files, checks the license,
-//! level and structure, and writes one immutable JSON asset per book. The
-//! output depends only on the inputs: the same sources give the same bytes
-//! and the same `version`.
+//! §2). It reads a canonical `source.md` (or a legacy Nickel manifest)
+//! and its text files, checks the license, level and structure, and writes one
+//! immutable JSON asset per book. The output depends only on the inputs: the
+//! same sources give the same bytes and the same `version`.
+
+pub mod book_lock;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
@@ -33,6 +35,14 @@ pub struct Options {
     pub content_license: PathBuf,
     /// The `nickel` executable.
     pub nickel: PathBuf,
+    /// `content/book-versions.lock`; a missing file is an empty lock.
+    pub lock: PathBuf,
+    /// The lock must not change; a build that would update it fails.
+    pub locked: bool,
+    /// Explicitly record token-index changes instead of failing.
+    pub relock: bool,
+    /// Optional generated-assets directory for the web client.
+    pub web_out: Option<PathBuf>,
 }
 
 impl Options {
@@ -48,6 +58,10 @@ impl Options {
             bundle: root.join("target/bundle.json"),
             third_party: root.join("THIRD_PARTY.md"),
             content_license: root.join("content/LICENSE"),
+            lock: root.join("content/book-versions.lock"),
+            locked: false,
+            relock: false,
+            web_out: None,
             books,
             nickel: PathBuf::from("nickel"),
         }
@@ -134,33 +148,48 @@ pub struct BookIndex {
     pub books: Vec<BookMeta>,
 }
 
+/// One build result. `lock_update` is the new lock text when the build added
+/// a book or recorded a version change; the caller writes it unless locked.
+#[derive(Debug)]
+pub struct BuildOutput {
+    pub compiled: Vec<Compiled>,
+    pub diagnostics: Vec<Diagnostic>,
+    pub lock_update: Option<String>,
+}
+
+impl BuildOutput {
+    fn rejected(diagnostics: Vec<Diagnostic>) -> Self {
+        Self {
+            compiled: Vec::new(),
+            diagnostics,
+            lock_update: None,
+        }
+    }
+}
+
 /// Runs the whole build, writing nothing itself (the caller prints and
 /// decides). Missing bundle or license files become diagnostics.
 ///
 /// # Errors
 /// The books directory cannot be read.
-pub fn build(opts: &Options) -> std::io::Result<(Vec<Compiled>, Vec<Diagnostic>)> {
+/// The build is one pass over the sources plus a lock check, kept together.
+#[allow(clippy::too_many_lines)]
+pub fn build(opts: &Options) -> std::io::Result<BuildOutput> {
     let bundle = match std::fs::read_to_string(&opts.bundle) {
         Ok(json) => match serde_json::from_str::<Bundle>(&json) {
             Ok(bundle) => bundle,
             Err(error) => {
-                return Ok((
-                    Vec::new(),
-                    vec![Diagnostic::global(format!(
-                        "{}: invalid bundle: {error}",
-                        opts.bundle.display()
-                    ))],
-                ));
+                return Ok(BuildOutput::rejected(vec![Diagnostic::global(format!(
+                    "{}: invalid bundle: {error}",
+                    opts.bundle.display()
+                ))]));
             }
         },
         Err(error) => {
-            return Ok((
-                Vec::new(),
-                vec![Diagnostic::global(format!(
-                    "{}: {error}; run `just content` first",
-                    opts.bundle.display()
-                ))],
-            ));
+            return Ok(BuildOutput::rejected(vec![Diagnostic::global(format!(
+                "{}: {error}; run `just content` first",
+                opts.bundle.display()
+            ))]));
         }
     };
     let third_party = std::fs::read_to_string(&opts.third_party).unwrap_or_default();
@@ -176,28 +205,64 @@ pub fn build(opts: &Options) -> std::io::Result<(Vec<Compiled>, Vec<Diagnostic>)
         .collect();
     dirs.sort();
     for dir in dirs {
+        let markdown = dir.join("source.md");
         let manifest = dir.join("book.ncl");
-        if !manifest.is_file() {
+        if !markdown.is_file() && !manifest.is_file() {
             continue;
         }
-        let json = match nickel_export(&opts.nickel, &manifest) {
-            Ok(json) => json,
-            Err(message) => {
-                diagnostics.push(Diagnostic::global(format!(
-                    "{}: {message}",
-                    manifest.display()
-                )));
-                continue;
+        if markdown.is_file() && manifest.is_file() {
+            diagnostics.push(Diagnostic::global(format!(
+                "{}: has both source.md and book.ncl; keep one source",
+                dir.display()
+            )));
+            continue;
+        }
+        let (source, en_only) = if markdown.is_file() {
+            let text = match std::fs::read_to_string(&markdown) {
+                Ok(text) => text,
+                Err(error) => {
+                    diagnostics.push(Diagnostic::global(format!(
+                        "{}: {error}",
+                        markdown.display()
+                    )));
+                    continue;
+                }
+            };
+            let id = frontmatter_id(&text).unwrap_or_else(|| {
+                format!(
+                    "book.{}",
+                    dir.file_name()
+                        .and_then(|name| name.to_str())
+                        .unwrap_or("untitled")
+                )
+            });
+            match parse_source_md(&id, &text) {
+                Ok(source) => (source, true),
+                Err(message) => {
+                    diagnostics.push(Diagnostic::book(&id, message));
+                    continue;
+                }
             }
-        };
-        let source: BookSource = match serde_json::from_str(&json) {
-            Ok(source) => source,
-            Err(error) => {
-                diagnostics.push(Diagnostic::global(format!(
-                    "{}: {error}",
-                    manifest.display()
-                )));
-                continue;
+        } else {
+            let json = match nickel_export(&opts.nickel, &manifest) {
+                Ok(json) => json,
+                Err(message) => {
+                    diagnostics.push(Diagnostic::global(format!(
+                        "{}: {message}",
+                        manifest.display()
+                    )));
+                    continue;
+                }
+            };
+            match serde_json::from_str::<BookSource>(&json) {
+                Ok(source) => (source, false),
+                Err(error) => {
+                    diagnostics.push(Diagnostic::global(format!(
+                        "{}: {error}",
+                        manifest.display()
+                    )));
+                    continue;
+                }
             }
         };
         if !seen.insert(source.id.clone()) {
@@ -217,7 +282,7 @@ pub fn build(opts: &Options) -> std::io::Result<(Vec<Compiled>, Vec<Diagnostic>)
             diagnostics.push(Diagnostic::book(&source.id, message));
             continue;
         }
-        match compile_book(&source, &dir, &index) {
+        match compile_book(&source, &dir, &index, en_only) {
             Ok(book) => {
                 let bytes = book_bytes(&book);
                 let digest = hex(&Sha256::digest(&bytes));
@@ -234,7 +299,290 @@ pub fn build(opts: &Options) -> std::io::Result<(Vec<Compiled>, Vec<Diagnostic>)
             }
         }
     }
-    Ok((compiled, diagnostics))
+    let lock_update = if diagnostics.is_empty() {
+        check_lock(opts, &compiled, &mut diagnostics)
+    } else {
+        None
+    };
+    Ok(BuildOutput {
+        compiled,
+        diagnostics,
+        lock_update,
+    })
+}
+
+fn check_lock(
+    opts: &Options,
+    compiled: &[Compiled],
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Option<String> {
+    let text = std::fs::read_to_string(&opts.lock).unwrap_or_default();
+    let mut lock = match book_lock::Lock::parse(&text) {
+        Ok(lock) => lock,
+        Err(message) => {
+            diagnostics.push(Diagnostic::global(format!(
+                "{}: {message}",
+                opts.lock.display()
+            )));
+            return None;
+        }
+    };
+    let mut changed = false;
+    for item in compiled {
+        let token_index = book_lock::token_index(&item.book);
+        match lock.get(&item.book.id) {
+            None => {
+                lock.insert(book_lock::LockEntry {
+                    book: item.book.id.clone(),
+                    version: item.book.version.clone(),
+                    token_index,
+                });
+                changed = true;
+            }
+            Some(previous) if previous.token_index != token_index => {
+                if opts.relock {
+                    lock.insert(book_lock::LockEntry {
+                        book: item.book.id.clone(),
+                        version: item.book.version.clone(),
+                        token_index,
+                    });
+                    changed = true;
+                } else {
+                    diagnostics.push(Diagnostic::book(
+                        item.book.id.as_str(),
+                        "token index changed; book marks would point at different words. Run `just book-relock` if this is intentional",
+                    ));
+                }
+            }
+            Some(previous) if previous.version != item.book.version => {
+                lock.insert(book_lock::LockEntry {
+                    book: item.book.id.clone(),
+                    version: item.book.version.clone(),
+                    token_index,
+                });
+                changed = true;
+            }
+            Some(_) => {}
+        }
+    }
+    if !changed {
+        return None;
+    }
+    let rendered = lock.render();
+    if opts.locked {
+        diagnostics.push(Diagnostic::global(format!(
+            "{} is outdated; run `just books` and commit it",
+            opts.lock.display()
+        )));
+        None
+    } else {
+        Some(rendered)
+    }
+}
+
+/// The `id` in a Markdown frontmatter, for diagnostics before the whole
+/// source parses.
+fn split_frontmatter(text: &str) -> Result<(BTreeMap<String, String>, String), String> {
+    let normalized = text.replace("\r\n", "\n");
+    let rest = normalized
+        .strip_prefix("---\n")
+        .ok_or_else(|| "source.md must start with YAML frontmatter (`---`)".to_owned())?;
+    let end = rest
+        .find("\n---")
+        .ok_or_else(|| "source.md frontmatter has no closing `---`".to_owned())?;
+    let front = &rest[..end];
+    let body = rest[end + 4..].trim_start_matches('\n');
+    let mut fields = BTreeMap::new();
+    for line in front.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let (key, value) = line
+            .split_once(':')
+            .ok_or_else(|| format!("frontmatter line `{line}` is not `key: value`"))?;
+        fields.insert(key.trim().to_owned(), unquote(value.trim()));
+    }
+    Ok((fields, body.to_owned()))
+}
+
+fn unquote(value: &str) -> String {
+    let value = value.trim();
+    if value.len() >= 2 && value.starts_with('"') && value.ends_with('"') {
+        let mut out = String::new();
+        let mut escaped = false;
+        for ch in value[1..value.len() - 1].chars() {
+            if escaped {
+                out.push(match ch {
+                    'n' => '\n',
+                    't' => '\t',
+                    other => other,
+                });
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else {
+                out.push(ch);
+            }
+        }
+        out
+    } else {
+        value.to_owned()
+    }
+}
+
+fn parse_source_md(fallback_id: &str, text: &str) -> Result<BookSource, String> {
+    let (fields, body) = split_frontmatter(text)?;
+    let id = fields
+        .get("id")
+        .filter(|value| !value.is_empty())
+        .cloned()
+        .unwrap_or_else(|| fallback_id.to_owned());
+    let title = fields
+        .get("title")
+        .filter(|value| !value.trim().is_empty())
+        .cloned()
+        .ok_or("source.md frontmatter has no title")?;
+    let level = fields
+        .get("level")
+        .filter(|value| !value.trim().is_empty())
+        .cloned()
+        .ok_or("source.md frontmatter has no level")?;
+    let license = fields
+        .get("license")
+        .filter(|value| !value.trim().is_empty())
+        .cloned()
+        .ok_or("source.md frontmatter has no license")?;
+    let source = fields
+        .get("source")
+        .filter(|value| !value.trim().is_empty())
+        .cloned()
+        .ok_or("source.md frontmatter has no source")?;
+    let author = fields.get("author").cloned().unwrap_or_default();
+    let source_text = if author.trim().is_empty() {
+        source
+    } else {
+        format!("{author} — {source}")
+    };
+    let chapters = markdown_chapters(&body, &title)?;
+    Ok(BookSource {
+        id,
+        title: Localized {
+            uz: None,
+            ru: None,
+            en: Some(title),
+        },
+        level,
+        license,
+        source: source_text,
+        chapters,
+    })
+}
+
+fn markdown_chapters(body: &str, book_title: &str) -> Result<Vec<ChapterSource>, String> {
+    let mut chapters: Vec<(String, Vec<String>)> = Vec::new();
+    let mut current: Option<(String, Vec<String>)> = None;
+    let mut preamble: Vec<String> = Vec::new();
+    let mut paragraph: Vec<String> = Vec::new();
+    let flush_paragraph = |paragraph: &mut Vec<String>,
+                           current: &mut Option<(String, Vec<String>)>,
+                           preamble: &mut Vec<String>| {
+        if paragraph.is_empty() {
+            return;
+        }
+        let text = strip_markdown_inline(&paragraph.join(" "));
+        paragraph.clear();
+        if text.is_empty() {
+            return;
+        }
+        if let Some((_, paragraphs)) = current {
+            paragraphs.push(text);
+        } else {
+            preamble.push(text);
+        }
+    };
+    for line in body.lines() {
+        let trimmed = line.trim();
+        if let Some(heading) = trimmed.strip_prefix('#') {
+            flush_paragraph(&mut paragraph, &mut current, &mut preamble);
+            if let Some(chapter) = current.take() {
+                if chapter.1.is_empty() {
+                    return Err(format!("chapter `{}` has no text", chapter.0));
+                }
+                chapters.push(chapter);
+            }
+            let heading = strip_markdown_inline(heading.trim_start_matches('#').trim());
+            if heading.is_empty() {
+                continue;
+            }
+            if chapters.is_empty() && current.is_none() && !preamble.is_empty() {
+                chapters.push(("Beginning".into(), std::mem::take(&mut preamble)));
+            }
+            current = Some((heading, Vec::new()));
+        } else if trimmed.is_empty() {
+            flush_paragraph(&mut paragraph, &mut current, &mut preamble);
+        } else {
+            paragraph.push(trimmed.to_owned());
+        }
+    }
+    flush_paragraph(&mut paragraph, &mut current, &mut preamble);
+    if let Some(chapter) = current.take() {
+        if chapter.1.is_empty() {
+            return Err(format!("chapter `{}` has no text", chapter.0));
+        }
+        chapters.push(chapter);
+    } else if chapters.is_empty() && !preamble.is_empty() {
+        chapters.push((book_title.to_owned(), std::mem::take(&mut preamble)));
+    }
+    if chapters.is_empty() {
+        return Err("source.md has no chapter text".into());
+    }
+    Ok(chapters
+        .into_iter()
+        .map(|(title, paragraphs)| ChapterSource {
+            id: None,
+            title: Localized {
+                uz: None,
+                ru: None,
+                en: Some(title),
+            },
+            text: Some(paragraphs.join("\n\n")),
+            file: None,
+        })
+        .collect())
+}
+fn strip_markdown_inline(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    let mut in_link_text = false;
+    let mut skip_url = false;
+    while let Some(ch) = chars.next() {
+        match ch {
+            '[' if !skip_url => in_link_text = true,
+            ']' if in_link_text => {
+                if chars.peek() == Some(&'(') {
+                    skip_url = true;
+                }
+                in_link_text = false;
+            }
+            ')' if skip_url => skip_url = false,
+            '*' | '_' | '`' | '#' if !in_link_text && !skip_url => {}
+            '<' if !skip_url => {
+                for next in chars.by_ref() {
+                    if next == '>' {
+                        break;
+                    }
+                }
+            }
+            other if !skip_url => out.push(other),
+            _ => {}
+        }
+    }
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn frontmatter_id(text: &str) -> Option<String> {
+    split_frontmatter(text).ok()?.0.get("id").cloned()
 }
 
 /// Writes the compiled books and `index.json`.
@@ -245,10 +593,38 @@ pub fn build(opts: &Options) -> std::io::Result<(Vec<Compiled>, Vec<Diagnostic>)
 /// # Panics
 /// Never: the index always serializes.
 pub fn write(opts: &Options, compiled: &[Compiled]) -> std::io::Result<()> {
-    std::fs::create_dir_all(&opts.out)?;
-    for item in compiled {
-        std::fs::write(opts.out.join(format!("{}.json", item.book.id)), &item.bytes)?;
+    write_assets(&opts.out, compiled)?;
+    if let Some(web_out) = &opts.web_out {
+        write_assets(web_out, compiled)?;
     }
+    Ok(())
+}
+
+fn write_assets(dir: &Path, compiled: &[Compiled]) -> std::io::Result<()> {
+    std::fs::create_dir_all(dir)?;
+    for item in compiled {
+        std::fs::write(dir.join(format!("{}.json", item.book.id)), &item.bytes)?;
+    }
+    std::fs::write(dir.join("index.json"), index_bytes(compiled))
+}
+
+/// Writes the new `book-versions.lock`.
+///
+/// # Errors
+/// The lock file cannot be written.
+pub fn write_lock(opts: &Options, text: &str) -> std::io::Result<()> {
+    if let Some(parent) = opts.lock.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(&opts.lock, text)
+}
+
+/// The catalog bytes used by both the server asset and the web build.
+///
+/// # Panics
+/// Never: the index always serializes.
+#[must_use]
+pub fn index_bytes(compiled: &[Compiled]) -> Vec<u8> {
     let index = BookIndex {
         books: compiled
             .iter()
@@ -264,9 +640,8 @@ pub fn write(opts: &Options, compiled: &[Compiled]) -> std::io::Result<()> {
     };
     let mut json = serde_json::to_vec(&index).expect("book index serializes");
     json.push(b'\n');
-    std::fs::write(opts.out.join("index.json"), json)
+    json
 }
-
 /// The canonical asset bytes: compact JSON plus a trailing newline.
 ///
 /// # Panics
@@ -360,8 +735,13 @@ fn level_allowed(level: &str) -> bool {
     matches!(level, "A1" | "A2" | "B1" | "B2" | "C1")
 }
 
-fn require_localized(value: &Localized, what: &str, out: &mut Vec<String>) {
-    for (lang, key) in [(Lang::En, "en"), (Lang::Ru, "ru"), (Lang::Uz, "uz")] {
+fn require_localized(value: &Localized, what: &str, en_only: bool, out: &mut Vec<String>) {
+    let languages: &[(Lang, &str)] = if en_only {
+        &[(Lang::En, "en")]
+    } else {
+        &[(Lang::En, "en"), (Lang::Ru, "ru"), (Lang::Uz, "uz")]
+    };
+    for &(lang, key) in languages {
         if value.get(lang).is_none_or(str::is_empty) {
             out.push(format!("{what}: title in {key} is missing"));
         }
@@ -517,13 +897,14 @@ pub fn compile_source(
     root: &Path,
     bundle: &Bundle,
 ) -> Result<Book, Vec<String>> {
-    compile_book(source, root, &LexemeIndex::of(bundle))
+    compile_book(source, root, &LexemeIndex::of(bundle), false)
 }
 
 fn compile_book(
     source: &BookSource,
     root: &Path,
     index: &LexemeIndex,
+    en_only: bool,
 ) -> Result<Book, Vec<String>> {
     let mut errors = Vec::new();
     if !source.id.starts_with("book.") || BookId::new(&source.id).is_none() {
@@ -538,7 +919,7 @@ fn compile_book(
             source.level
         ));
     }
-    require_localized(&source.title, "book", &mut errors);
+    require_localized(&source.title, "book", en_only, &mut errors);
     if source.chapters.is_empty() {
         errors.push("a book needs at least one chapter".into());
     }
@@ -553,7 +934,7 @@ fn compile_book(
                 chapter.id.as_deref().unwrap_or_default()
             ));
         }
-        require_localized(&chapter.title, &generated, &mut errors);
+        require_localized(&chapter.title, &generated, en_only, &mut errors);
         let text = match (&chapter.text, &chapter.file) {
             (Some(text), None) if !text.trim().is_empty() => text.clone(),
             (None, Some(file)) => {
@@ -757,6 +1138,60 @@ mod tests {
     }
 
     #[test]
+    fn parses_canonical_source_md() {
+        let text = r#"---
+id: "book.demo"
+title: "A Demo"
+author: "Writer"
+level: "A1"
+license: "original"
+source: "Somewhere"
+---
+
+## One
+
+A cat **sits** on a mat.
+
+## Two
+
+A dog naps.
+"#;
+        let source = parse_source_md("book.fallback", text).unwrap();
+        assert_eq!(source.id, "book.demo");
+        assert_eq!(source.title.en.as_deref(), Some("A Demo"));
+        assert_eq!(source.source, "Writer — Somewhere");
+        assert_eq!(source.chapters.len(), 2);
+        assert_eq!(source.chapters[0].title.en.as_deref(), Some("One"));
+        assert_eq!(
+            source.chapters[0].text.as_deref(),
+            Some("A cat sits on a mat.")
+        );
+    }
+
+    #[test]
+    fn token_index_ignores_text_but_not_structure() {
+        let source = BookSource {
+            id: "book.test".into(),
+            title: localized("Test"),
+            level: "A1".into(),
+            license: "original".into(),
+            source: "refl test".into(),
+            chapters: vec![ChapterSource {
+                id: Some("chapter.test.1".into()),
+                title: localized("One"),
+                text: Some("A cat sits. A cat naps.".into()),
+                file: None,
+            }],
+        };
+        let mut book = compile_book(&source, Path::new("."), &index(), false).unwrap();
+        let before = book_lock::token_index(&book);
+        book.chapters[0].paragraphs[0].sentences[0].text = "A dog sits.".into();
+        assert_eq!(book_lock::token_index(&book), before);
+        book.chapters[0].paragraphs[0].sentences[0].tokens.pop();
+        assert_ne!(book_lock::token_index(&book), before);
+    }
+
+    #[test]
     fn book_version_is_stable_and_matches_bytes() {
         let source = BookSource {
             id: "book.test".into(),
@@ -771,7 +1206,7 @@ mod tests {
                 file: None,
             }],
         };
-        let book = compile_book(&source, Path::new("."), &index()).unwrap();
+        let book = compile_book(&source, Path::new("."), &index(), false).unwrap();
         assert_eq!(book.chapters[0].paragraphs[0].sentences.len(), 2);
         let sentence = &book.chapters[0].paragraphs[0].sentences[0];
         assert_eq!(sentence.tokens[0].text, "A");
@@ -782,7 +1217,7 @@ mod tests {
             "token.test.1.1.1.2"
         );
         let first = book_bytes(&book);
-        let again = compile_book(&source, Path::new("."), &index()).unwrap();
+        let again = compile_book(&source, Path::new("."), &index(), false).unwrap();
         assert_eq!(book_bytes(&again), first);
         assert_eq!(again.version, book.version);
         assert_eq!(
