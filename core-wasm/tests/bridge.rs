@@ -37,6 +37,152 @@ fn unknown_event() -> Value {
     })
 }
 
+fn many_events(count: usize) -> Vec<Value> {
+    let mut events: Vec<Value> = (1..=count)
+        .map(|i| {
+            json!({
+                "schema_version": 2,
+                "event_id": format!("01930000-0000-7000-8000-{i:012x}"),
+                "learner_id": "01930000-0000-7000-8000-0000000000aa",
+                "session_id": null,
+                "client_ts": 1_700_000_000_000_i64 + i64::try_from(i).unwrap(),
+                "server_ts": null,
+                "payload": { "type": "lesson_started", "lesson": "lesson.articles" },
+            })
+        })
+        .collect();
+    // Insert an unknown event by id order.
+    events.insert(
+        count / 2,
+        json!({
+            "schema_version": 2,
+            "event_id": format!("01930000-0000-7000-8000-{:012x}", count + 1),
+            "learner_id": "01930000-0000-7000-8000-0000000000aa",
+            "session_id": null,
+            "client_ts": 1_700_000_000_000_i64,
+            "server_ts": null,
+            "payload": { "type": "sticker_sent" },
+        }),
+    );
+    events
+}
+
+fn native_state(bundle: &Bundle, events: &[Value]) -> State {
+    let decoded: Vec<Decoded> = events
+        .iter()
+        .map(|event| decode_event(&event.to_string()).unwrap())
+        .collect();
+    replay(
+        &KnowledgeModel::default(),
+        &Profile::default(),
+        bundle,
+        &decoded,
+    )
+}
+
+fn state_from_snapshot(session: &refl_core_wasm::WasmSession) -> State {
+    serde_json::from_str(&session.snapshot_json()).unwrap()
+}
+
+#[test]
+fn stateful_fold_matches_stateless_and_native() {
+    let bundle_json = bundle_json();
+    let bundle: Bundle = serde_json::from_str(&bundle_json).unwrap();
+    let events = many_events(2_500);
+    let expected = native_state(&bundle, &events);
+
+    let stateless: Value = serde_json::from_str(&refl_core_wasm::fold_state(
+        &bundle_json,
+        "",
+        None,
+        &json!(events).to_string(),
+    ))
+    .unwrap();
+    let stateless_state: State = serde_json::from_value(stateless["snapshot"].clone()).unwrap();
+    assert_eq!(
+        stateless_state.canonical_bytes(),
+        expected.canonical_bytes()
+    );
+
+    let snapshot = serde_json::to_string(&expected).unwrap();
+    let mut resumed = refl_core_wasm::WasmSession::new(&bundle_json, Some(snapshot)).unwrap();
+    let duplicate = events
+        .iter()
+        .find(|event| event["payload"]["type"] == json!("sticker_sent"))
+        .expect("unknown event");
+    let resumed_result: Value =
+        serde_json::from_str(&resumed.fold_event(&duplicate.to_string())).unwrap();
+    assert_eq!(resumed_result["state_hash"], json!(expected.hash()));
+    assert_eq!(resumed.state_hash(), expected.hash());
+
+    let mut one = refl_core_wasm::WasmSession::new(&bundle_json, None).unwrap();
+    let first_result: Value =
+        serde_json::from_str(&one.fold_event(&events[0].to_string())).unwrap();
+    assert_eq!(first_result["state_hash"], json!(one.state_hash()));
+    assert!(!one.is_incomplete());
+
+    let mut incremental = refl_core_wasm::WasmSession::new(&bundle_json, None).unwrap();
+    let first = incremental.fold_events(&json!(events[..1_000]).to_string());
+    let first: Value = serde_json::from_str(&first).unwrap();
+    assert_eq!(first["incomplete"], json!(false));
+    let second = incremental.fold_events(&json!(events[1_000..]).to_string());
+    let second: Value = serde_json::from_str(&second).unwrap();
+    assert_eq!(second["state_hash"], json!(expected.hash()));
+    assert_eq!(second["incomplete"], json!(true));
+    assert!(incremental.is_incomplete());
+    assert_eq!(incremental.state_hash(), expected.hash());
+    assert_eq!(
+        state_from_snapshot(&incremental).canonical_bytes(),
+        expected.canonical_bytes()
+    );
+
+    let mut reversed = refl_core_wasm::WasmSession::new(&bundle_json, None).unwrap();
+    let reversed_result: Value = serde_json::from_str(
+        &reversed.fold_events(&json!(events.iter().rev().collect::<Vec<_>>()).to_string()),
+    )
+    .unwrap();
+    assert_eq!(reversed_result["state_hash"], json!(expected.hash()));
+    assert_eq!(
+        state_from_snapshot(&reversed).canonical_bytes(),
+        expected.canonical_bytes()
+    );
+}
+
+#[test]
+fn stateful_plan_and_placement_methods_are_available() {
+    let bundle = bundle_json();
+    let folded: Value =
+        serde_json::from_str(&refl_core_wasm::fold_state(&bundle, "", None, "[]")).unwrap();
+    let snapshot = folded["snapshot"].to_string();
+    let session = refl_core_wasm::WasmSession::new(&bundle, None).unwrap();
+
+    let plan: Value = serde_json::from_str(&refl_core_wasm::plan_session(
+        &bundle,
+        &snapshot,
+        1_700_000_000_000.0,
+        1_500_000.0,
+    ))
+    .unwrap();
+    let plan_json = plan["plan"].to_string();
+    let stateful = session.plan_next(&plan_json, 1_700_000_000_000.0);
+    let stateless = refl_core_wasm::next_item(&bundle, &snapshot, &plan_json, 1_700_000_000_000.0);
+    assert_eq!(stateful, stateless);
+
+    let placement = json!({
+        "subject": "en",
+        "asked": [],
+        "correct": 0,
+    });
+    let stateful = session.placement_next(&placement.to_string(), 1_700_000_000_000.0);
+    let stateless = refl_core_wasm::placement_next(
+        &bundle,
+        &snapshot,
+        &placement.to_string(),
+        1_700_000_000_000.0,
+    );
+    assert_eq!(stateful, stateless);
+}
+
 #[test]
 fn core_info_has_the_current_wire_version() {
     let info: Value = serde_json::from_str(&refl_core_wasm::core_info()).unwrap();

@@ -20,6 +20,7 @@ use refl_core::plan::{
 use refl_core::value::{Lang, Seed, Timestamp};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 const CORE_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -311,6 +312,164 @@ pub fn fold_state(
     export(result)
 }
 
+fn parse_one_event(json: &str) -> Result<Decoded, BridgeError> {
+    let value = parse_json(json, "invalid_event")?;
+    let raw = match value {
+        Value::String(raw) => raw,
+        other => serde_json::to_string(&other)
+            .map_err(|error| BridgeError::json(&error, "invalid_event"))?,
+    };
+    decode_event(&raw).map_err(|error| BridgeError::new("decode_error", error.to_string()))
+}
+
+/// A stateful browser handle: the parsed bundle, learner state and the
+/// events folded in this session stay in WASM linear memory, so incremental
+/// calls do not reparse the bundle or the whole snapshot.
+#[derive(Debug)]
+#[wasm_bindgen]
+pub struct WasmSession {
+    bundle: Bundle,
+    families: Families,
+    model: KnowledgeModel,
+    profile: Profile,
+    state: State,
+    log: Vec<Decoded>,
+    from_snapshot: bool,
+}
+
+impl WasmSession {
+    fn replay_log(&mut self) {
+        self.state = replay(&self.model, &self.profile, &self.bundle, &self.log);
+    }
+
+    fn apply_one(&mut self, event: Decoded) -> Result<(), BridgeError> {
+        let older = self
+            .state
+            .position
+            .as_ref()
+            .is_some_and(|position| event_id(&event) <= position);
+        if older && self.from_snapshot {
+            if Some(event_id(&event)) == self.state.position.as_ref() {
+                // A re-delivered event already covered by the snapshot.
+                return Ok(());
+            }
+            return Err(BridgeError::new(
+                "needs_replay",
+                "event precedes the loaded snapshot; replay the full log",
+            ));
+        }
+        self.log.push(event);
+        if older {
+            self.replay_log();
+            return Ok(());
+        }
+        let context = FoldCtx::new(&self.bundle, &self.families);
+        let event = self.log.last().expect("just pushed");
+        if self.model.apply(&mut self.state, event, &context).is_err() {
+            self.replay_log();
+        }
+        Ok(())
+    }
+
+    fn result(&self) -> Value {
+        json!({
+            "state_hash": self.state.hash(),
+            "incomplete": self.state.incomplete,
+            "last_event_id": to_value(&self.state.position).unwrap_or(Value::Null),
+        })
+    }
+}
+
+#[wasm_bindgen]
+impl WasmSession {
+    /// Create a stateful session from a bundle and an optional snapshot.
+    ///
+    /// # Errors
+    /// Returns the bridge error as a JavaScript string when the bundle or
+    /// snapshot JSON is invalid.
+    #[allow(clippy::needless_pass_by_value)] // wasm-bindgen owns the JS string
+    #[wasm_bindgen(constructor)]
+    pub fn new(bundle_json: &str, snapshot_json: Option<String>) -> Result<WasmSession, JsValue> {
+        let bundle = parse_bundle(bundle_json).map_err(|error| js_error(&error))?;
+        let model = KnowledgeModel::default();
+        let snapshot =
+            parse_snapshot(snapshot_json.as_deref()).map_err(|error| js_error(&error))?;
+        let from_snapshot = snapshot.is_some();
+        let state = snapshot.unwrap_or_else(|| model.init(&Profile::default()));
+        let profile = state.profile.clone();
+        let families = Families::of(&bundle);
+        Ok(Self {
+            bundle,
+            families,
+            model,
+            profile,
+            state,
+            log: Vec::new(),
+            from_snapshot,
+        })
+    }
+
+    /// Fold one event object (or a JSON-encoded event string).
+    pub fn fold_event(&mut self, event_json: &str) -> String {
+        let result = parse_one_event(event_json).and_then(|event| {
+            self.apply_one(event)?;
+            Ok(self.result())
+        });
+        export(result)
+    }
+
+    /// Fold a batch of events; the batch is sorted by `event_id` first.
+    pub fn fold_events(&mut self, events_json: &str) -> String {
+        let result = parse_events(events_json).and_then(|mut events| {
+            events.sort_by(|a, b| event_id(a).cmp(event_id(b)));
+            for event in events {
+                self.apply_one(event)?;
+            }
+            Ok(self.result())
+        });
+        export(result)
+    }
+
+    pub fn plan_next(&self, plan_json: &str, now_ms: f64) -> String {
+        let result = (|| {
+            let plan = parse_plan(plan_json)?;
+            let now = timestamp(now_ms)?;
+            next_value(&self.bundle, &self.state, &plan, now)
+        })();
+        export(result)
+    }
+
+    pub fn placement_next(&self, placement_json: &str, now_ms: f64) -> String {
+        let result = (|| {
+            let placement = parse_placement(placement_json)?;
+            let now = timestamp(now_ms)?;
+            placement_value(&self.bundle, &self.state, &placement, now)
+        })();
+        export(result)
+    }
+
+    /// Serialize the current `State` as JSON.
+    ///
+    /// # Panics
+    /// Never for a state produced by the core; the state holds finite values
+    /// and serializable maps.
+    pub fn snapshot_json(&self) -> String {
+        serde_json::to_string(&self.state).expect("learner state serializes")
+    }
+
+    pub fn state_hash(&self) -> String {
+        self.state.hash()
+    }
+
+    pub fn is_incomplete(&self) -> bool {
+        self.state.incomplete
+    }
+}
+
+fn js_error(error: &BridgeError) -> JsValue {
+    JsValue::from_str(&format!("{}: {}", error.code, error.message))
+}
+
 fn plan(
     bundle_json: &str,
     snapshot_json: &str,
@@ -480,22 +639,18 @@ pub fn placement_answer(
     ))
 }
 
-fn next(
-    bundle_json: &str,
-    snapshot_json: &str,
-    plan_json: &str,
-    now_ms: f64,
+fn next_value(
+    bundle: &Bundle,
+    state: &State,
+    plan: &Plan,
+    now: Timestamp,
 ) -> Result<Value, BridgeError> {
-    let bundle = parse_bundle(bundle_json)?;
-    let state = parse_state(snapshot_json)?;
-    let plan = parse_plan(plan_json)?;
-    let now = timestamp(now_ms)?;
     let model = KnowledgeModel::default();
     let params = Params::default();
     let reading_speed = ReadingSpeed::default();
     let history = History::default();
-    let planner = Planner::new(&model, &bundle, &params, &reading_speed);
-    match planner.next_item(&state, &plan, &history, now, plan.seed) {
+    let planner = Planner::new(&model, bundle, &params, &reading_speed);
+    match planner.next_item(state, plan, &history, now, plan.seed) {
         Next::Lesson { kc, explanation } => Ok(json!({
             "kind": "lesson",
             "kc": kc,
@@ -512,6 +667,19 @@ fn next(
             "end": to_value(&end)?,
         })),
     }
+}
+
+fn next(
+    bundle_json: &str,
+    snapshot_json: &str,
+    plan_json: &str,
+    now_ms: f64,
+) -> Result<Value, BridgeError> {
+    let bundle = parse_bundle(bundle_json)?;
+    let state = parse_state(snapshot_json)?;
+    let plan = parse_plan(plan_json)?;
+    let now = timestamp(now_ms)?;
+    next_value(&bundle, &state, &plan, now)
 }
 
 #[wasm_bindgen]
