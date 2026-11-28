@@ -489,15 +489,27 @@ pub fn event_in(
     })
 }
 
-/// Milliseconds of the latest known event of a log; [`T0`] for none.
+/// Milliseconds of the latest event of a log; [`T0`] for none.
+///
+/// Unknown events carry no decoded `client_ts`, but their `UUIDv7` timestamp is
+/// still part of the fold position, so it must also bound a synthetic session
+/// that starts after the log.
 pub fn event_time(log: &[Decoded]) -> i64 {
     log.iter()
-        .filter_map(|e| match e {
-            Decoded::Known(e) => Some(e.client_ts.0),
-            Decoded::Unknown(_) => None,
+        .map(|e| match e {
+            Decoded::Known(e) => e.client_ts.0.max(uuid_time(e.event_id)),
+            Decoded::Unknown(u) => uuid_time(u.event_id),
         })
         .max()
         .unwrap_or(T0.0)
+}
+
+fn uuid_time(id: EventId) -> i64 {
+    let bytes = id.as_uuid().as_bytes();
+    let ms = u64::from_be_bytes([
+        0, 0, bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5],
+    ]);
+    i64::try_from(ms).expect("UUIDv7 time after the epoch and before i64::MAX")
 }
 
 /// An event from a newer core: a payload type this core does not know.
