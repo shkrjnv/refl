@@ -165,7 +165,7 @@ export function webPositions(
         let dx = left.x - right.x;
         let dy = left.y - right.y;
         const distance = Math.max(1, Math.hypot(dx, dy));
-        const force = 9000 / (distance * distance);
+        const force = 24000 / (distance * distance);
         dx /= distance;
         dy /= distance;
         left.x += dx * force * cooling;
@@ -183,7 +183,7 @@ export function webPositions(
       const dx = right.x - left.x;
       const dy = right.y - left.y;
       const distance = Math.max(1, Math.hypot(dx, dy));
-      const force = (distance - 220) * 0.004 * cooling;
+      const force = (distance - 240) * 0.005 * cooling;
       const ux = dx / distance;
       const uy = dy / distance;
       left.x += ux * force;
@@ -197,6 +197,48 @@ export function webPositions(
         point.x = clampX(point.x * 0.995 + 500 * 0.005);
         point.y = clampY(point.y * 0.995 + 500 * 0.005);
       }
+    }
+  }
+  // Hard separation larger than a node card at the narrowest supported
+  // stage (360 px viewport ≈ 310 layout px, so a 96 px card spans ≈ 310
+  // units). The soft force alone can leave two nodes touching.
+  const minimum = 340;
+  for (let pass = 0; pass < 24; pass += 1) {
+    let moved = false;
+    for (let i = 0; i < ids.length; i += 1) {
+      const left = positions.get(ids[i] ?? "");
+      if (!left) {
+        continue;
+      }
+      for (let j = i + 1; j < ids.length; j += 1) {
+        const right = positions.get(ids[j] ?? "");
+        if (!right) {
+          continue;
+        }
+        let dx = right.x - left.x;
+        let dy = right.y - left.y;
+        let distance = Math.hypot(dx, dy);
+        if (distance >= minimum) {
+          continue;
+        }
+        if (distance < 1) {
+          const angle = ((i + 1) * 1.7 + (j + 1) * 0.9) % (Math.PI * 2);
+          dx = Math.cos(angle);
+          dy = Math.sin(angle);
+          distance = 1;
+        }
+        const push = (minimum - distance) / 2;
+        const ux = dx / distance;
+        const uy = dy / distance;
+        left.x = clampX(left.x - ux * push);
+        left.y = clampY(left.y - uy * push);
+        right.x = clampX(right.x + ux * push);
+        right.y = clampY(right.y + uy * push);
+        moved = true;
+      }
+    }
+    if (!moved) {
+      break;
     }
   }
   return positions;

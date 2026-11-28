@@ -163,10 +163,8 @@ export function LibraryScreen({
             const percent = coverage[book.meta.id] ?? null;
             return (
               <Card tone="plain" key={book.meta.id} className="book-card">
-                <p className="eyebrow">{book.meta.level}</p>
-                <h2>{localizedText(book.meta.title, locale)}</h2>
-                <p className="book-source">{book.book.source}</p>
-                <div className="book-coverage">
+                <div className="book-card-head">
+                  <span className="book-level-badge">{book.meta.level}</span>
                   <StatusMeta
                     tone={percent === null ? "neutral" : percent >= 80 ? "success" : "accent"}
                   >
@@ -174,15 +172,19 @@ export function LibraryScreen({
                       ? t("library-coverage-unknown")
                       : t("library-coverage", { percent })}
                   </StatusMeta>
-                  <span className="bento-note">{t("library-coverage-note")}</span>
                 </div>
-                <Button
-                  type="button"
-                  variant="primary"
-                  onClick={() => setOpenBook(book)}
-                >
-                  {t("library-open-book")}
-                </Button>
+                <h2>{localizedText(book.meta.title, locale)}</h2>
+                <p className="book-source">{book.book.source}</p>
+                <p className="bento-note">{t("library-coverage-note")}</p>
+                <div className="book-card-footer">
+                  <Button
+                    type="button"
+                    variant="primary"
+                    onClick={() => setOpenBook(book)}
+                  >
+                    {t("library-open-book")}
+                  </Button>
+                </div>
               </Card>
             );
           })}

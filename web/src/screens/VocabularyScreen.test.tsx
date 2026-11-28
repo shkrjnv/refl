@@ -65,6 +65,9 @@ function renderScreen(state = dueState, store = fakeStore()) {
 describe("vocabulary screen", () => {
   it("lists bank senses and filters by meaning", () => {
     renderScreen();
+    expect(
+      screen.getByRole("button", { name: "All" }).getAttribute("aria-pressed"),
+    ).toBe("true");
     expect(screen.getByRole("heading", { name: "cat" })).toBeTruthy();
     expect(screen.getByText("a small animal with soft fur")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Find a word"), {

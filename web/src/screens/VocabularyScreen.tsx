@@ -426,69 +426,71 @@ export function VocabularyScreen({
         </Button>
       </header>
       <div className="vocab-io" aria-label={t("vocab-io-label")}>
-        <div className="vocab-io-group">
-          <span className="vocab-io-label">{t("vocab-export")}</span>
-          <select
-            className="answer-input vocab-format"
-            aria-label={t("vocab-export-format")}
-            value={exportFormat}
-            onChange={(event) =>
-              setExportFormat(event.currentTarget.value as VocabularyFormat)
-            }
-          >
-            <option value="tsv">TSV</option>
-            <option value="csv">CSV</option>
-            <option value="json">JSON</option>
-          </select>
-          <label className="vocab-check">
-            <input
-              type="checkbox"
-              checked={includeCourse}
-              onChange={(event) => setIncludeCourse(event.currentTarget.checked)}
-            />
-            {t("vocab-export-course")}
-          </label>
-          <label className="vocab-check">
-            <input
-              type="checkbox"
-              checked={includePersonal}
-              onChange={(event) => setIncludePersonal(event.currentTarget.checked)}
-            />
-            {t("vocab-export-personal")}
-          </label>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            disabled={!includeCourse && !includePersonal}
-            onClick={downloadExport}
-          >
-            {t("vocab-export-action")}
-          </Button>
-        </div>
-        <div className="vocab-io-group">
-          <input
-            ref={fileInput}
-            type="file"
-            accept=".tsv,.csv,.json,.txt,text/tab-separated-values,text/csv,application/json"
-            className="vocab-file-input"
-            onChange={(event) => {
-              const file = event.currentTarget.files?.[0];
-              if (file) {
-                void chooseImport(file);
+        <div className="vocab-io-row">
+          <div className="vocab-io-field">
+            <span className="vocab-io-label">{t("vocab-export-format")}</span>
+            <select
+              className="answer-input vocab-format"
+              aria-label={t("vocab-export-format")}
+              value={exportFormat}
+              onChange={(event) =>
+                setExportFormat(event.currentTarget.value as VocabularyFormat)
               }
-            }}
-          />
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={() => fileInput.current?.click()}
-          >
-            {t("vocab-import")}
-          </Button>
-          <span className="bento-note">{t("vocab-import-hint")}</span>
+            >
+              <option value="tsv">TSV</option>
+              <option value="csv">CSV</option>
+              <option value="json">JSON</option>
+            </select>
+          </div>
+          <div className="vocab-io-scope">
+            <label className="vocab-check">
+              <input
+                type="checkbox"
+                checked={includeCourse}
+                onChange={(event) => setIncludeCourse(event.currentTarget.checked)}
+              />
+              {t("vocab-export-course")}
+            </label>
+            <label className="vocab-check">
+              <input
+                type="checkbox"
+                checked={includePersonal}
+                onChange={(event) => setIncludePersonal(event.currentTarget.checked)}
+              />
+              {t("vocab-export-personal")}
+            </label>
+          </div>
+          <div className="vocab-io-actions">
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={!includeCourse && !includePersonal}
+              onClick={downloadExport}
+            >
+              {t("vocab-export-action")}
+            </Button>
+            <input
+              ref={fileInput}
+              type="file"
+              accept=".tsv,.csv,.json,.txt,text/tab-separated-values,text/csv,application/json"
+              className="vocab-file-input"
+              onChange={(event) => {
+                const file = event.currentTarget.files?.[0];
+                if (file) {
+                  void chooseImport(file);
+                }
+              }}
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => fileInput.current?.click()}
+            >
+              {t("vocab-import")}
+            </Button>
+          </div>
         </div>
+        <p className="vocab-io-help">{t("vocab-import-hint")}</p>
       </div>
       {importDone !== null ? (
         <p className="inline-alert" role="status">
@@ -589,7 +591,7 @@ export function VocabularyScreen({
       {error ? <p className="inline-alert danger">{error}</p> : null}
       <div className="vocab-list">
         {filtered.length === 0 ? (
-          <Card tone="plain">
+          <Card tone="plain" className="vocab-empty-card">
             <p>{t("vocab-empty")}</p>
           </Card>
         ) : (

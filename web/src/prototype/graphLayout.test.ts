@@ -66,3 +66,22 @@ describe("knowledge graph layout fallback", () => {
     ).toBe(nodes.length);
   });
 });
+
+describe("web explorer separation", () => {
+  it("keeps nodes farther apart than a card on a small stage", () => {
+    const resolved = resolveGraphPositions(nodes, [], "content-v1", "web");
+    const points = [...resolved.positions.values()];
+    for (let i = 0; i < points.length; i += 1) {
+      for (let j = i + 1; j < points.length; j += 1) {
+        const left = points[i];
+        const right = points[j];
+        if (!left || !right) {
+          continue;
+        }
+        expect(Math.hypot(left.x - right.x, left.y - right.y)).toBeGreaterThan(
+          320,
+        );
+      }
+    }
+  });
+});
