@@ -268,7 +268,7 @@ fn difficulty(item: &ItemProjection) -> f64 {
 /// One observation of the knowledge model: the slot's KCs with weights, or
 /// a single pseudo-observation.
 struct Observation<'a> {
-    kcs: &'a [(KcId, f64)],
+    kcs: &'a [(&'a KcId, f64)],
     b: f64,
     g: f64,
     slip: f64,
@@ -391,16 +391,17 @@ impl KnowledgeModel {
     ) -> Option<f64> {
         let slot = item.slots.get(usize::from(slot_index))?;
         let b = difficulty(item);
-        let terms = slot
-            .kcs
-            .iter()
-            .map(|k| Some(self.term(self.noisy_belief(s, bundle, &k.kc, now, noise)?, b)))
-            .collect::<Option<Vec<_>>>()?;
-        Some(math::predict(
-            item.guessing(slot_index),
-            self.params.slip,
-            &terms,
-        ))
+        // `math::predict` without collecting the terms: the same product of
+        // P* in the same order (starting at 1.0), so the result is
+        // bit-identical and the fold allocates nothing here.
+        let mut product = 1.0_f64;
+        for k in &slot.kcs {
+            product *= self
+                .term(self.noisy_belief(s, bundle, &k.kc, now, noise)?, b)
+                .p_star;
+        }
+        let g = item.guessing(slot_index);
+        Some(g + (1.0 - g - self.params.slip) * product)
     }
 
     /// Fisher information of `slot` of `item` about `kc` at `now`, from the
@@ -468,9 +469,26 @@ impl KnowledgeModel {
 
     /// One Newton step on every KC of the observation at time `t`.
     fn observe(&self, s: &mut State, bundle: &Bundle, o: &Observation<'_>, t: Timestamp) {
-        let mut kcs = Vec::with_capacity(o.kcs.len());
-        let mut terms = Vec::with_capacity(o.kcs.len());
-        for (kc, w) in o.kcs {
+        // Slots have a handful of KCs: keep the terms on the stack and fall
+        // back to the heap only for an unusually wide observation.
+        const INLINE: usize = 8;
+        let blank = KcTerm {
+            p_star: 0.0,
+            slope: 0.0,
+        };
+        let mut inline_terms = [blank; INLINE];
+        let mut inline_index = [0_usize; INLINE];
+        let mut heap_terms = Vec::new();
+        let mut heap_index = Vec::new();
+        let (terms, index): (&mut [KcTerm], &mut [usize]) = if o.kcs.len() <= INLINE {
+            (&mut inline_terms[..], &mut inline_index[..])
+        } else {
+            heap_terms.resize(o.kcs.len(), blank);
+            heap_index.resize(o.kcs.len(), 0);
+            (&mut heap_terms[..], &mut heap_index[..])
+        };
+        let mut len = 0;
+        for (i, (kc, _)) in o.kcs.iter().enumerate() {
             let Some(k) = self.touch(s, bundle, kc, t) else {
                 continue;
             };
@@ -479,19 +497,21 @@ impl KnowledgeModel {
                 var: k.var,
                 r: self.recall(k.card.as_ref(), t),
             };
-            terms.push(self.term(belief, o.b));
-            kcs.push((kc, *w));
+            terms[len] = self.term(belief, o.b);
+            index[len] = i;
+            len += 1;
         }
-        let evidence = math::evidence(o.g, o.slip, o.correct, &terms);
-        for ((kc, w), e) in kcs.into_iter().zip(evidence) {
-            let k = s.kcs.get_mut(kc).expect("touched above");
-            let (mu, var) = math::posterior(k.mu, k.var, w, e);
-            k.mu = mu;
-            k.var = var;
-            if o.direct && w > 0.0 {
-                k.observations += 1;
+        let (terms, index) = (&terms[..len], &index[..len]);
+        math::evidence_each(o.g, o.slip, o.correct, terms, |j, e| {
+            let (kc, weight) = o.kcs[index[j]];
+            let state = s.kcs.get_mut(kc).expect("touched above");
+            let (mu, var) = math::posterior(state.mu, state.var, weight, e);
+            state.mu = mu;
+            state.var = var;
+            if o.direct && weight > 0.0 {
+                state.observations += 1;
             }
-        }
+        });
     }
 
     /// A mentor's mark «тема известна»: one correct observation of the KC at
@@ -505,7 +525,7 @@ impl KnowledgeModel {
             s,
             bundle,
             &Observation {
-                kcs: &[(kc.clone(), p.w_secondary)],
+                kcs: &[(kc, p.w_secondary)],
                 b: 0.0,
                 g: 0.0,
                 slip: p.slip,
@@ -523,6 +543,10 @@ impl KnowledgeModel {
         let Some(k) = s.kcs.get(kc) else {
             return false;
         };
+        // All three conditions are pure; the cheapest goes first.
+        if k.production.len() < p.production_needed {
+            return false;
+        }
         let belief = Belief {
             mu: k.mu,
             var: k.var + p.eta * days(k.var_at, now),
@@ -530,7 +554,6 @@ impl KnowledgeModel {
         };
         self.mastery_probability(belief) >= p.mastery_confidence
             && self.fluency(s, bundle, kc).holds()
-            && k.production.len() >= p.production_needed
     }
 
     /// bⱼ of `subject`: `Σr / (n + n₀)`, 0 without counted answers.
@@ -998,12 +1021,17 @@ impl KnowledgeModel {
             return Applied::Unresolved;
         };
         let (verdict, misconception) = match ctx.corrections.get(&ev.event_id) {
-            Some(c) => (c.verdict, c.misconception.clone()),
-            None => (a.verdict, a.misconception.clone()),
+            Some(c) => (c.verdict, c.misconception.as_ref()),
+            None => (a.verdict, a.misconception.as_ref()),
         };
         let correct = matches!(verdict, Verdict::Correct | Verdict::Typo);
-        let last = s.last_answer.entry(item.subject.clone()).or_insert(t);
-        *last = (*last).max(t);
+        // Look up before inserting, so a known key is not cloned per answer.
+        match s.last_answer.get_mut(&item.subject) {
+            Some(last) => *last = (*last).max(t),
+            None => {
+                s.last_answer.insert(item.subject.clone(), t);
+            }
+        }
 
         // Fluency bookkeeping of every answer, rapid guesses included: the
         // instructions shown in this session and the items answered lately.
@@ -1017,7 +1045,9 @@ impl KnowledgeModel {
         // outside a known session, does not count.
         let known_instruction =
             s.session.is_some() && instruction.is_some_and(|i| s.session_instructions.contains(i));
-        if let Some(i) = instruction {
+        if let Some(i) = instruction
+            && !s.session_instructions.contains(i)
+        {
             s.session_instructions.insert(i.clone());
         }
         let unseen = s
@@ -1027,8 +1057,12 @@ impl KnowledgeModel {
         let inconsistent = timing_inconsistent(a);
         s.timing_inconsistent += u32::from(inconsistent);
         s.seen.retain(|_, at| days(*at, shown) < p.unseen_days);
-        let seen = s.seen.entry(a.item.id.clone()).or_insert(shown);
-        *seen = (*seen).max(shown);
+        match s.seen.get_mut(&a.item.id) {
+            Some(seen) => *seen = (*seen).max(shown),
+            None => {
+                s.seen.insert(a.item.id.clone(), shown);
+            }
+        }
 
         let expected_ms = f64::from(item.expected_time) * 1000.0;
         let latency = f64::from(a.latency_ms);
@@ -1090,8 +1124,26 @@ impl KnowledgeModel {
                     state.var += p.process_noise;
                 }
             }
-            self.predict_slot(s, bundle, item, a.slot, shown, 0.0)
-                .expect("the slot resolved above")
+            // Widening at `shown` and adding q gives each KC exactly the σ²
+            // that `predict_slot(.., q)` used: (σ² + η·Δt) + q, or prior + q
+            // for a new KC. So the prediction is the same bits, unless a KC
+            // repeats in the slot and got q twice.
+            let repeated = slot
+                .kcs
+                .iter()
+                .enumerate()
+                .any(|(i, k)| slot.kcs[..i].iter().any(|j| j.kc == k.kc));
+            if repeated {
+                self.predict_slot(s, bundle, item, a.slot, shown, 0.0)
+                    .expect("the slot resolved above")
+            } else {
+                debug_assert_eq!(
+                    self.predict_slot(s, bundle, item, a.slot, shown, 0.0)
+                        .map(f64::to_bits),
+                    Some(predicted_noisy.to_bits()),
+                );
+                predicted_noisy
+            }
         };
         let outcome = AnswerOutcome {
             predicted,
@@ -1129,7 +1181,7 @@ impl KnowledgeModel {
         if verdict == Verdict::Unrecognized {
             modifier *= p.w_unrecognized;
         }
-        let weighted: Vec<(KcId, f64)> = slot
+        let weighted: Vec<(&KcId, f64)> = slot
             .kcs
             .iter()
             .map(|k| {
@@ -1137,7 +1189,7 @@ impl KnowledgeModel {
                     KcRole::Primary => 1.0,
                     KcRole::Secondary => p.w_secondary,
                 };
-                (k.kc.clone(), role * modifier)
+                (&k.kc, role * modifier)
             })
             .collect();
         let b = difficulty(item);
@@ -1156,7 +1208,7 @@ impl KnowledgeModel {
             },
             shown,
         );
-        let mut touched: BTreeSet<KcId> = weighted.iter().map(|(k, _)| k.clone()).collect();
+        let mut touched: BTreeSet<&KcId> = weighted.iter().map(|(k, _)| *k).collect();
         // Spelling: a typo fails the subject's spelling KC with the primary
         // weight; a correct letter-only typed answer succeeds on it with the
         // secondary weight.
@@ -1174,7 +1226,7 @@ impl KnowledgeModel {
                 s,
                 bundle,
                 &Observation {
-                    kcs: &[(subject.spelling_kc.clone(), w)],
+                    kcs: &[(&subject.spelling_kc, w)],
                     b: 0.0,
                     g: 0.0,
                     slip: p.slip,
@@ -1183,7 +1235,7 @@ impl KnowledgeModel {
                 },
                 t,
             );
-            touched.insert(subject.spelling_kc.clone());
+            touched.insert(&subject.spelling_kc);
         }
 
         // Memory, fluency and production: the slot's primary KCs. The tempo
@@ -1250,7 +1302,11 @@ impl KnowledgeModel {
                 }
             }
             if known {
-                let b = s.baseline.entry(item.subject.clone()).or_default();
+                if !s.baseline.contains_key(&item.subject) {
+                    s.baseline
+                        .insert(item.subject.clone(), super::state::Baseline::default());
+                }
+                let b = s.baseline.get_mut(&item.subject).expect("inserted above");
                 b.sum += r;
                 b.n += 1;
             }
@@ -1258,7 +1314,7 @@ impl KnowledgeModel {
 
         // Misconceptions: a shown one gains α, a resisted one gains β.
         if verdict == Verdict::Wrong
-            && let Some(x) = &misconception
+            && let Some(x) = misconception
             && let Some(m) = self.touch_misconception(s, bundle, x, t)
         {
             m.alpha += if sure_error { p.sure_error_weight } else { 1.0 };
@@ -1296,7 +1352,7 @@ impl KnowledgeModel {
                     s,
                     bundle,
                     &Observation {
-                        kcs: &[(kc.clone(), w)],
+                        kcs: &[(kc, w)],
                         b: 0.0,
                         g: 0.0,
                         slip: p.slip,
@@ -1305,11 +1361,11 @@ impl KnowledgeModel {
                     },
                     t,
                 );
-                touched.insert(kc.clone());
+                touched.insert(kc);
             }
         }
 
-        for kc in &touched {
+        for kc in touched {
             let newly_mastered = s.kcs.get(kc).is_some_and(|k| !k.ever_mastered)
                 && self.is_mastered(s, bundle, kc, t);
             if newly_mastered {
