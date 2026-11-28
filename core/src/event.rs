@@ -119,6 +119,14 @@ pub struct PlacementCompletedEvent {
     pub source: PlacementSource,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename_all = "snake_case"))]
+#[serde(rename_all = "snake_case")]
+pub enum LexicalDirection {
+    Recognize,
+    Produce,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename_all = "snake_case"))]
 #[serde(rename_all = "snake_case")]
@@ -263,6 +271,17 @@ impl TryFrom<CustomLexemeArchivedRaw> for CustomLexemeArchivedEvent {
 
 const fn yes() -> bool {
     true
+}
+
+/// Direct lexical evidence from the vocabulary review block
+/// (`docs/16-vocabulary-library-notes-graph.md`, §1). The sense id is either
+/// a bundle sense or a personal word.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct LexicalReviewEvent {
+    pub lexeme: LexemeId,
+    pub direction: LexicalDirection,
+    pub correct: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -538,6 +557,8 @@ pub enum EventPayload {
     BookMarkDeleted(BookMarkDeletedEvent),
     NoteSaved(NoteSavedEvent),
     NoteDeleted(NoteDeletedEvent),
+    /// Direct evidence from the vocabulary review block.
+    LexicalReview(LexicalReviewEvent),
 }
 
 /// Uniqueness key of an event the server derives from the log: the database
@@ -580,6 +601,7 @@ impl EventPayload {
             Self::BookMarkDeleted(_) => "book_mark_deleted",
             Self::NoteSaved(_) => "note_saved",
             Self::NoteDeleted(_) => "note_deleted",
+            Self::LexicalReview(_) => "lexical_review",
         }
     }
 
@@ -956,6 +978,7 @@ pub const EVENT_TYPES: &[&str] = &[
     "book_mark_deleted",
     "note_saved",
     "note_deleted",
+    "lexical_review",
 ];
 
 /// `kind` tags of every [`Response`] variant this core knows; checked like

@@ -31,9 +31,9 @@ use refl_core::content::{
 use refl_core::event::{
     AnswerContext, AnswerEvent, BookMarkCreatedEvent, BookMarkDeletedEvent, BookMarkKind,
     CURRENT_SCHEMA_VERSION, Confidence, CustomLexemeArchivedEvent, CustomLexemeEvent,
-    CustomLexemeSource, Decoded, Event, EventPayload, InputDevice, NoteAnchor, NoteAnchorKind,
-    NoteDeletedEvent, NoteSavedEvent, PlanAction, PlanCandidate, PlanIssuedEvent, PlanScope,
-    ReclassifiedEvent, Response, UnknownEvent, Verdict,
+    CustomLexemeSource, Decoded, Event, EventPayload, InputDevice, LexicalDirection,
+    LexicalReviewEvent, NoteAnchor, NoteAnchorKind, NoteDeletedEvent, NoteSavedEvent, PlanAction,
+    PlanCandidate, PlanIssuedEvent, PlanScope, ReclassifiedEvent, Response, UnknownEvent, Verdict,
 };
 use refl_core::ids::{
     BookId, BookMarkId, ContentVersion, CustomLexemeId, DomainId, EventId, ExplanationId, FamilyId,
@@ -652,7 +652,7 @@ pub fn synthetic_log(bundle: &Bundle, spec: LogSpec) -> Vec<Decoded> {
         }
         // Batch 4 personal records: notes, custom words and book marks. Their
         // ids are the event's own UUIDv7 so the log stays deterministic.
-        if (11..20).contains(&roll) {
+        if (11..22).contains(&roll) {
             let id = *event_id(at, tail).as_uuid();
             let custom = || CustomLexemeEvent {
                 custom_id: CustomLexemeId(id),
@@ -707,6 +707,15 @@ pub fn synthetic_log(bundle: &Bundle, spec: LogSpec) -> Vec<Decoded> {
                     end_token: tail % 8,
                     quote_hash: "b".repeat(64),
                     color: None,
+                }),
+                20 | 21 => EventPayload::LexicalReview(LexicalReviewEvent {
+                    lexeme: refl_core::ids::LexemeId::new(id.to_string()).expect("UUID is a slug"),
+                    direction: if roll == 20 {
+                        LexicalDirection::Recognize
+                    } else {
+                        LexicalDirection::Produce
+                    },
+                    correct: roll == 20,
                 }),
                 _ => EventPayload::BookMarkDeleted(BookMarkDeletedEvent {
                     mark_id: BookMarkId(id),

@@ -453,3 +453,54 @@ fn the_synthetic_log_still_folds_reproducibly_with_batch4_events() {
     assert_eq!(state.hash(), fold(&b, &log).hash());
     assert!(serde_json::to_string(&json!({ "hash": state.hash() })).is_ok());
 }
+
+#[test]
+fn lexical_review_events_update_the_two_directions() {
+    let b = bundle();
+    let sense = LexemeId::new("en.lex.cat.animal").unwrap();
+    let t0 = at(0, 0);
+    let t1 = at(1, 0);
+    let review = |at: Timestamp, tail: u64, direction, correct| {
+        event(
+            at,
+            tail,
+            EventPayload::LexicalReview(refl_core::event::LexicalReviewEvent {
+                lexeme: sense.clone(),
+                direction,
+                correct,
+            }),
+        )
+    };
+    let state = fold(
+        &b,
+        &[
+            review(t1, 2, LexicalDirection::Produce, true),
+            review(t0, 1, LexicalDirection::Recognize, false),
+        ],
+    );
+    let recognize = state
+        .lexical_card(&sense, LexicalDirection::Recognize)
+        .expect("recognize card");
+    assert_eq!(recognize.review_count, 1);
+    assert_eq!(recognize.lapse_count, 1);
+    let produce = state
+        .lexical_card(&sense, LexicalDirection::Produce)
+        .expect("produce card");
+    assert_eq!(produce.review_count, 1);
+    assert_eq!(produce.lapse_count, 0);
+    // A later direct review moves the card forward in the same direction.
+    let later = fold(
+        &b,
+        &[
+            review(t0, 1, LexicalDirection::Recognize, false),
+            review(t1, 2, LexicalDirection::Recognize, true),
+        ],
+    );
+    assert_eq!(
+        later
+            .lexical_card(&sense, LexicalDirection::Recognize)
+            .unwrap()
+            .review_count,
+        2
+    );
+}

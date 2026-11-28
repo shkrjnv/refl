@@ -1350,6 +1350,8 @@ impl LearnerModel for KnowledgeModel {
         self.predict_slot(s, bundle, bundle.projection(item)?, slot, now, noise)
     }
 
+    /// One dispatch over every event type; the arms stay close to the spec.
+    #[allow(clippy::too_many_lines)]
     fn apply(
         &self,
         s: &mut State,
@@ -1409,6 +1411,21 @@ impl LearnerModel for KnowledgeModel {
                         s.profile.start_level.insert(subject_id.clone(), level);
                     }
                 }
+                Applied::Skipped
+            }
+            EventPayload::LexicalReview(r) => {
+                let source = if ctx
+                    .bundle
+                    .content
+                    .lexemes
+                    .iter()
+                    .any(|lexeme| lexeme.senses.iter().any(|sense| sense.id == r.lexeme))
+                {
+                    LexicalSource::Bundle
+                } else {
+                    LexicalSource::Custom
+                };
+                self.review_lexeme(s, &r.lexeme, r.direction, r.correct, e.client_ts, source);
                 Applied::Skipped
             }
             EventPayload::CustomLexemeCreated(c) | EventPayload::CustomLexemeUpdated(c) => {

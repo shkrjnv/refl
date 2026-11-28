@@ -10,6 +10,7 @@ use sha2::{Digest, Sha256};
 
 use super::Profile;
 use super::fsrs::Card;
+pub use crate::event::LexicalDirection;
 use crate::event::{
     BookMarkKind, CustomLexemeContext, CustomLexemeSource, InputDevice, NoteAnchor,
 };
@@ -73,13 +74,6 @@ pub struct State {
     /// Book highlights and bookmarks, with tombstones.
     #[serde(default)]
     pub book_marks: BTreeMap<BookMarkId, BookMarkRecord>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum LexicalDirection {
-    Recognize,
-    Produce,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

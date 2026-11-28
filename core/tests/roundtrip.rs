@@ -9,10 +9,11 @@ use refl_core::content::{
 use refl_core::event::{
     AnswerContext, AnswerEvent, BookMarkCreatedEvent, BookMarkDeletedEvent, BookMarkKind,
     Confidence, CriterionScore, CustomLexemeArchivedEvent, CustomLexemeEvent, CustomLexemeSource,
-    EventPayload, HalfBands, InputDevice, MentorOverrideEvent, NoteAnchor, NoteAnchorKind,
-    NoteDeletedEvent, NoteSavedEvent, OverrideKind, OverrideReason, PlacementCompletedEvent,
-    PlacementSource, PlanAction, PlanCandidate, PlanFactor, PlanIssuedEvent, PlanScope,
-    ReclassifiedEvent, Response, Verdict, WritingScoredEvent,
+    EventPayload, HalfBands, InputDevice, LexicalDirection, LexicalReviewEvent,
+    MentorOverrideEvent, NoteAnchor, NoteAnchorKind, NoteDeletedEvent, NoteSavedEvent,
+    OverrideKind, OverrideReason, PlacementCompletedEvent, PlacementSource, PlanAction,
+    PlanCandidate, PlanFactor, PlanIssuedEvent, PlanScope, ReclassifiedEvent, Response, Verdict,
+    WritingScoredEvent,
 };
 use refl_core::ids::{
     AchievementId, BookId, BookMarkId, ContentVersion, CustomLexemeId, DomainId, EventId,
@@ -320,6 +321,21 @@ fn batch4_payload() -> impl Strategy<Value = EventPayload> {
             .prop_map(|id| EventPayload::NoteDeleted(NoteDeletedEvent {
                 note_id: NoteId(id)
             })),
+        (
+            slug(LexemeId::new),
+            prop_oneof![
+                Just(LexicalDirection::Recognize),
+                Just(LexicalDirection::Produce)
+            ],
+            any::<bool>()
+        )
+            .prop_map(|(lexeme, direction, correct)| {
+                EventPayload::LexicalReview(LexicalReviewEvent {
+                    lexeme,
+                    direction,
+                    correct,
+                })
+            }),
         runtime.prop_map(|id| EventPayload::BookMarkDeleted(BookMarkDeletedEvent {
             mark_id: BookMarkId(id)
         })),
