@@ -97,12 +97,12 @@ dev:
 # The core and its wasm-bindgen bridge must build for the browser; the web
 # client gets the generated JS glue, while compiled wasm/js stay untracked.
 wasm:
-    cargo build --locked --release -p refl-core --target wasm32-unknown-unknown
-    cargo build --locked --release -p refl-core-wasm --target wasm32-unknown-unknown
+    cargo build --locked --profile wasm-release -p refl-core --target wasm32-unknown-unknown
+    cargo build --locked --profile wasm-release -p refl-core-wasm --target wasm32-unknown-unknown
     rm -rf web/src/generated/wasm
     mkdir -p web/src/generated/wasm
-    wasm-bindgen --target web --out-dir web/src/generated/wasm target/wasm32-unknown-unknown/release/refl_core_wasm.wasm
-    wasm-opt --strip-debug --strip-producers --strip-target-features \
+    wasm-bindgen --target web --out-dir web/src/generated/wasm target/wasm32-unknown-unknown/wasm-release/refl_core_wasm.wasm
+    wasm-opt --strip-debug --strip-producers --strip-target-features --all-features -Oz \
         web/src/generated/wasm/refl_core_wasm_bg.wasm \
         -o web/src/generated/wasm/refl_core_wasm_bg.opt.wasm
     mv web/src/generated/wasm/refl_core_wasm_bg.opt.wasm \
