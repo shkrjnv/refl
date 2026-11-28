@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { IellaTip } from "../components/IellaTip";
 import { NotesPanel } from "../components/NotesPanel";
 import { Button, Card, StatusMeta } from "../components/ui";
-import type { Edge } from "../generated/core/Edge";
+import { resolveGraphPositions } from "../prototype/graphLayout";
 import type { Locale } from "../i18n";
 import { useTranslation } from "../i18n";
 import type { KcEntry, PrototypeContent } from "../prototype/content";
@@ -46,96 +46,6 @@ const STATUS_TONE: Record<NodeStatus, "neutral" | "accent" | "success" | "danger
   fading: "danger",
   blocked: "neutral",
 };
-
-function seedFrom(text: string): number {
-  let seed = 2166136261;
-  for (let index = 0; index < text.length; index += 1) {
-    seed ^= text.charCodeAt(index);
-    seed = Math.imul(seed, 16777619);
-  }
-  return seed >>> 0;
-}
-
-function random(seed: number): () => number {
-  let value = seed;
-  return () => {
-    value += 0x6d2b79f5;
-    let t = value;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-/** Deterministic force layout: 300 steps, seeded by the content version. */
-function webPositions(
-  nodes: Node[],
-  edges: Edge[],
-  seed: number,
-): Map<string, { x: number; y: number }> {
-  const next = random(seed);
-  const positions = new Map(
-    nodes.map((node) => [
-      node.entry.kc.id,
-      { x: node.x + next() * 40, y: node.y + next() * 40 },
-    ]),
-  );
-  const ids = nodes.map((node) => node.entry.kc.id);
-  const links = edges.filter(
-    (edge) => positions.has(edge.from) && positions.has(edge.to),
-  );
-  for (let step = 0; step < 300; step += 1) {
-    const cooling = 1 - step / 300;
-    for (let i = 0; i < ids.length; i += 1) {
-      const left = positions.get(ids[i] ?? "");
-      if (!left) {
-        continue;
-      }
-      for (let j = i + 1; j < ids.length; j += 1) {
-        const right = positions.get(ids[j] ?? "");
-        if (!right) {
-          continue;
-        }
-        let dx = left.x - right.x;
-        let dy = left.y - right.y;
-        const distance = Math.max(1, Math.hypot(dx, dy));
-        const force = 9000 / (distance * distance);
-        dx /= distance;
-        dy /= distance;
-        left.x += dx * force * cooling;
-        left.y += dy * force * cooling;
-        right.x -= dx * force * cooling;
-        right.y -= dy * force * cooling;
-      }
-    }
-    for (const edge of links) {
-      const left = positions.get(edge.from);
-      const right = positions.get(edge.to);
-      if (!left || !right) {
-        continue;
-      }
-      const dx = right.x - left.x;
-      const dy = right.y - left.y;
-      const distance = Math.max(1, Math.hypot(dx, dy));
-      const force = (distance - 220) * 0.004 * cooling;
-      const ux = dx / distance;
-      const uy = dy / distance;
-      left.x += ux * force;
-      left.y += uy * force;
-      right.x -= ux * force;
-      right.y -= uy * force;
-    }
-    for (const id of ids) {
-      const position = positions.get(id);
-      if (!position) {
-        continue;
-      }
-      position.x = Math.max(80, Math.min(920, position.x * 0.995 + 500 * 0.005));
-      position.y = Math.max(80, Math.min(920, position.y * 0.995 + 500 * 0.005));
-    }
-  }
-  return positions;
-}
 
 export function GraphScreen({
   content,
@@ -208,12 +118,24 @@ export function GraphScreen({
     });
   }, [liveEntries, progress, learner, content, liveIds, locale]);
 
-  const positions = useMemo(() => {
-    if (mode === "layered") {
-      return new Map(nodes.map((node) => [node.entry.kc.id, { x: node.x, y: node.y }]));
-    }
-    return webPositions(nodes, edges, seedFrom(content.contentVersion));
-  }, [mode, nodes, edges, content.contentVersion]);
+  const resolved = useMemo(
+    () =>
+      resolveGraphPositions(
+        nodes.map((node) => ({
+          id: node.entry.kc.id,
+          x: node.entry.layout_x,
+          y: node.entry.layout_y,
+          levelRank: node.entry.level_rank,
+          level: node.entry.kc.level,
+          domain: node.entry.kc.domain,
+        })),
+        edges,
+        content.contentVersion,
+        mode,
+      ),
+    [mode, nodes, edges, content.contentVersion],
+  );
+  const positions = resolved.positions;
 
   const focus = selected ?? focused;
   const neighbors = useMemo(() => {
@@ -272,58 +194,67 @@ export function GraphScreen({
           </button>
         </div>
       </header>
+      {resolved.fallback ? (
+        <p className="graph-note">{t("graph-fallback-note")}</p>
+      ) : null}
       <div className={`graph-canvas graph-${mode}`}>
-        <svg
-          viewBox="0 0 1000 1000"
-          role="group"
-          aria-label={t("graph-canvas-label")}
-          className="graph-svg"
-        >
-          <defs>
-            <marker
-              id="graph-arrow"
-              viewBox="0 0 10 10"
-              refX="8"
-              refY="5"
-              markerWidth="6"
-              markerHeight="6"
-              orient="auto-start-reverse"
-            >
-              <path d="M 0 0 L 10 5 L 0 10 z" className="graph-arrow-head" />
-            </marker>
-          </defs>
-          {edges.map((edge) => {
-            const left = positions.get(edge.from);
-            const right = positions.get(edge.to);
-            if (!left || !right) {
-              return null;
-            }
-            const dim =
-              neighbors !== null &&
-              !(neighbors.has(edge.from) && neighbors.has(edge.to));
-            return (
-              <line
-                key={`${edge.kind}-${edge.from}-${edge.to}`}
-                x1={left.x}
-                y1={left.y}
-                x2={right.x}
-                y2={right.y}
-                className={`graph-edge graph-edge-${edge.kind}${dim ? " dim" : ""}`}
-                markerEnd={edge.kind === "requires" ? "url(#graph-arrow)" : undefined}
-              />
-            );
-          })}
+        <div className="graph-stage">
+          <svg
+            viewBox="0 0 1000 1000"
+            preserveAspectRatio="none"
+            role="img"
+            aria-label={t("graph-canvas-label")}
+            className="graph-svg"
+          >
+            <defs>
+              <marker
+                id="graph-arrow"
+                viewBox="0 0 10 10"
+                refX="8"
+                refY="5"
+                markerWidth="6"
+                markerHeight="6"
+                orient="auto-start-reverse"
+              >
+                <path d="M 0 0 L 10 5 L 0 10 z" className="graph-arrow-head" />
+              </marker>
+            </defs>
+            {edges.map((edge) => {
+              const left = positions.get(edge.from);
+              const right = positions.get(edge.to);
+              if (!left || !right) {
+                return null;
+              }
+              const dim =
+                neighbors !== null &&
+                !(neighbors.has(edge.from) && neighbors.has(edge.to));
+              return (
+                <line
+                  key={`${edge.kind}-${edge.from}-${edge.to}`}
+                  x1={left.x}
+                  y1={left.y}
+                  x2={right.x}
+                  y2={right.y}
+                  className={`graph-edge graph-edge-${edge.kind}${dim ? " dim" : ""}`}
+                  markerEnd={edge.kind === "requires" ? "url(#graph-arrow)" : undefined}
+                />
+              );
+            })}
+          </svg>
           {nodes.map((node) => {
-            const position = positions.get(node.entry.kc.id) ?? { x: node.x, y: node.y };
+            const position = positions.get(node.entry.kc.id) ?? { x: 500, y: 500 };
             const dim = neighbors !== null && !neighbors.has(node.entry.kc.id);
             const title = content.title(node.entry, locale);
             return (
-              <g
+              <button
                 key={node.entry.kc.id}
+                type="button"
                 className={`graph-node graph-node-${node.status}${dim ? " dim" : ""}${selected === node.entry.kc.id ? " selected" : ""}`}
-                transform={`translate(${position.x} ${position.y})`}
-                role="button"
-                tabIndex={0}
+                style={{
+                  left: `${position.x / 10}%`,
+                  top: `${position.y / 10}%`,
+                }}
+                aria-pressed={selected === node.entry.kc.id}
                 aria-label={t("graph-node-label", {
                   title,
                   status: t(`graph-status-${node.status}`),
@@ -336,26 +267,19 @@ export function GraphScreen({
                   setSelected(node.entry.kc.id);
                   setNoteOpen(false);
                 }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    setSelected(node.entry.kc.id);
-                  }
-                }}
               >
-                <circle r="70" className="graph-hit" />
-                <circle r="38" className="graph-node-disc" />
-                <text textAnchor="middle" y="5" className="graph-node-label">
-                  {title.length > 18 ? `${title.slice(0, 17)}…` : title}
-                </text>
-                <text textAnchor="middle" y="62" className="graph-node-status">
+                <span className="graph-node-dot" aria-hidden="true" />
+                <span className="graph-node-title">{title}</span>
+                <span className="graph-node-status">
                   {t(`graph-status-${node.status}`)}
-                </text>
-              </g>
+                </span>
+              </button>
             );
           })}
-        </svg>
-        {nodes.length === 0 ? <p className="bento-empty">{t("graph-empty")}</p> : null}
+          {nodes.length === 0 ? (
+            <p className="bento-empty">{t("graph-empty")}</p>
+          ) : null}
+        </div>
       </div>
       {selectedNode ? (
         <Card tone="plain" className="graph-drawer">

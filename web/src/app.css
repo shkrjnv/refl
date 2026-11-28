@@ -11956,3 +11956,263 @@ input:focus-visible {
   gap: 8px;
   margin-top: 8px;
 }
+
+/* Readable graph nodes: HTML labels over an SVG edge layer. */
+.graph-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  max-height: 620px;
+}
+
+.graph-stage .graph-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-height: none;
+}
+
+.graph-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.84rem;
+}
+
+.graph-node {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  width: 140px;
+  min-height: 58px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  transform: translate(-50%, -50%);
+  border: 2px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  padding: 7px 9px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.graph-node-title {
+  display: -webkit-box;
+  overflow: hidden;
+  width: 100%;
+  font-size: 0.78rem;
+  font-weight: 650;
+  line-height: 1.18;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.graph-node-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: 0.66rem;
+}
+
+.graph-node-dot {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--border-strong);
+}
+
+.graph-node-learning {
+  border-color: var(--blue);
+  background: var(--info-surface);
+}
+
+.graph-node-learning .graph-node-dot {
+  background: var(--blue);
+}
+
+.graph-node-mastered {
+  border-color: var(--green);
+  background: var(--success-surface);
+}
+
+.graph-node-mastered .graph-node-dot {
+  background: var(--green);
+}
+
+.graph-node-fading {
+  border-color: var(--sun);
+  background: var(--warning-surface);
+}
+
+.graph-node-fading .graph-node-dot {
+  background: var(--sun);
+}
+
+.graph-node-blocked {
+  border-style: dashed;
+  background: var(--surface);
+}
+
+.graph-node.dim {
+  opacity: 0.28;
+}
+
+.graph-node.selected,
+.graph-node:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+@media (max-width: 540px) {
+  .graph-node {
+    width: 96px;
+    min-height: 52px;
+    padding: 5px 6px;
+  }
+
+  .graph-node-title {
+    font-size: 0.66rem;
+  }
+
+  .graph-node-status {
+    font-size: 0.58rem;
+  }
+}
+
+.book-card > .ui-button {
+  align-self: flex-start;
+  width: auto;
+}
+
+.vocab-form-head {
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.vocab-form-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.vocab-form-heading h2 {
+  margin: 0;
+  font-size: 1.35rem;
+  line-height: 1.15;
+}
+
+.vocab-form-heading .bento-note {
+  max-width: 52ch;
+  margin: 0;
+}
+
+.vocab-form-head > .ui-button {
+  flex: 0 0 auto;
+}
+
+.vocab-io {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  padding: 10px 12px;
+}
+
+.vocab-io-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.vocab-io-label {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.vocab-format {
+  min-height: var(--tap);
+  width: auto;
+  padding: 0 8px;
+}
+
+.vocab-check {
+  display: inline-flex;
+  min-height: var(--tap);
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.vocab-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.vocab-import-preview {
+  padding: 18px;
+}
+
+.vocab-import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.vocab-import-warnings {
+  margin: 0;
+  color: var(--sun-deep);
+  font-size: 0.82rem;
+}
+
+.vocab-import-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+.vocab-import-row {
+  display: grid;
+  grid-template-columns: auto minmax(100px, 1fr) auto;
+  gap: 8px;
+  align-items: baseline;
+  border-top: 1px solid var(--border);
+  padding: 6px 0;
+  font-size: 0.82rem;
+}
+
+.vocab-import-row small {
+  grid-column: 1 / -1;
+  color: var(--text-muted);
+}
+
+.vocab-import-row.status-duplicate,
+.vocab-import-row.status-invalid {
+  color: var(--text-muted);
+}
+
+.vocab-import-row.status-too_large {
+  color: var(--danger, var(--coral));
+}

@@ -54,9 +54,10 @@ function paths(name: StudioIconName): ReactNode {
     case "vocabulary":
       return (
         <>
-          <path d="M4.2 18.6 9 4.2h1.4l4.8 14.4" />
-          <path d="M6.3 13.4h6.2" />
-          <path d="M15.7 10.2c1.6-.5 3.2-.2 3.8.2v7.1c-.8-.4-2.2-.6-3.8-.1" />
+          <rect x="3.5" y="6.5" width="13" height="14" rx="2" />
+          <path d="M7 6.5V4h12.5v13.5h-3" />
+          <path d="M6.5 10.5h6M6.5 13.5h4.5" />
+          <path d="M14.8 9.4v5.2l-1.7-1.2-1.7 1.2V9.4z" />
         </>
       );
     case "library":

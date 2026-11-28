@@ -1,6 +1,11 @@
 import { PrototypeContent } from "../prototype/content";
 
-const articleKc = (id: string, en: string, rank = 1) => ({
+const articleKc = (
+  id: string,
+  en: string,
+  rank = 1,
+  layout = { x: 500, y: 500 },
+) => ({
   kc: {
     id,
     subject: "en",
@@ -19,17 +24,19 @@ const articleKc = (id: string, en: string, rank = 1) => ({
   },
   status: "live",
   level_rank: rank,
-  layout_x: 500,
-  layout_y: 500,
+  layout_x: layout.x,
+  layout_y: layout.y,
 });
 
-export function testContent(): PrototypeContent {
+export function testContent(
+  layout = { x: 500, y: 500 },
+): PrototypeContent {
   const kcId = "en.gram.article.a-an-sound";
   const bundle = {
     format_version: 10,
     content_version: "test-content",
     content: {
-      kcs: [articleKc(kcId, "a or an", 1)],
+      kcs: [articleKc(kcId, "a or an", 1, layout)],
       edges: [],
       lexemes: [
         {

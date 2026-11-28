@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { IellaTip } from "../components/IellaTip";
 import { NotesPanel } from "../components/NotesPanel";
@@ -7,6 +7,14 @@ import type { Locale } from "../i18n";
 import { useTranslation } from "../i18n";
 import type { PrototypeContent } from "../prototype/content";
 import { retrievability } from "../prototype/progress";
+import {
+  candidateToInput,
+  exportVocabulary,
+  previewVocabularyImport,
+  type ImportPreview,
+  type VocabularyFormat,
+  type VocabularyWord,
+} from "../prototype/vocabularyIO";
 import {
   parseRecords,
   type CustomLexemeView,
@@ -165,6 +173,13 @@ export function VocabularyScreen({
   const [reviewing, setReviewing] = useState<WordView[] | null>(null);
   const [reviewIndex, setReviewIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
+  const [exportFormat, setExportFormat] = useState<VocabularyFormat>("tsv");
+  const [includeCourse, setIncludeCourse] = useState(true);
+  const [includePersonal, setIncludePersonal] = useState(true);
+  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importDone, setImportDone] = useState<number | null>(null);
+  const fileInput = useRef<HTMLInputElement | null>(null);
   const [noteTarget, setNoteTarget] = useState<WordView | null>(null);
 
   const filtered = words.filter((word) => {
@@ -184,7 +199,6 @@ export function VocabularyScreen({
     return status === "all" || statusOf(word.card, now) === status;
   });
   const due = words.filter((word) => statusOf(word.card, now) === "due");
-  const customForEdit = form.id ? records.customLexemes[form.id] ?? null : null;
 
   const startReview = () => {
     if (due.length === 0) {
@@ -250,6 +264,89 @@ export function VocabularyScreen({
       setError(t("vocab-error-save"));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const exportWords = (): VocabularyWord[] =>
+    words.map((word) => ({
+      lemma: word.lemma,
+      pos: word.pos,
+      definition: word.definition,
+      glossUz: word.glossUz,
+      glossRu: word.glossRu,
+      examples: word.examples,
+      collocations: word.collocations,
+      ipa: word.ipa,
+      bundleLexemeId: word.bundleId,
+      source: word.custom && !word.bundleId ? "personal" : "course",
+    }));
+
+  const downloadExport = () => {
+    const exported = exportVocabulary(exportWords(), {
+      format: exportFormat,
+      course: includeCourse,
+      personal: includePersonal,
+    });
+    const blob = new Blob([exported.text], { type: exported.mime });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = exported.filename;
+    link.rel = "noopener";
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  };
+
+  const chooseImport = async (file: File) => {
+    setImportError(null);
+    setImportDone(null);
+    try {
+      const text = await file.text();
+      const existing = [
+        ...content.lexemes.map((lexeme) => lexeme.lemma),
+        ...Object.values(records.customLexemes)
+          .filter((record) => !record.archived)
+          .map((record) => record.lemma),
+      ];
+      setImportPreview(previewVocabularyImport(file.name, text, existing));
+    } catch {
+      setImportPreview(null);
+      setImportError(t("vocab-import-error"));
+    }
+  };
+
+  const confirmImport = async () => {
+    if (!importPreview) {
+      return;
+    }
+    setBusy(true);
+    setImportError(null);
+    let next = stateJson;
+    let imported = 0;
+    try {
+      for (const row of importPreview.valid) {
+        if (!row.candidate) {
+          continue;
+        }
+        next = await recordsWriter.saveCustomWord(
+          next,
+          candidateToInput(row.candidate),
+        );
+        imported += 1;
+      }
+      onStateChange(next);
+      setImportDone(imported);
+      setImportPreview(null);
+    } catch {
+      onStateChange(next);
+      setImportError(t("vocab-import-error"));
+    } finally {
+      setBusy(false);
+      if (fileInput.current) {
+        fileInput.current.value = "";
+      }
     }
   };
 
@@ -328,6 +425,142 @@ export function VocabularyScreen({
           {t("vocab-review-start", { count: due.length })}
         </Button>
       </header>
+      <div className="vocab-io" aria-label={t("vocab-io-label")}>
+        <div className="vocab-io-group">
+          <span className="vocab-io-label">{t("vocab-export")}</span>
+          <select
+            className="answer-input vocab-format"
+            aria-label={t("vocab-export-format")}
+            value={exportFormat}
+            onChange={(event) =>
+              setExportFormat(event.currentTarget.value as VocabularyFormat)
+            }
+          >
+            <option value="tsv">TSV</option>
+            <option value="csv">CSV</option>
+            <option value="json">JSON</option>
+          </select>
+          <label className="vocab-check">
+            <input
+              type="checkbox"
+              checked={includeCourse}
+              onChange={(event) => setIncludeCourse(event.currentTarget.checked)}
+            />
+            {t("vocab-export-course")}
+          </label>
+          <label className="vocab-check">
+            <input
+              type="checkbox"
+              checked={includePersonal}
+              onChange={(event) => setIncludePersonal(event.currentTarget.checked)}
+            />
+            {t("vocab-export-personal")}
+          </label>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={!includeCourse && !includePersonal}
+            onClick={downloadExport}
+          >
+            {t("vocab-export-action")}
+          </Button>
+        </div>
+        <div className="vocab-io-group">
+          <input
+            ref={fileInput}
+            type="file"
+            accept=".tsv,.csv,.json,.txt,text/tab-separated-values,text/csv,application/json"
+            className="vocab-file-input"
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              if (file) {
+                void chooseImport(file);
+              }
+            }}
+          />
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => fileInput.current?.click()}
+          >
+            {t("vocab-import")}
+          </Button>
+          <span className="bento-note">{t("vocab-import-hint")}</span>
+        </div>
+      </div>
+      {importDone !== null ? (
+        <p className="inline-alert" role="status">
+          {t("vocab-import-done", { count: importDone })}
+        </p>
+      ) : null}
+      {importError ? (
+        <p className="inline-alert danger" role="alert">
+          {importError}
+        </p>
+      ) : null}
+      {importPreview ? (
+        <Card tone="plain" className="vocab-import-preview">
+          <div className="vocab-form-head">
+            <div className="vocab-form-heading">
+              <p className="eyebrow">{t("vocab-import-preview-eyebrow")}</p>
+              <h2>{t("vocab-import-preview-title")}</h2>
+              <p className="bento-note">
+                {t("vocab-import-summary", {
+                  valid: importPreview.valid.length,
+                  duplicates: importPreview.duplicates,
+                  invalid: importPreview.invalid,
+                  tooLarge: importPreview.tooLarge,
+                })}
+              </p>
+            </div>
+            <div className="vocab-import-actions">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setImportPreview(null)}
+              >
+                {t("vocab-import-cancel")}
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                disabled={busy || importPreview.valid.length === 0}
+                onClick={() => void confirmImport()}
+              >
+                {t("vocab-import-confirm", { count: importPreview.valid.length })}
+              </Button>
+            </div>
+          </div>
+          {importPreview.warnings.length > 0 ? (
+            <ul className="vocab-import-warnings">
+              {importPreview.warnings.map((warning) => (
+                <li key={warning}>{warning}</li>
+              ))}
+            </ul>
+          ) : null}
+          <ul className="vocab-import-rows">
+            {importPreview.rows.slice(0, 12).map((row) => (
+              <li
+                key={`${row.line}-${row.candidate?.lemma ?? ""}`}
+                className={`vocab-import-row status-${row.status}`}
+              >
+                <span>{t("vocab-import-line", { line: row.line })}</span>
+                <strong>{row.candidate?.lemma ?? "—"}</strong>
+                <span>{t(`vocab-import-status-${row.status}`)}</span>
+                {row.message ? <small>{row.message}</small> : null}
+              </li>
+            ))}
+          </ul>
+          {importPreview.rows.length > 12 ? (
+            <p className="bento-note">
+              {t("vocab-import-more", { count: importPreview.rows.length - 12 })}
+            </p>
+          ) : null}
+        </Card>
+      ) : null}
       <div className="vocab-tools">
         <label className="field vocab-search">
           <span>{t("vocab-search-label")}</span>
@@ -457,11 +690,14 @@ export function VocabularyScreen({
       </div>
       <Card tone="plain" className="vocab-form-card">
         <div className="vocab-form-head">
-          <h2>{formOpen ? t("vocab-form-edit-title") : t("vocab-form-title")}</h2>
+          <div className="vocab-form-heading">
+            <p className="eyebrow">{t("vocab-form-eyebrow")}</p>
+            <h2>{formOpen ? t("vocab-form-edit-title") : t("vocab-form-title")}</h2>
+            <p className="bento-note">{t("vocab-form-note")}</p>
+          </div>
           <Button
             type="button"
-            variant="ghost"
-            size="sm"
+            variant={formOpen ? "secondary" : "primary"}
             onClick={() => {
               setFormOpen((open) => !open);
               if (formOpen) {
@@ -549,7 +785,6 @@ export function VocabularyScreen({
             {content.senseForForm(form.lemma) ? (
               <p className="bento-note">{t("vocab-form-bank-match")}</p>
             ) : null}
-            {customForEdit ? null : null}
             <Button type="submit" variant="primary" disabled={busy}>
               {form.id ? t("vocab-form-save-edit") : t("vocab-form-save")}
             </Button>

@@ -38,12 +38,12 @@ function fakeStore(): RecordStore {
   } as unknown as RecordStore;
 }
 
-function renderGraph() {
+function renderGraph(content = testContent()) {
   const onPractice = vi.fn();
   render(
     <I18nProvider initialLocale="en">
       <GraphScreen
-        content={testContent()}
+        content={content}
         stateJson={state}
         locale="en"
         recordsWriter={fakeStore()}
@@ -78,5 +78,19 @@ describe("knowledge graph", () => {
     fireEvent.click(web);
     expect(web.getAttribute("aria-pressed")).toBe("true");
     expect(layered.getAttribute("aria-pressed")).toBe("false");
+  });
+});
+
+describe("knowledge graph zero layout", () => {
+  it("uses the generated fallback instead of stacking at zero", () => {
+    renderGraph(testContent({ x: 0, y: 0 }));
+    expect(
+      screen.getByText(
+        "This bundle has no saved graph positions, so the map uses a generated level layout.",
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "a or an, Learning" }),
+    ).toBeTruthy();
   });
 });

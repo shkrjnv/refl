@@ -113,3 +113,33 @@ describe("vocabulary screen", () => {
     });
   });
 });
+
+describe("vocabulary import UI", () => {
+  it("previews a TSV file and imports only valid rows", async () => {
+    const { container } = render(
+      <I18nProvider initialLocale="en">
+        <VocabularyScreen
+          content={testContent()}
+          stateJson="{}"
+          locale="en"
+          recordsWriter={fakeStore()}
+          onStateChange={() => undefined}
+        />
+      </I18nProvider>,
+    );
+    const input = container.querySelector(".vocab-file-input") as HTMLInputElement;
+    const file = new File(
+      ["Lemma\tDefinition\nmira\ta name\ncat\ta duplicate\n"],
+      "deck.tsv",
+      { type: "text/tab-separated-values" },
+    );
+    fireEvent.change(input, { target: { files: [file] } });
+    expect(await screen.findByText("Check before saving")).toBeTruthy();
+    expect(screen.getByText(/1 valid/)).toBeTruthy();
+    expect(screen.getByText(/1 duplicates/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Import 1 words" }));
+    await waitFor(() => {
+      expect(screen.getByText("Imported 1 personal word(s).")).toBeTruthy();
+    });
+  });
+});
