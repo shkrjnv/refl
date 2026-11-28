@@ -11,7 +11,9 @@
 #![allow(clippy::missing_panics_doc)]
 
 pub mod cohort;
+pub mod hetero;
 pub mod prereq;
+pub mod stress;
 pub mod termination;
 
 use std::collections::BTreeMap;

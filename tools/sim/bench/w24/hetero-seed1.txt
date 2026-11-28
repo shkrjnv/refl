@@ -1,0 +1,157 @@
+hetero seed=1 learners=1000 steps=200 live_bundle=content/bench/v3/bundle.json (5 live KCs) full_bundle=target/bundle.json (32 learning KCs)
+
+== live Articles sub-graph: 1000 learners x 200 steps, target KCs 5 ==
+
+-- S1 Leitner/linear --
+mastery reached 1127/4164 (27.1%); steps median 106 IQR 53-123; level MAE 0.343 RMSE 0.512
+mis @30: 21.8% (1942->1518)  mis @60: 23.7% (1942->1481)  mis @100: 28.6% (1942->1387)  mis @200: 31.6% (1942->1329)  
+placement @3: MAE 0.353 RMSE 0.796  placement @6: MAE 1.054 RMSE 1.401  placement @10: MAE 1.014 RMSE 1.344  
+by archetype:
+  True zero          0/835 (0.0%) | median NaN IQR NaN-NaN | level MAE 0.031 RMSE 0.035
+  Spiky / uneven     227/835 (27.2%) | median 102 IQR 53-119 | level MAE 0.299 RMSE 0.486
+  L1-fossilized      0/835 (0.0%) | median NaN IQR NaN-NaN | level MAE 0.035 RMSE 0.062
+  Fast + high slip   no learning targets (all KCs already >= 0.85 at T0) | level MAE 0.876 RMSE 0.897
+  Impulsive guesser  453/829 (54.6%) | median 115 IQR 105-136 | level MAE 0.286 RMSE 0.347
+  Steady average     447/830 (53.9%) | median 68 IQR 39-110 | level MAE 0.532 RMSE 0.639
+
+-- S2 KC-adaptive --
+mastery reached 1001/4164 (24.0%); steps median 98 IQR 66-125; level MAE 0.361 RMSE 0.556
+mis @30: 26.2% (1942->1433)  mis @60: 25.3% (1942->1450)  mis @100: 27.9% (1942->1401)  mis @200: 32.1% (1942->1318)  
+placement @3: MAE 0.353 RMSE 0.796  placement @6: MAE 1.054 RMSE 1.401  placement @10: MAE 1.014 RMSE 1.344  
+by archetype:
+  True zero          0/835 (0.0%) | median NaN IQR NaN-NaN | level MAE 0.017 RMSE 0.023
+  Spiky / uneven     183/835 (21.9%) | median 94 IQR 74-136 | level MAE 0.264 RMSE 0.461
+  L1-fossilized      0/835 (0.0%) | median NaN IQR NaN-NaN | level MAE 0.016 RMSE 0.029
+  Fast + high slip   no learning targets (all KCs already >= 0.85 at T0) | level MAE 0.769 RMSE 0.809
+  Impulsive guesser  405/829 (48.9%) | median 111 IQR 95-125 | level MAE 0.609 RMSE 0.766
+  Steady average     413/830 (49.8%) | median 74 IQR 52-111 | level MAE 0.491 RMSE 0.631
+
+-- S3 full refl --
+mastery reached 2724/4164 (65.4%); steps median 72 IQR 51-111; level MAE 0.362 RMSE 0.487
+mis @30: 77.0% (1942->447)  mis @60: 91.8% (1942->159)  mis @100: 99.9% (1942->2)  mis @200: 100.0% (1942->0)  
+placement @3: MAE 0.353 RMSE 0.796  placement @6: MAE 1.054 RMSE 1.401  placement @10: MAE 1.014 RMSE 1.344  
+by archetype:
+  True zero          75/835 (9.0%) | median 160 IQR 135-181 | level MAE 0.123 RMSE 0.303
+  Spiky / uneven     834/835 (99.9%) | median 80 IQR 60-108 | level MAE 0.343 RMSE 0.395
+  L1-fossilized      158/835 (18.9%) | median 161 IQR 134-181 | level MAE 0.206 RMSE 0.356
+  Fast + high slip   no learning targets (all KCs already >= 0.85 at T0) | level MAE 0.433 RMSE 0.466
+  Impulsive guesser  827/829 (99.8%) | median 60 IQR 47-116 | level MAE 0.844 RMSE 0.881
+  Steady average     830/830 (100.0%) | median 55 IQR 37-73 | level MAE 0.223 RMSE 0.242
+
+per KC (median [IQR] steps / reach%):
+KC                                             bank                     S1                     S2                     S3
+en.gram.article.a-an-sound                  21/8      111 [106-115] (27%)     117 [80-135] (24%)     115 [88-134] (61%)
+en.gram.article.first-mention               11/4       106 [40-111] (27%)     103 [71-124] (24%)      73 [54-103] (65%)
+en.gram.article.second-mention              14/4       122 [54-124] (27%)      98 [74-120] (24%)      71 [56-103] (63%)
+en.gram.article.zero-general                11/3       136 [69-138] (25%)      95 [60-120] (24%)       59 [52-93] (65%)
+en.gram.noun.countability                   15/4         28 [20-96] (28%)      72 [20-114] (25%)       37 [19-74] (72%)
+
+failure audit (S3 rate below both baselines):
+none on this seed
+
+S3 low absolute reach (<10%):
+none on this seed
+
+archetype audit (S3 rate below both baselines):
+none on this seed
+
+S3 low absolute reach by archetype (<10%):
+- True zero: S3 reach 9% (baselines 0/0%), median 160
+- Fast + high slip: S3 reach 0% (baselines 0/0%), median NaN
+
+L1 split:
+  uz: 1355/2089 (64.9%) | median 73 IQR 52-111 | level MAE 0.360 RMSE 0.483
+  ru: 1369/2075 (66.0%) | median 71 IQR 49-110 | level MAE 0.363 RMSE 0.492
+
+== full 32-KC A1 projection (draft content promoted): 1000 learners x 200 steps, target KCs 32 ==
+
+-- S1 Leitner/linear --
+mastery reached 3349/21537 (15.5%); steps median 38 IQR 17-77; level MAE 0.426 RMSE 0.697
+mis @30: 5.3% (7260->6875)  mis @60: 10.8% (7260->6474)  mis @100: 15.9% (7260->6104)  mis @200: 24.6% (7260->5476)  
+placement @3: MAE 0.471 RMSE 0.830  placement @6: MAE 0.811 RMSE 1.146  placement @10: MAE 0.810 RMSE 1.144  
+by archetype:
+  True zero          0/5344 (0.0%) | median NaN IQR NaN-NaN | level MAE 0.007 RMSE 0.008
+  Spiky / uneven     904/3215 (28.1%) | median 38 IQR 16-92 | level MAE 0.378 RMSE 0.383
+  L1-fossilized      202/5228 (3.9%) | median 26 IQR 15-31 | level MAE 0.022 RMSE 0.031
+  Fast + high slip   no learning targets (all KCs already >= 0.85 at T0) | level MAE 1.591 RMSE 1.596
+  Impulsive guesser  861/3188 (27.0%) | median 40 IQR 21-85 | level MAE 0.332 RMSE 0.364
+  Steady average     1382/4562 (30.3%) | median 38 IQR 24-76 | level MAE 0.223 RMSE 0.293
+
+-- S2 KC-adaptive --
+mastery reached 3492/21537 (16.2%); steps median 56 IQR 19-129; level MAE 0.475 RMSE 0.749
+mis @30: 8.7% (7260->6627)  mis @60: 14.4% (7260->6214)  mis @100: 21.0% (7260->5738)  mis @200: 26.3% (7260->5347)  
+placement @3: MAE 0.471 RMSE 0.830  placement @6: MAE 0.811 RMSE 1.146  placement @10: MAE 0.810 RMSE 1.144  
+by archetype:
+  True zero          0/5344 (0.0%) | median NaN IQR NaN-NaN | level MAE 0.005 RMSE 0.006
+  Spiky / uneven     869/3215 (27.0%) | median 93 IQR 40-150 | level MAE 0.419 RMSE 0.425
+  L1-fossilized      231/5228 (4.4%) | median 70 IQR 27-145 | level MAE 0.041 RMSE 0.060
+  Fast + high slip   no learning targets (all KCs already >= 0.85 at T0) | level MAE 1.697 RMSE 1.699
+  Impulsive guesser  874/3188 (27.4%) | median 44 IQR 14-119 | level MAE 0.372 RMSE 0.403
+  Steady average     1518/4562 (33.3%) | median 40 IQR 14-119 | level MAE 0.311 RMSE 0.358
+
+-- S3 full refl --
+mastery reached 6701/21537 (31.1%); steps median 52 IQR 24-120; level MAE 0.683 RMSE 0.908
+mis @30: 49.8% (7260->3648)  mis @60: 65.6% (7260->2496)  mis @100: 78.8% (7260->1540)  mis @200: 88.9% (7260->807)  
+placement @3: MAE 0.471 RMSE 0.830  placement @6: MAE 0.811 RMSE 1.146  placement @10: MAE 0.810 RMSE 1.144  
+by archetype:
+  True zero          1/5344 (0.0%) | median 192 IQR 192-192 | level MAE 0.012 RMSE 0.012
+  Spiky / uneven     1349/3215 (42.0%) | median 93 IQR 29-160 | level MAE 0.995 RMSE 1.108
+  L1-fossilized      367/5228 (7.0%) | median 101 IQR 58-156 | level MAE 0.050 RMSE 0.072
+  Fast + high slip   no learning targets (all KCs already >= 0.85 at T0) | level MAE 1.394 RMSE 1.401
+  Impulsive guesser  2233/3188 (70.0%) | median 32 IQR 21-62 | level MAE 0.556 RMSE 0.640
+  Steady average     2751/4562 (60.3%) | median 63 IQR 30-133 | level MAE 1.093 RMSE 1.156
+
+per KC (median [IQR] steps / reach%):
+KC                                             bank                     S1                     S2                     S3
+en.gram.adjective.position                   2/2            1 [1-5] (15%)       22 [21-95] (17%)       58 [44-76] (28%)
+en.gram.adverb.frequency                     2/2          37 [4-38] (19%)       29 [3-127] (20%)       42 [14-73] (21%)
+en.gram.article.a-an-sound                  21/8          97 [94-99] (3%)     NaN [NaN-NaN] (0%)     195 [187-197] (3%)
+en.gram.article.first-mention               11/4          93 [92-94] (4%)     NaN [NaN-NaN] (0%)    172 [156-188] (30%)
+en.gram.article.second-mention              14/4       107 [106-109] (3%)     189 [189-189] (0%)    176 [164-190] (23%)
+en.gram.article.zero-general                11/3       120 [119-124] (2%)     199 [199-199] (0%)    172 [158-187] (33%)
+en.gram.be.present-affirmative               2/2          6 [5-131] (15%)       48 [2-116] (15%)        21 [6-37] (22%)
+en.gram.be.present-negative                  2/2            8 [7-8] (12%)      50 [18-119] (14%)       58 [42-97] (24%)
+en.gram.be.present-questions                 2/2        10 [10-136] (12%)      62 [41-123] (16%)       25 [12-41] (35%)
+en.gram.can.ability                          2/2         11 [11-12] (20%)       13 [12-83] (27%)       30 [23-37] (34%)
+en.gram.can.requests                         2/2         12 [11-13] (30%)       32 [12-86] (34%)       33 [26-88] (34%)
+en.gram.determiner.demonstratives            2/2         27 [19-27] (28%)        23 [6-92] (32%)       52 [30-80] (33%)
+en.gram.imperative                           2/2         38 [37-38] (17%)       44 [3-131] (17%)        26 [5-46] (19%)
+en.gram.noun.countability                   15/4         76 [73-83] (11%)       80 [70-146] (2%)     113 [84-136] (55%)
+en.gram.noun.plural-irregular                2/2         27 [25-27] (31%)      30 [29-119] (33%)      73 [35-133] (32%)
+en.gram.noun.plural-regular                  2/2        77 [71-153] (14%)       76 [9-139] (11%)      81 [33-117] (49%)
+en.gram.possessive.adjectives                2/2         47 [29-48] (16%)       30 [13-73] (20%)       33 [21-43] (29%)
+en.gram.possessive.s                         2/2         31 [27-32] (32%)       46 [6-118] (33%)      61 [30-100] (32%)
+en.gram.preposition.place                    2/2         33 [33-34] (13%)      21 [14-101] (14%)       41 [28-64] (27%)
+en.gram.preposition.time                     2/2         36 [35-38] (11%)     108 [19-163] (14%)      57 [21-113] (23%)
+en.gram.present-continuous.affirmative       2/2         16 [15-16] (25%)      78 [20-119] (28%)       33 [27-78] (36%)
+en.gram.present-continuous.questions         2/2         16 [15-17] (37%)      96 [30-155] (43%)      53 [34-116] (38%)
+en.gram.present-simple.affirmative           2/2         38 [37-47] (19%)       28 [3-121] (20%)        22 [7-37] (21%)
+en.gram.present-simple.negative              2/2        40 [39-165] (20%)       66 [6-133] (20%)       17 [12-40] (25%)
+en.gram.present-simple.questions             2/2        42 [38-167] (15%)      88 [32-135] (15%)       28 [18-43] (28%)
+en.gram.present-simple.third-person-s        2/2        67 [43-170] (15%)       97 [9-142] (16%)       24 [16-46] (27%)
+en.gram.pronoun.object                       2/2         47 [45-47] (17%)       31 [24-88] (20%)       50 [21-61] (26%)
+en.gram.pronoun.subject                      2/2        91 [48-174] (17%)      78 [67-146] (14%)        10 [3-27] (48%)
+en.gram.quantifier.much-many                 2/2       149 [51-150] (17%)     123 [57-161] (25%)       55 [37-94] (50%)
+en.gram.quantifier.some-any                  2/2        75 [52-150] (13%)      72 [25-122] (11%)      84 [42-119] (49%)
+en.gram.question.words                       2/2        49 [41-167] (17%)      74 [16-142] (20%)      48 [32-112] (35%)
+en.gram.there-is-are                         2/2         53 [6-101] (16%)      48 [21-114] (16%)        22 [6-50] (34%)
+
+failure audit (S3 rate below both baselines):
+- en.gram.noun.plural-irregular: S3 rate 32% vs best of S1/S2 33%, median 73 vs 27/30; bank 2 slots / 2 families
+- en.gram.possessive.s: S3 rate 32% vs best of S1/S2 33%, median 61 vs 31/46; bank 2 slots / 2 families
+- en.gram.present-continuous.questions: S3 rate 38% vs best of S1/S2 43%, median 53 vs 16/96; bank 2 slots / 2 families
+
+S3 low absolute reach (<10%):
+- en.gram.article.a-an-sound: S3 reach 3% (baselines 3/0%), bank 21 slots / 8 families
+
+archetype audit (S3 rate below both baselines):
+none on this seed
+
+S3 low absolute reach by archetype (<10%):
+- True zero: S3 reach 0% (baselines 0/0%), median 192
+- L1-fossilized: S3 reach 7% (baselines 4/4%), median 101
+- Fast + high slip: S3 reach 0% (baselines 0/0%), median NaN
+
+L1 split:
+  uz: 3320/10833 (30.6%) | median 52 IQR 24-121 | level MAE 0.665 RMSE 0.887
+  ru: 3381/10704 (31.6%) | median 51 IQR 24-119 | level MAE 0.700 RMSE 0.928

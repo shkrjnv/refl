@@ -134,6 +134,37 @@ plan-speed:
     cargo run --locked --release --quiet -p refl-sim --bin plan-hash -- --time
     wasmtime run target/wasm32-wasip1/release/plan-hash.wasm --time
 
+# W24: 100k-event fold/replay/selection and native-vs-JSON-boundary benchmarks
+stress:
+    cargo test --locked --release -p refl-sim --test stress -- --ignored --nocapture --test-threads=1
+
+# W24: the same fold in native release and wasm32-wasip1 under wasmtime; hashes must match
+stress-wasm events="100000" seed="7":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --locked --release --quiet -p refl-sim --bin stress --target wasm32-wasip1
+    native="$(cargo run --locked --release --quiet -p refl-sim --bin stress -- fold {{events}} {{seed}})"
+    wasm="$(wasmtime run target/wasm32-wasip1/release/stress.wasm fold {{events}} {{seed}})"
+    echo "native: $native"
+    echo "wasm:   $wasm"
+    native_hash="$(printf '%s\n' "$native" | grep -o 'hash=[0-9a-f]*' | head -1)"
+    wasm_hash="$(printf '%s\n' "$wasm" | grep -o 'hash=[0-9a-f]*' | head -1)"
+    native_bytes="$(printf '%s\n' "$native" | grep -o 'snapshot_bytes=[0-9]*->[0-9]*' | head -1)"
+    wasm_bytes="$(printf '%s\n' "$wasm" | grep -o 'snapshot_bytes=[0-9]*->[0-9]*' | head -1)"
+    test -n "$native_hash"
+    test "$native_hash" = "$wasm_hash"
+    test "$native_bytes" = "$wasm_bytes"
+    echo "cross-target hash and snapshot bytes match"
+
+# W24: 1,000 learners x 200 steps on the live and full 32-KC bundles (writes the report)
+hetero learners="1000" steps="200" seed="1": content
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p tools/sim/bench/w24
+    cargo run --locked --release --quiet -p refl-sim --bin hetero -- \
+        content/bench/v3/bundle.json target/bundle.json {{learners}} {{steps}} {{seed}} \
+        | tee tools/sim/bench/w24/hetero-seed{{seed}}.txt
+
 # The K5 cohort on content/ (draft KCs as live): our sessions against «только FSRS»
 cohort learners="200" days="30" seed="1": content
     cargo run --locked --release --quiet -p refl-sim --bin cohort -- target/bundle.json {{learners}} {{days}} {{seed}}

@@ -1351,6 +1351,7 @@ dependencies = [
  "libm",
  "proptest",
  "refl-core",
+ "refl-core-wasm",
  "serde_json",
  "sha2",
  "uuid",
