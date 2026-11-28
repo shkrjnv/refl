@@ -51,11 +51,9 @@ describe("admin invite actions", () => {
     );
     const indicator = copied.querySelector(".crossfade-icon");
     expect(indicator?.getAttribute("data-active")).toBe("true");
-    expect(
-      indicator?.querySelector(
-        '.crossfade-icon-state-to path[d="m4.5 12.5 5 5L20 6.8"]',
-      ),
-    ).not.toBeNull();
+    const check = indicator?.querySelector(".crossfade-icon-state-to .studio-icon");
+    expect(check?.getAttribute("class")).toContain("lucide-check");
+    expect(check?.querySelector("path")).not.toBeNull();
     expect(document.querySelector(".pulse-confirm")).toBeNull();
   });
 });

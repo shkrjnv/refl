@@ -104,6 +104,9 @@ describe("studio identity", () => {
   it("keeps the navigation icon set on the same stroke geometry", () => {
     for (const name of [
       "today",
+      "vocabulary",
+      "library",
+      "graph",
       "practice",
       "progress",
       "profile",

@@ -47,9 +47,9 @@ describe("lesson confirmation check", () => {
     const verdict = screen.getByText("Correct");
     const row = verdict.closest(".feedback-verdict");
     expect(row).not.toBeNull();
-    expect(
-      row?.querySelector('.studio-icon path[d="m4.5 12.5 5 5L20 6.8"]'),
-    ).not.toBeNull();
+    const check = row?.querySelector(".studio-icon");
+    expect(check?.getAttribute("class")).toContain("lucide-check");
+    expect(check?.querySelector("path")).not.toBeNull();
     expect(document.querySelector(".pulse-confirm")).toBeNull();
 
     const css = readFileSync("src/app.css", "utf8");

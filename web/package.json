@@ -16,6 +16,7 @@
   "dependencies": {
     "@fluent/bundle": "0.19.1",
     "@fluent/langneg": "0.7.0",
+    "lucide-react": "1.82.0",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },
