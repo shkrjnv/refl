@@ -690,7 +690,14 @@ impl<'a> Planner<'a> {
         let mut candidates: Vec<(f64, KcId)> = s
             .kcs
             .iter()
-            .filter(|(kc, _)| !used.contains(*kc) && self.is_live(kc))
+            .filter(|(kc, _)| {
+                !used.contains(*kc)
+                    && self.is_live(kc)
+                    && matches!(
+                        self.progress(s, kc, now),
+                        KcProgress::Mastered | KcProgress::LongTerm
+                    )
+            })
             .filter_map(|(kc, _)| {
                 let mastered = s.mastered_at.get(kc)?;
                 let age = days_between(*mastered, now);
