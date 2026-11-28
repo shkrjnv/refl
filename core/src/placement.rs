@@ -238,7 +238,7 @@ fn done(
     placement: &Placement,
     now: Timestamp,
 ) -> PlacementNext {
-    let level = result_level(model, bundle, state, &placement.subject, now);
+    let level = result_level(model, bundle, state, placement, now);
     PlacementNext::Done(PlacementResult {
         level,
         start_level: start_level(level.as_ref(), bundle, &placement.subject),
@@ -299,11 +299,40 @@ fn result_level(
     model: &KnowledgeModel,
     bundle: &Bundle,
     state: &State,
-    subject: &SubjectId,
+    placement: &Placement,
     now: Timestamp,
 ) -> Option<Level> {
-    let domain = domain_for(bundle, subject)?;
-    model.level(state, bundle, subject, &domain, now)
+    let domain = domain_for(bundle, &placement.subject)?;
+    let assessed = model.level_assessed(state, bundle, &placement.subject, &domain, now);
+    let perfect = placement.asked.len() >= MIN_ITEMS && placement.correct == answered(placement);
+    if perfect && let Some(ceiling) = ceiling_rank(bundle, &placement.subject, &domain) {
+        // A short placement cannot certify every KC, but a clean run is the
+        // strongest evidence this content can give. Report the top of the
+        // live range instead of letting untouched priors lower the band.
+        let point = ceiling;
+        let low = assessed.map_or_else(
+            || (point - 1.0).max(0.0),
+            |level| level.low.max(point - 1.0).min(point),
+        );
+        return Some(Level {
+            point,
+            low,
+            high: point,
+        });
+    }
+    assessed.or_else(|| model.level(state, bundle, &placement.subject, &domain, now))
+}
+
+fn ceiling_rank(bundle: &Bundle, subject: &SubjectId, domain: &DomainId) -> Option<f64> {
+    bundle
+        .content
+        .kcs
+        .iter()
+        .filter(|e| {
+            e.status == KcStatus::Live && &e.kc.subject == subject && &e.kc.domain == domain
+        })
+        .map(|e| f64::from(e.level_rank))
+        .max_by(f64::total_cmp)
 }
 
 /// The level is needed only after the beginner threshold; computing it on
@@ -316,7 +345,7 @@ fn level_for_next(
     now: Timestamp,
 ) -> Option<Level> {
     if placement.asked.len() >= BEGINNER_ITEMS {
-        result_level(model, bundle, state, &placement.subject, now)
+        result_level(model, bundle, state, placement, now)
     } else {
         None
     }
