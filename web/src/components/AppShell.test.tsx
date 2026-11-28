@@ -153,6 +153,20 @@ describe("adaptive studio shell", () => {
     expect(document.activeElement).toBe(more);
   });
 
+  it("dims the page behind the wide More popover and closes on the scrim", () => {
+    const { container } = renderShell("bottom");
+    const more = screen.getByRole("button", { name: "More" });
+    fireEvent.click(more);
+    const scrim = container.querySelector(".more-scrim");
+    expect(scrim).toBeTruthy();
+    if (!scrim) {
+      return;
+    }
+    fireEvent.click(scrim);
+    expect(screen.queryByRole("dialog", { name: "More sections" })).toBeNull();
+    expect(document.activeElement).toBe(more);
+  });
+
   it("uses a neutral learner name when no display name is set", () => {
     const { container } = renderShell("left", undefined, "today", undefined, "");
     expect(

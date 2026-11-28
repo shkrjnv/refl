@@ -2,6 +2,8 @@
 
 `hero-nature.jpg` is "Misty Lake Pukaki and Mt Cook" by Bernard Spragg. NZ, published under CC0 1.0. The bundled copy is the 3000 × 1792 source from Wikimedia Commons; no network request is made at runtime.
 
+The `hero-nature-{480,768,1120,1600,2048}.{avif,webp,jpg}` files are responsive derivatives of that source, generated locally with ffmpeg (AVIF CRF 36, WebP quality 75, JPEG qscale 7). The original source is kept for traceability and is not requested by the app.
+
 Source: https://commons.wikimedia.org/wiki/File:Misty_Lake_Pukaki_and_Mt_Cook._(17717782294).jpg
 License: https://creativecommons.org/publicdomain/zero/1.0/
 

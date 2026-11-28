@@ -33,8 +33,20 @@ describe("reader word popover", () => {
   it("uses the reader field and a labelled 44 px close control", () => {
     const onClose = renderPopover();
     expect(screen.getByRole("dialog", { name: "Word card" })).toBeTruthy();
+    expect(
+      screen.getByText(
+        "This word is not in the course bank. Add it with your own definition.",
+      ),
+    ).toBeTruthy();
+    const example = screen.getByText("A lion is in his house.");
+    expect(example.tagName).toBe("BLOCKQUOTE");
+    expect(screen.getByText("Example")).toBeTruthy();
     const field = screen.getByRole("textbox", { name: "English definition" });
     expect(field.classList.contains("reader-word-input")).toBe(true);
+    // The example sits above the definition field, not after the action.
+    expect(
+      example.compareDocumentPosition(field) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     const close = screen.getByRole("button", { name: "Close word card" });
     fireEvent.click(close);
     expect(onClose).toHaveBeenCalled();

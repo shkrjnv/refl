@@ -326,6 +326,13 @@ export function AppShell({
       <div className="mobile-dock" ref={moreRef}>
         {moreOpen ? (
           <div
+            className="more-scrim"
+            aria-hidden="true"
+            onClick={closeMore}
+          />
+        ) : null}
+        {moreOpen ? (
+          <div
             id="mobile-more-sheet"
             ref={sheetRef}
             className="mobile-more-sheet"
