@@ -92,7 +92,10 @@ pub fn next(
     if live.is_empty() {
         return PlacementNext::Unavailable;
     }
-    let level = result_level(model, bundle, state, &placement.subject, now);
+    // The level estimate walks every live KC; only the beginner exit and a
+    // finished check need it. A selection call on a short progress stays
+    // cheap.
+    let level = level_for_next(model, bundle, state, placement, now);
 
     if beginner_exit(placement, level.as_ref()) {
         return PlacementNext::Done(PlacementResult {
@@ -301,6 +304,22 @@ fn result_level(
 ) -> Option<Level> {
     let domain = domain_for(bundle, subject)?;
     model.level(state, bundle, subject, &domain, now)
+}
+
+/// The level is needed only after the beginner threshold; computing it on
+/// every short selection call is unnecessary work for the 100k benchmark.
+fn level_for_next(
+    model: &KnowledgeModel,
+    bundle: &Bundle,
+    state: &State,
+    placement: &Placement,
+    now: Timestamp,
+) -> Option<Level> {
+    if placement.asked.len() >= BEGINNER_ITEMS {
+        result_level(model, bundle, state, &placement.subject, now)
+    } else {
+        None
+    }
 }
 
 fn start_level(level: Option<&Level>, bundle: &Bundle, subject: &SubjectId) -> f64 {
