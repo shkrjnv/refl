@@ -145,6 +145,7 @@ auth-pending-check-note = Статус проверяется новым вхо�
 
 today-eyebrow = Сегодня
 today-greeting = Рады видеть вас, { $name }
+today-greeting-anonymous = Рады видеть вас
 sync-status-label = Состояние синхронизации
 today-route-eyebrow = Маршрут на сегодня
 today-route-title = Сегодняшний маршрут
@@ -515,6 +516,9 @@ profile-settings-open = Настройки
 profile-settings-back = Назад в профиль
 settings-embedded-note = Аккаунт, данные, оформление и админ находятся здесь.
 settings-account-note = Способы входа и язык интерфейса настраиваются здесь.
+settings-copy-id = Скопировать ID
+settings-id-copied = Скопировано
+settings-copy-id-failed = Не удалось скопировать ID. Выделите его и скопируйте вручную.
 settings-sync-title = Состояние синхронизации
 settings-sync-note = Ответы синхронизируются в фоне, когда устройство онлайн.
 settings-sync-pending = { $count } { $count ->

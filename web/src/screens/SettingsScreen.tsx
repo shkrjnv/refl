@@ -115,6 +115,7 @@ export function SettingsScreen({
   const [eraseArmed, setEraseArmed] = useState(false);
   const [dataNotice, setDataNotice] = useState<string | null>(null);
   const [dataError, setDataError] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
   const [syncPulse, setSyncPulse] = useState(false);
   const syncPulseTimerRef = useRef<number | null>(null);
@@ -168,6 +169,19 @@ export function SettingsScreen({
       setDataNotice(t("settings-exported"));
     } catch {
       setDataError(t("settings-export-failed"));
+    }
+  };
+
+  const copyLearnerId = async () => {
+    if (!learnerId) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(learnerId);
+      setCopiedId(true);
+      window.setTimeout(() => setCopiedId(false), 2000);
+    } catch {
+      setDataError(t("settings-copy-id-failed"));
     }
   };
 
@@ -373,7 +387,26 @@ export function SettingsScreen({
           <Card tone="plain" className="settings-card">
             <h2>{t("settings-account-title")}</h2>
             <p className="settings-note">{t("settings-account-note")}</p>
-            {learnerId ? <code className="settings-identity">{learnerId}</code> : null}
+            {learnerId ? (
+              <div className="settings-identity-row">
+                <code className="settings-identity">{learnerId}</code>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  aria-label={t("settings-copy-id")}
+                  onClick={() => void copyLearnerId()}
+                >
+                  <CrossfadeIcon
+                    name="copy"
+                    activeName="check"
+                    active={copiedId}
+                    size={16}
+                  />
+                  {copiedId ? t("settings-id-copied") : t("settings-copy-id")}
+                </Button>
+              </div>
+            ) : null}
             <div className="method-list">
               {methodRow("email", "settings-method-email")}
               {methodRow("telegram", "settings-method-telegram")}

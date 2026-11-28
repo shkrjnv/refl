@@ -108,6 +108,7 @@ export function ProfileScreen({
 }: ProfileScreenProps) {
   const selectedCompanion = companionById(companion);
   const { t } = useTranslation();
+  const displayName = learnerLabel.trim() || t("profile-learner");
   const [view, setView] = useState<"profile" | "settings">("profile");
   const [visibility, setVisibility] = useState<ProfileVisibility>("self");
   const [preview, setPreview] = useState(false);
@@ -174,12 +175,11 @@ export function ProfileScreen({
       <header className="profile-heading">
         <div className="profile-heading-main">
           <div className="profile-avatar profile-avatar-large" aria-hidden="true">
-            {learnerLabel.slice(0, 1)}
+            {displayName.slice(0, 1)}
           </div>
           <div className="profile-heading-copy">
             <p className="eyebrow">{t("profile-eyebrow")}</p>
-            <h1>{learnerLabel}</h1>
-            {!visitor ? <code>{learnerId}</code> : null}
+            <h1>{displayName}</h1>
             <div className="profile-meta-line">
               <StatusMeta tone={isAdmin ? "warning" : "neutral"}>
                 {isAdmin ? t("profile-role-admin") : t("profile-role-learner")}

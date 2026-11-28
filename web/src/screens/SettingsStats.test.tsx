@@ -138,7 +138,8 @@ describe("statistics, profile, and settings", () => {
     );
 
     expect(screen.getByRole("heading", { name: "Learner" })).toBeTruthy();
-    expect(screen.getByText("learner-42")).toBeTruthy();
+    // The account ID belongs to Settings, not to the profile heading.
+    expect(screen.queryByText("learner-42")).toBeNull();
     expect(screen.getByText("Learner", { selector: ".status-meta" })).toBeTruthy();
     expect(screen.getByText("Milestones")).toBeTruthy();
     expect(screen.getByText("Level progress")).toBeTruthy();
@@ -164,7 +165,7 @@ describe("statistics, profile, and settings", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Exit preview" }));
     expect(screen.getByRole("heading", { name: "Error notebook" })).toBeTruthy();
-    expect(screen.getByText("learner-42")).toBeTruthy();
+    expect(screen.queryByText("learner-42")).toBeNull();
   });
 
   it("opens the embedded settings tabs from the Profile header", () => {
@@ -184,6 +185,8 @@ describe("statistics, profile, and settings", () => {
     expect(tabs[0]?.getAttribute("aria-selected")).toBe("true");
     expect(screen.queryByRole("tab", { name: "Admin" })).toBeNull();
     expect(screen.getByText("Learner identity")).toBeTruthy();
+    expect(screen.getByText("learner-42")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Copy ID" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
     fireEvent.click(screen.getByRole("tab", { name: "Appearance" }));
     expect(screen.getByRole("heading", { name: "Appearance" })).toBeTruthy();

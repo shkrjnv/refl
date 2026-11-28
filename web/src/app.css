@@ -9235,6 +9235,23 @@ input:focus-visible {
   white-space: nowrap;
 }
 
+.settings-identity-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 12px;
+}
+
+.settings-identity-row .settings-identity {
+  min-width: 0;
+  flex: 1;
+  margin: 0;
+}
+
+.settings-identity-row .ui-button {
+  flex: none;
+}
+
 .settings-sync-status {
   display: flex;
   flex-wrap: wrap;

@@ -145,6 +145,7 @@ auth-pending-check-note = Status is checked with a new sign-in. Your invite stay
 
 today-eyebrow = Today
 today-greeting = Good to see you, { $name }
+today-greeting-anonymous = Good to see you
 sync-status-label = Sync status
 today-route-eyebrow = Route for today
 today-route-title = Today's route
@@ -511,6 +512,9 @@ profile-settings-open = Settings
 profile-settings-back = Back to profile
 settings-embedded-note = Account, data, appearance, and admin live here.
 settings-account-note = Sign-in methods and the interface language are managed here.
+settings-copy-id = Copy ID
+settings-id-copied = Copied
+settings-copy-id-failed = Could not copy the ID. Select it and copy manually.
 settings-sync-title = Sync status
 settings-sync-note = Answers sync in the background when this device is online.
 settings-sync-pending = { $count } answers waiting.

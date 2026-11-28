@@ -145,6 +145,7 @@ auth-pending-check-note = Holat yangi kirish bilan tekshiriladi. Taklif brauzerd
 
 today-eyebrow = Bugun
 today-greeting = Sizni ko‘rganimizdan xursandmiz, { $name }
+today-greeting-anonymous = Sizni ko‘rganimizdan xursandmiz
 sync-status-label = Sinxronlash holati
 today-route-eyebrow = Bugungi marshrut
 today-route-title = Bugungi marshrut
@@ -505,6 +506,9 @@ profile-settings-open = Sozlamalar
 profile-settings-back = Profilga qaytish
 settings-embedded-note = Akkaunt, ma’lumotlar, ko‘rinish va administrator shu yerda.
 settings-account-note = Kirish usullari va interfeys tili shu yerda sozlanadi.
+settings-copy-id = ID nusxalash
+settings-id-copied = Nusxalandi
+settings-copy-id-failed = ID nusxalanmadi. Uni belgilab, qo‘lda nusxalang.
 settings-sync-title = Sinxronlash holati
 settings-sync-note = Qurilma onlayn bo‘lganda javoblar fonda sinxronlanadi.
 settings-sync-pending = { $count } ta javob kutmoqda.

@@ -68,6 +68,8 @@ export function AppShell({
 }: AppShellProps) {
   const companionEntry = companionById(companion);
   const { t } = useTranslation();
+  // A learner without a display name still gets a neutral identity card.
+  const learnerName = learnerLabel.trim() || t("profile-learner");
   const primaryItems: NavItem[] = [
     { route: "today", label: t("nav-today"), glyph: "today" },
     { route: "vocabulary", label: t("nav-vocabulary"), glyph: "vocabulary" },
@@ -179,9 +181,9 @@ export function AppShell({
             aria-current={active === "profile" ? "page" : undefined}
             onClick={() => onNavigate("profile")}
           >
-            <span className="learner-avatar">{learnerLabel.slice(0, 1)}</span>
+            <span className="learner-avatar">{learnerName.slice(0, 1)}</span>
             <span className="learner-copy">
-              <strong>{learnerLabel}</strong>
+              <strong>{learnerName}</strong>
               <span>
                 {t("nav-profile")} · {t("profile-local-learner")}
               </span>

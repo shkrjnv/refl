@@ -220,12 +220,18 @@ export function TodayScreen({
     <div className="today-screen">
       <header className="today-masthead">
         <div className="today-identity">
-          <span className="today-avatar" aria-hidden="true">
-            {learnerLabel.slice(0, 1)}
-          </span>
+          {learnerLabel ? (
+            <span className="today-avatar" aria-hidden="true">
+              {learnerLabel.slice(0, 1)}
+            </span>
+          ) : null}
           <div>
             <p className="eyebrow">{t("today-eyebrow")}</p>
-            <h1>{t("today-greeting", { name: learnerLabel })}</h1>
+            <h1>
+              {learnerLabel
+                ? t("today-greeting", { name: learnerLabel })
+                : t("today-greeting-anonymous")}
+            </h1>
           </div>
         </div>
         <div className="today-masthead-side">
