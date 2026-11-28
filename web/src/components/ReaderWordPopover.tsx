@@ -174,22 +174,25 @@ export function ReaderWordPopover({
             ) : null}
           </>
         ) : (
-          <>
-            <p className="bento-note">{t("reader-not-in-dictionary")}</p>
-            <label className="field">
-              <span>{t("vocab-form-definition")}</span>
-              <textarea
-                className="reader-word-input"
-                rows={2}
-                value={customDefinition}
-                onChange={(event) =>
-                  onCustomDefinitionChange(event.currentTarget.value)
-                }
-              />
-            </label>
-          </>
+          <p className="reader-word-hint">{t("reader-not-in-dictionary")}</p>
         )}
-        <p className="bento-note">{sentenceText}</p>
+        <figure className="reader-word-example">
+          <figcaption>{t("reader-word-example")}</figcaption>
+          <blockquote lang="en">{sentenceText}</blockquote>
+        </figure>
+        {sense ? null : (
+          <label className="field reader-word-field">
+            <span>{t("vocab-form-definition")}</span>
+            <textarea
+              className="reader-word-input"
+              rows={2}
+              value={customDefinition}
+              onChange={(event) =>
+                onCustomDefinitionChange(event.currentTarget.value)
+              }
+            />
+          </label>
+        )}
         <Button
           type="button"
           variant="primary"

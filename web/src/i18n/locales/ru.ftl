@@ -682,6 +682,7 @@ reader-note-sentence = Заметка к предложению
 reader-marks-title = Закладки и выделения
 reader-word-card = Карточка слова
 reader-word-card-close = Закрыть карточку слова
+reader-word-example = Пример
 reader-not-in-dictionary = Этого слова нет в банке курса. Добавьте его со своим определением.
 reader-add-vocabulary = Добавить в словарь
 reader-in-vocabulary = Уже в словаре
