@@ -490,3 +490,26 @@ settings-sync-clear = Hammasi sinxronlangan.
 
 profile-note-progress = { $percent }% o‘zlashtirilgan
 profile-preview-badge = Mehmon
+
+# Entry and placement
+level-pre-a1 = A1 gacha
+level-start-note = { $next } ga { $percent }% yo‘l.
+entry-eyebrow = Boshlanish nuqtasi
+entry-title = Qayerdan boshlaymiz?
+entry-body = Birinchi qoidadan boshlang yoki qisqa tekshiruvdan o‘ting — kurs to‘g‘ri joydan boshlanadi.
+entry-zero-action = Boshidan boshlash
+entry-zero-body = Birinchi qoidadan boshlaysiz.
+entry-placement-action = Darajani tekshirish
+entry-placement-body = 10 tagacha savol. Tekshiruv paytida javoblar ko‘rsatilmaydi.
+entry-placement-empty = Bu til uchun tekshirilgan savollar hali yo‘q. Boshidan boshlang.
+placement-eyebrow = Boshlanish nuqtasi
+placement-title = Darajani tekshirish
+placement-note = Tekshiruv paytida javoblar ko‘rsatilmaydi.
+placement-progress = { $planned } tagacha savoldan { $answered }-savol
+placement-check = Tekshirish
+placement-done-title = Boshlanish nuqtangiz
+placement-done-body = Boshlanish: { $level }.
+placement-done-range = Ehtimoliy oraliq: { $range }.
+placement-done-action = O‘qishni boshlash
+placement-exit = Tekshiruvdan chiqish
+placement-empty = Tekshirish uchun tekshirilgan savollar yo‘q. Boshidan boshlang.

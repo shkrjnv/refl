@@ -5,6 +5,9 @@ import init, {
   decode_event_json,
   fold_state,
   next_item,
+  placement_answer,
+  placement_next,
+  placement_start,
   plan_session,
   replan_session,
 } from "../generated/wasm/refl_core_wasm.js";
@@ -22,5 +25,8 @@ export async function loadWasmCore(): Promise<WasmCore> {
     nextItem: next_item,
     replanSession: replan_session,
     checkAnswer: check_answer,
+    placementStart: placement_start,
+    placementNext: placement_next,
+    placementAnswer: placement_answer,
   };
 }

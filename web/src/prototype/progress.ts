@@ -24,6 +24,8 @@ export interface MisconceptionStateView {
 export interface LearnerState {
   kcs: Record<string, KcStateView>;
   misconceptions: Record<string, MisconceptionStateView>;
+  /** `profile.start_level.en`, absent until entry or placement records it. */
+  startLevel: number | null;
 }
 
 export interface KcProgress {
@@ -72,19 +74,28 @@ export interface MisconceptionProgress {
   status: MisconceptionStatus;
 }
 
+function emptyLearnerState(): LearnerState {
+  return { kcs: {}, misconceptions: {}, startLevel: null };
+}
+
 export function parseLearnerState(stateJson: string | null): LearnerState {
   if (!stateJson) {
-    return { kcs: {}, misconceptions: {} };
+    return emptyLearnerState();
   }
   let parsed: unknown;
   try {
     parsed = JSON.parse(stateJson) as unknown;
   } catch {
-    return { kcs: {}, misconceptions: {} };
+    return emptyLearnerState();
   }
   if (!isJsonObject(parsed)) {
-    return { kcs: {}, misconceptions: {} };
+    return emptyLearnerState();
   }
+  const profile = parsed["profile"];
+  const startLevels = isJsonObject(profile) ? profile["start_level"] : null;
+  const start = isJsonObject(startLevels) ? startLevels["en"] : null;
+  const startLevel =
+    typeof start === "number" && Number.isFinite(start) ? start : null;
   const kcs: Record<string, KcStateView> = {};
   const misconceptions: Record<string, MisconceptionStateView> = {};
   if (isJsonObject(parsed["misconceptions"])) {
@@ -118,7 +129,7 @@ export function parseLearnerState(stateJson: string | null): LearnerState {
     }
   }
   if (!isJsonObject(parsed["kcs"])) {
-    return { kcs: {}, misconceptions };
+    return { kcs: {}, misconceptions, startLevel };
   }
   for (const [id, value] of Object.entries(parsed["kcs"])) {
     if (!isJsonObject(value)) {
@@ -147,7 +158,7 @@ export function parseLearnerState(stateJson: string | null): LearnerState {
           : null,
     };
   }
-  return { kcs, misconceptions };
+  return { kcs, misconceptions, startLevel };
 }
 
 export function kcProgress(
@@ -305,6 +316,96 @@ export function levelBreakdown(
         value.total === 0 ? 0 : Math.round(value.percent / value.total),
     }))
     .sort((left, right) => left.level.localeCompare(right.level));
+}
+
+/** Curriculum bands shown in the level cards; Pre-A1 is a position label. */
+export const CEFR_ORDER = ["A1", "A2", "B1", "B2"] as const;
+
+/** Scale labels for a continuous position, pre-A1 = 0 … C2 = 6. */
+export const CEFR_LABELS = [
+  "Pre-A1",
+  "A1",
+  "A2",
+  "B1",
+  "B2",
+  "C1",
+  "C2",
+] as const;
+
+export interface LevelView {
+  current: string;
+  next: string;
+  percent: number;
+  mastered: number;
+  total: number;
+  preA1: boolean;
+}
+
+/**
+ * The honest level card: a placement-derived position when one exists, a
+ * Pre-A1 entry when there is no evidence, and the curriculum-coverage view
+ * for a learner with answers but no placement.
+ */
+export function levelView(
+  progress: readonly KcProgress[],
+  startLevel: number | null,
+): LevelView {
+  const levels = levelBreakdown(progress);
+  if (startLevel !== null) {
+    const clamped = Math.max(
+      0,
+      Math.min(CEFR_LABELS.length - 1, startLevel),
+    );
+    const index = Math.floor(clamped);
+    const current = CEFR_LABELS[index] ?? "Pre-A1";
+    const next = CEFR_LABELS[Math.min(index + 1, CEFR_LABELS.length - 1)] ?? current;
+    const entry = levels.find((candidate) => candidate.level === current);
+    const total = entry?.total ?? 0;
+    return {
+      current,
+      next,
+      percent:
+        total > 0
+          ? (entry?.percent ?? 0)
+          : Math.round((clamped - index) * 100),
+      mastered: entry?.mastered ?? 0,
+      total,
+      preA1: current === "Pre-A1",
+    };
+  }
+  if (totalReviews(progress) === 0) {
+    return {
+      current: "Pre-A1",
+      next: "A1",
+      percent: 0,
+      mastered: 0,
+      total: 0,
+      preA1: true,
+    };
+  }
+  const firstIncomplete = CEFR_ORDER.findIndex((level) => {
+    const entry = levels.find((candidate) => candidate.level === level);
+    return entry !== undefined && entry.percent < 100;
+  });
+  const highestObserved = CEFR_ORDER.reduce(
+    (index, level, candidate) =>
+      levels.some((entry) => entry.level === level && entry.total > 0)
+        ? candidate
+        : index,
+    0,
+  );
+  const currentIndex = firstIncomplete >= 0 ? firstIncomplete : highestObserved;
+  const current = CEFR_ORDER[currentIndex] ?? "A1";
+  const next = CEFR_ORDER[currentIndex + 1] ?? current;
+  const entry = levels.find((candidate) => candidate.level === current);
+  return {
+    current,
+    next,
+    percent: entry?.percent ?? 0,
+    mastered: entry?.mastered ?? 0,
+    total: entry?.total ?? 0,
+    preA1: false,
+  };
 }
 
 export function domainBreakdown(

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   ApiClient,
@@ -19,6 +19,16 @@ import { loadPrototypeContent } from "./prototype/load";
 import { isTourComplete, resetTour } from "./prototype/onboarding";
 import { PrototypeContent } from "./prototype/content";
 import {
+  entryDecision,
+  hasLearningHistory,
+  recordZeroEntry,
+  resetEntryChoice,
+} from "./prototype/entry";
+import {
+  PlacementRunner,
+  type PlacementView,
+} from "./prototype/placement";
+import {
   activitySummary,
   type ActivitySummary,
 } from "./prototype/activity";
@@ -32,7 +42,9 @@ import {
 import { initialStatus, type AppStatus } from "./prototype/status";
 import { noteActiveDay, readStreak } from "./prototype/streak";
 import { AuthGate } from "./screens/AuthGate";
+import { EntryScreen } from "./screens/EntryScreen";
 import { LessonScreen } from "./screens/LessonScreen";
+import { PlacementScreen } from "./screens/PlacementScreen";
 import { ProfileScreen } from "./screens/ProfileScreen";
 import { ProgressScreen } from "./screens/ProgressScreen";
 import { SummaryScreen } from "./screens/SummaryScreen";
@@ -86,6 +98,16 @@ export function App({ initialTheme, initialSkin }: AppProps) {
   const [rejected, setRejected] = useState<OutboxRecord[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [tourOpen, setTourOpen] = useState(false);
+  const [entryState, setEntryState] = useState<
+    "pending" | "needed" | "done"
+  >("pending");
+  const [entryBusy, setEntryBusy] = useState(false);
+  const [entryError, setEntryError] = useState<string | null>(null);
+  const [initialSyncSettled, setInitialSyncSettled] = useState(false);
+  const [placementRunner, setPlacementRunner] =
+    useState<PlacementRunner | null>(null);
+  const [placementView, setPlacementView] =
+    useState<PlacementView | null>(null);
   const [runner, setRunner] = useState<LessonRunner | null>(null);
   const [lessonView, setLessonView] = useState<LessonView | null>(null);
   const [summary, setSummary] = useState<LessonSummary | null>(null);
@@ -98,6 +120,14 @@ export function App({ initialTheme, initialSkin }: AppProps) {
   const skinRef = useRef<SkinName>(skin);
   skinRef.current = skin;
   const appearanceDirtyRef = useRef(false);
+  const placementAvailable = useMemo(
+    () =>
+      content !== null &&
+      content
+        .visibleArticles(locale)
+        .some((entry) => content.itemsForKc(entry.kc.id, locale).length > 0),
+    [content, locale],
+  );
 
   const sessionRef = useRef<ReturnType<typeof sessionRecordFromTokens> | null>(null);
   const storageRef = useRef<LearnerStorage | null>(null);
@@ -105,6 +135,7 @@ export function App({ initialTheme, initialSkin }: AppProps) {
   const coreRef = useRef<CoreWorkerClient | null>(null);
   const clockRef = useRef(new ClientClock());
   const syncingRef = useRef(false);
+  const placementActiveRef = useRef(false);
   const apiRef = useRef<ApiClient | null>(null);
   if (!apiRef.current) {
     apiRef.current = new ApiClient({
@@ -163,6 +194,37 @@ export function App({ initialTheme, initialSkin }: AppProps) {
     // or the active bundle changes.
   }, [identity, storage, content]);
 
+  useEffect(() => {
+    if (
+      entryState !== "pending" ||
+      !initialSyncSettled ||
+      !identity ||
+      !storage ||
+      !content
+    ) {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const snapshot = await storage.getSnapshot();
+      const [events, outbox] = await Promise.all([
+        storage.listEvents(),
+        storage.listOutbox(),
+      ]);
+      const decision = entryDecision(
+        snapshot?.state_json ?? null,
+        identity.learnerId,
+        hasLearningHistory([...events, ...outbox]),
+      );
+      if (!cancelled) {
+        setEntryState(decision);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [entryState, initialSyncSettled, identity, storage, content]);
+
   const refreshLocalState = async (store: LearnerStorage) => {
     const snapshot = await store.getSnapshot();
     setStateJson(snapshot?.state_json ?? null);
@@ -197,7 +259,14 @@ export function App({ initialTheme, initialSkin }: AppProps) {
     const store = storageRef.current;
     const loaded = contentRef.current;
     const core = coreRef.current;
-    if (!store || !loaded || !core || !identity || syncingRef.current) {
+    if (
+      !store ||
+      !loaded ||
+      !core ||
+      !identity ||
+      syncingRef.current ||
+      placementActiveRef.current
+    ) {
       return false;
     }
     syncingRef.current = true;
@@ -239,6 +308,7 @@ export function App({ initialTheme, initialSkin }: AppProps) {
       return false;
     } finally {
       syncingRef.current = false;
+      setInitialSyncSettled(true);
     }
   };
 
@@ -248,6 +318,13 @@ export function App({ initialTheme, initialSkin }: AppProps) {
   ) => {
     const learnerId = tokens.learner_id;
     setActionError(null);
+    setEntryState("pending");
+    setInitialSyncSettled(false);
+    setEntryBusy(false);
+    setEntryError(null);
+    setPlacementRunner(null);
+    setPlacementView(null);
+    placementActiveRef.current = false;
     sessionRef.current = sessionRef.current ?? sessionRecordFromTokens(tokens);
     const store = await LearnerStorage.open(learnerId);
     storageRef.current = store;
@@ -299,10 +376,106 @@ export function App({ initialTheme, initialSkin }: AppProps) {
         setContent(null);
         setIdentity(null);
         setContentError(false);
+        setEntryState("pending");
+        setInitialSyncSettled(false);
+        setPlacementRunner(null);
+        setPlacementView(null);
+        placementActiveRef.current = false;
         return;
       }
       setContentError(true);
     }
+  };
+
+  const startFromZero = async () => {
+    const store = storageRef.current;
+    const loaded = contentRef.current;
+    const core = coreRef.current;
+    if (!store || !loaded || !core || !identity) {
+      return;
+    }
+    setEntryBusy(true);
+    setEntryError(null);
+    try {
+      const snapshot = await store.getSnapshot();
+      const current = snapshot?.state_json ?? stateJson;
+      const next = await recordZeroEntry(
+        {
+          storage: store,
+          core,
+          content: loaded,
+          learnerId: identity.learnerId,
+          clock: clockRef.current,
+        },
+        current,
+      );
+      setStateJson(next);
+      setEntryState("done");
+      setTourOpen(!isTourComplete());
+      void syncNow();
+    } catch (error) {
+      setEntryError(
+        error instanceof Error ? error.message : t("common-unknown-error"),
+      );
+    } finally {
+      setEntryBusy(false);
+    }
+  };
+
+  const startPlacement = async () => {
+    const store = storageRef.current;
+    const loaded = contentRef.current;
+    const core = coreRef.current;
+    if (!store || !loaded || !core || !identity || !placementAvailable) {
+      return;
+    }
+    setEntryBusy(true);
+    setEntryError(null);
+    try {
+      // Wait for a settled log before the runner starts folding locally.
+      await syncNow().catch(() => false);
+      placementActiveRef.current = true;
+      const runner = new PlacementRunner({
+        storage: store,
+        core,
+        content: loaded,
+        learnerId: identity.learnerId,
+        locale,
+        clock: clockRef.current,
+      });
+      const snapshot = await store.getSnapshot();
+      const view = await runner.start(
+        snapshot?.state_json ?? stateJson,
+      );
+      setPlacementRunner(runner);
+      setPlacementView(view);
+    } catch (error) {
+      placementActiveRef.current = false;
+      setEntryError(
+        error instanceof Error ? error.message : t("common-unknown-error"),
+      );
+    } finally {
+      setEntryBusy(false);
+    }
+  };
+
+  const finishPlacement = () => {
+    placementActiveRef.current = false;
+    setPlacementRunner(null);
+    setPlacementView(null);
+    setEntryState("done");
+    setTourOpen(!isTourComplete());
+    const store = storageRef.current;
+    if (store) {
+      void refreshLocalState(store);
+    }
+    void syncNow();
+  };
+
+  const exitPlacement = () => {
+    placementActiveRef.current = false;
+    setPlacementRunner(null);
+    setPlacementView(null);
   };
 
   const startLesson = async (minutes = 25) => {
@@ -416,6 +589,11 @@ export function App({ initialTheme, initialSkin }: AppProps) {
     setLessonView(null);
     setRejected([]);
     setIsAdmin(false);
+    setEntryState("pending");
+    setInitialSyncSettled(false);
+    setPlacementRunner(null);
+    setPlacementView(null);
+    placementActiveRef.current = false;
     setRoute("today");
     setStatus(initialStatus(true));
   };
@@ -521,6 +699,7 @@ export function App({ initialTheme, initialSkin }: AppProps) {
       return;
     }
     await store.wipe();
+    resetEntryChoice(identity?.learnerId);
     storageRef.current = null;
     contentRef.current = null;
     sessionRef.current = null;
@@ -534,6 +713,11 @@ export function App({ initialTheme, initialSkin }: AppProps) {
     setLessonView(null);
     setRejected([]);
     setIsAdmin(false);
+    setEntryState("pending");
+    setInitialSyncSettled(false);
+    setPlacementRunner(null);
+    setPlacementView(null);
+    placementActiveRef.current = false;
     setRoute("today");
     setStatus(initialStatus(true));
   };
@@ -586,6 +770,39 @@ export function App({ initialTheme, initialSkin }: AppProps) {
           <p>{t("app-content-loading-body")}</p>
         </Card>
       </div>
+    );
+  }
+
+  if (entryState === "pending") {
+    return (
+      <div className="startup-screen">
+        <Card tone="plain" className="startup-card">
+          <h1>{t("app-content-loading")}</h1>
+          <p>{t("app-content-loading-body")}</p>
+        </Card>
+      </div>
+    );
+  }
+
+  if (entryState === "needed") {
+    if (placementRunner && placementView) {
+      return (
+        <PlacementScreen
+          runner={placementRunner}
+          initialView={placementView}
+          onComplete={finishPlacement}
+          onExit={exitPlacement}
+        />
+      );
+    }
+    return (
+      <EntryScreen
+        placementAvailable={placementAvailable}
+        busy={entryBusy}
+        error={entryError}
+        onStartFromZero={() => void startFromZero()}
+        onCheck={() => void startPlacement()}
+      />
     );
   }
 

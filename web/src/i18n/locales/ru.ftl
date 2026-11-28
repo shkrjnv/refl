@@ -504,3 +504,26 @@ settings-sync-clear = Всё синхронизировано.
 
 profile-note-progress = Освоено { $percent }%
 profile-preview-badge = Гость
+
+# Entry and placement
+level-pre-a1 = До A1
+level-start-note = { $percent }% пути к { $next }.
+entry-eyebrow = Стартовая точка
+entry-title = С чего начнём?
+entry-body = Начните с первого правила или пройдите короткую проверку, чтобы курс стартовал в нужном месте.
+entry-zero-action = Начать с начала
+entry-zero-body = Вы начнёте с первого правила.
+entry-placement-action = Проверить уровень
+entry-placement-body = До 10 вопросов. Во время проверки ответы не показываются.
+entry-placement-empty = Для этого языка пока нет вычитанных вопросов. Начните с начала.
+placement-eyebrow = Стартовая точка
+placement-title = Проверка уровня
+placement-note = Во время проверки ответы не показываются.
+placement-progress = Вопрос { $answered } из { $planned }
+placement-check = Проверить
+placement-done-title = Ваша стартовая точка
+placement-done-body = Старт: { $level }.
+placement-done-range = Вероятный диапазон: { $range }.
+placement-done-action = Начать учиться
+placement-exit = Выйти из проверки
+placement-empty = Вычитанных вопросов для проверки пока нет. Начните с начала.

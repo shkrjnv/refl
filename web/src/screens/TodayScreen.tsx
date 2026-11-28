@@ -12,7 +12,7 @@ import type { PrototypeContent } from "../prototype/content";
 import {
   dueCount,
   kcProgress,
-  levelBreakdown,
+  levelView,
   misconceptionProgress,
   parseLearnerState,
   totalReviews,
@@ -35,7 +35,6 @@ export interface TodayScreenProps {
   onTourComplete: () => void;
 }
 
-const CEFR_ORDER = ["A1", "A2", "B1", "B2"] as const;
 const DURATIONS = [10, 15, 25] as const;
 
 interface MasteryStatus {
@@ -116,27 +115,12 @@ export function TodayScreen({
   const due = dueCount(progress);
   const reviews = totalReviews(progress);
   const weak = weakestKcs(progress);
-  const levels = levelBreakdown(progress);
-  const firstIncomplete = CEFR_ORDER.findIndex((level) => {
-    const entry = levels.find((candidate) => candidate.level === level);
-    return entry !== undefined && entry.percent < 100;
-  });
-  const highestObserved = CEFR_ORDER.reduce(
-    (index, level, candidate) =>
-      levels.some((entry) => entry.level === level && entry.total > 0)
-        ? candidate
-        : index,
-    0,
-  );
-  const currentIndex = firstIncomplete >= 0 ? firstIncomplete : highestObserved;
-  const currentLevel = levels.find(
-    (entry) => entry.level === CEFR_ORDER[currentIndex],
-  );
-  const levelName = CEFR_ORDER[currentIndex] ?? "A1";
-  const nextLevel = CEFR_ORDER[currentIndex + 1] ?? levelName;
-  const levelPercent = currentLevel?.percent ?? 0;
-  const levelMastered = currentLevel?.mastered ?? 0;
-  const levelTotal = currentLevel?.total ?? 0;
+  const level = levelView(progress, state.startLevel);
+  const levelName = level.preA1 ? t("level-pre-a1") : level.current;
+  const nextLevel = level.next;
+  const levelPercent = level.percent;
+  const levelMastered = level.mastered;
+  const levelTotal = level.total;
   const overallPercent =
     progress.length === 0
       ? 0
@@ -347,7 +331,12 @@ export function TodayScreen({
           />
           <p className="bento-note">
             {levelTotal === 0
-              ? t("today-level-empty")
+              ? level.preA1 && levelPercent > 0
+                ? t("level-start-note", {
+                    percent: levelPercent,
+                    next: nextLevel,
+                  })
+                : t("today-level-empty")
               : t("today-level-note", {
                   mastered: levelMastered,
                   total: levelTotal,

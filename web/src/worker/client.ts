@@ -6,6 +6,7 @@ import type {
   DecodedEvent,
   FoldResult,
   NextItemResult,
+  PlacementStep,
   PlanSessionResult,
   ReplanSessionResult,
 } from "../wasm/types";
@@ -215,6 +216,60 @@ export class CoreWorkerClient {
       itemRef,
       response,
       elapsedMs,
+    });
+  }
+
+  placementStart(
+    bundleJson: string,
+    snapshotJson: string,
+    subject: string,
+    nowMs: number,
+  ): Promise<PlacementStep> {
+    return this.#call({
+      id: this.#id(),
+      method: "placementStart",
+      bundleJson,
+      snapshotJson,
+      subject,
+      nowMs,
+    });
+  }
+
+  placementNext(
+    bundleJson: string,
+    snapshotJson: string,
+    placementJson: string,
+    nowMs: number,
+  ): Promise<PlacementStep> {
+    return this.#call({
+      id: this.#id(),
+      method: "placementNext",
+      bundleJson,
+      snapshotJson,
+      placementJson,
+      nowMs,
+    });
+  }
+
+  placementAnswer(
+    bundleJson: string,
+    snapshotJson: string,
+    placementJson: string,
+    itemRefJson: string,
+    slot: number,
+    correct: boolean,
+    nowMs: number,
+  ): Promise<PlacementStep> {
+    return this.#call({
+      id: this.#id(),
+      method: "placementAnswer",
+      bundleJson,
+      snapshotJson,
+      placementJson,
+      itemRefJson,
+      slot,
+      correct,
+      nowMs,
     });
   }
 

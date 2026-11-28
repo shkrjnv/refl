@@ -11,7 +11,7 @@ import type { NavigationPosition } from "../prototype/layout";
 import type { PrototypeContent } from "../prototype/content";
 import {
   kcProgress,
-  levelBreakdown,
+  levelView,
   memoryRetention,
   misconceptionProgress,
   parseLearnerState,
@@ -51,7 +51,6 @@ export interface ProfileScreenProps {
   onSyncNow?: () => Promise<boolean>;
 }
 
-const CEFR_ORDER = ["A1", "A2", "B1", "B2"] as const;
 const VISIBILITIES: ProfileVisibility[] = [
   "self",
   "team",
@@ -104,25 +103,12 @@ export function ProfileScreen({
   const reviews = totalReviews(progress);
   const retention = memoryRetention(progress);
   const due = progress.filter((kc) => kc.due).length;
-  const levels = levelBreakdown(progress);
-  const firstIncomplete = CEFR_ORDER.findIndex((level) => {
-    const entry = levels.find((candidate) => candidate.level === level);
-    return entry !== undefined && entry.percent < 100;
-  });
-  const highestObserved = CEFR_ORDER.reduce(
-    (index, level, candidate) =>
-      levels.some((entry) => entry.level === level && entry.total > 0)
-        ? candidate
-        : index,
-    0,
-  );
-  const currentIndex = firstIncomplete >= 0 ? firstIncomplete : highestObserved;
-  const levelName = CEFR_ORDER[currentIndex] ?? "A1";
-  const nextLevel = CEFR_ORDER[currentIndex + 1] ?? levelName;
-  const currentLevel = levels.find((entry) => entry.level === levelName);
-  const levelPercent = currentLevel?.percent ?? 0;
-  const levelMastered = currentLevel?.mastered ?? 0;
-  const levelTotal = currentLevel?.total ?? 0;
+  const level = levelView(progress, state.startLevel);
+  const levelName = level.preA1 ? t("level-pre-a1") : level.current;
+  const nextLevel = level.next;
+  const levelPercent = level.percent;
+  const levelMastered = level.mastered;
+  const levelTotal = level.total;
   const errors = useMemo(
     () =>
       misconceptionProgress(content, state, locale)
@@ -295,7 +281,12 @@ export function ProfileScreen({
                 />
                 <p>
                   {levelTotal === 0
-                    ? t("today-level-empty")
+                    ? level.preA1 && levelPercent > 0
+                      ? t("level-start-note", {
+                          percent: levelPercent,
+                          next: nextLevel,
+                        })
+                      : t("today-level-empty")
                     : t("profile-level-note", {
                         mastered: levelMastered,
                         total: levelTotal,

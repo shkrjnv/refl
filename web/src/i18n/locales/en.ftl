@@ -496,3 +496,26 @@ settings-sync-clear = Everything is synced.
 
 profile-note-progress = { $percent }% mastered
 profile-preview-badge = Visitor
+
+# Entry and placement
+level-pre-a1 = Pre-A1
+level-start-note = { $percent }% of the way to { $next }.
+entry-eyebrow = Starting point
+entry-title = Where would you like to start?
+entry-body = Begin with the first rule, or take a short check so the course starts at the right place.
+entry-zero-action = Start from the beginning
+entry-zero-body = You will begin with the first rule.
+entry-placement-action = Check my level
+entry-placement-body = Up to 10 questions. We won't show the answers during the check.
+entry-placement-empty = No reviewed questions are available for this language yet. Start from the beginning.
+placement-eyebrow = Starting point
+placement-title = Check your level
+placement-note = We won't show the answers during the check.
+placement-progress = Question { $answered } of up to { $planned }
+placement-check = Check
+placement-done-title = Your starting point
+placement-done-body = Start at { $level }.
+placement-done-range = Likely range: { $range }.
+placement-done-action = Start learning
+placement-exit = Leave the check
+placement-empty = There are no reviewed questions to check yet. Start from the beginning.

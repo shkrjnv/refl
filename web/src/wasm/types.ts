@@ -1,4 +1,5 @@
 import type { JsonValue } from "../types/json";
+import type { ItemRef } from "../generated/core/ItemRef";
 
 export interface CoreInfo {
   core_version: string;
@@ -66,6 +67,35 @@ export type AnswerCheckResult =
       elapsed_ms: number;
     };
 
+export interface PlacementItem {
+  item: ItemRef;
+  slot: number;
+}
+
+export interface Placement {
+  subject: string;
+  asked: PlacementItem[];
+  correct: number;
+}
+
+export interface PlacementLevel {
+  point: number;
+  low: number;
+  high: number;
+}
+
+export type PlacementStep =
+  | { kind: "item"; item: ItemRef; slot: number; placement: Placement }
+  | {
+      kind: "done";
+      placement: Placement;
+      level: PlacementLevel | null;
+      start_level: number;
+      answered: number;
+      source: "start_from_zero" | "diagnostic";
+    }
+  | { kind: "unavailable"; placement: Placement };
+
 export interface WasmCore {
   coreInfo(): string;
   checkBundleCompatibility(bundleJson: string): string;
@@ -101,5 +131,26 @@ export interface WasmCore {
     itemRefJson: string,
     responseJson: string,
     elapsedMs: number,
+  ): string;
+  placementStart(
+    bundleJson: string,
+    snapshotJson: string,
+    subject: string,
+    nowMs: number,
+  ): string;
+  placementNext(
+    bundleJson: string,
+    snapshotJson: string,
+    placementJson: string,
+    nowMs: number,
+  ): string;
+  placementAnswer(
+    bundleJson: string,
+    snapshotJson: string,
+    placementJson: string,
+    itemRefJson: string,
+    slot: number,
+    correct: boolean,
+    nowMs: number,
   ): string;
 }

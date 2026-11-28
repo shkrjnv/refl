@@ -110,6 +110,18 @@ describe("statistics, profile, and settings", () => {
     expect(document.querySelectorAll(".status-meta").length).toBeGreaterThan(0);
   });
 
+  it("shows Pre-A1 on a profile with no evidence", () => {
+    render(
+      <I18nProvider initialLocale="en">
+        <ProfileScreen {...profileProps()} stateJson={null} />
+      </I18nProvider>,
+    );
+    expect(screen.getByText("Level Pre-A1 companion")).toBeTruthy();
+    expect(
+      screen.getByText("Your level grows after the first session."),
+    ).toBeTruthy();
+  });
+
   it("embeds public-profile preview, visibility, and private learner cards", () => {
     render(
       <I18nProvider initialLocale="en">

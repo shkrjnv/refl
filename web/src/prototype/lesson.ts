@@ -114,11 +114,11 @@ interface AnswerLog {
 
 const DEFAULT_BUDGET_MS = 25 * 60 * 1000;
 
-function verdictOf(result: AnswerCheckResult): string {
+export function verdictOf(result: AnswerCheckResult): string {
   return result.kind === "checked" ? result.verdict : "unrecognized";
 }
 
-function isCorrect(result: AnswerCheckResult): boolean {
+export function isCorrect(result: AnswerCheckResult): boolean {
   return (
     result.kind === "checked" &&
     (result.verdict === "correct" || result.verdict === "typo")

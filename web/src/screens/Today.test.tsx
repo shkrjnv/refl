@@ -276,5 +276,7 @@ describe("Today fixed bento", () => {
       screen.getByText("No route focus yet. Your first session will create a note here."),
     ).toBeTruthy();
     expect(screen.getByText("No activity in recent weeks yet.")).toBeTruthy();
+    expect(screen.getAllByText("Pre-A1 → A1").length).toBeGreaterThan(0);
+    expect(screen.getByText("Your level grows after the first session.")).toBeTruthy();
   });
 });

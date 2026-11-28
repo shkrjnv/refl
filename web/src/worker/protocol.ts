@@ -53,6 +53,33 @@ export type CoreRequest =
       itemRef: JsonValue;
       response: JsonValue;
       elapsedMs: number;
+    }
+  | {
+      id: number;
+      method: "placementStart";
+      bundleJson: string;
+      snapshotJson: string;
+      subject: string;
+      nowMs: number;
+    }
+  | {
+      id: number;
+      method: "placementNext";
+      bundleJson: string;
+      snapshotJson: string;
+      placementJson: string;
+      nowMs: number;
+    }
+  | {
+      id: number;
+      method: "placementAnswer";
+      bundleJson: string;
+      snapshotJson: string;
+      placementJson: string;
+      itemRefJson: string;
+      slot: number;
+      correct: boolean;
+      nowMs: number;
     };
 
 export interface CoreRpcErrorPayload {
@@ -125,6 +152,32 @@ export function isCoreRequest(value: unknown): value is CoreRequest {
         isJsonValue(value["itemRef"]) &&
         isJsonValue(value["response"]) &&
         isFiniteNumber(value["elapsedMs"])
+      );
+    case "placementStart":
+      return (
+        typeof value["bundleJson"] === "string" &&
+        typeof value["snapshotJson"] === "string" &&
+        typeof value["subject"] === "string" &&
+        isFiniteNumber(value["nowMs"])
+      );
+    case "placementNext":
+      return (
+        typeof value["bundleJson"] === "string" &&
+        typeof value["snapshotJson"] === "string" &&
+        typeof value["placementJson"] === "string" &&
+        isFiniteNumber(value["nowMs"])
+      );
+    case "placementAnswer":
+      return (
+        typeof value["bundleJson"] === "string" &&
+        typeof value["snapshotJson"] === "string" &&
+        typeof value["placementJson"] === "string" &&
+        typeof value["itemRefJson"] === "string" &&
+        typeof value["slot"] === "number" &&
+        Number.isInteger(value["slot"]) &&
+        value["slot"] >= 0 &&
+        typeof value["correct"] === "boolean" &&
+        isFiniteNumber(value["nowMs"])
       );
     default:
       return false;

@@ -41,6 +41,7 @@ function dayFromDate(date: Date): string {
 function countAnswerEvents(
   events: readonly ActivityEvent[],
   counts: Map<string, number>,
+  answerDays: Set<string>,
 ): void {
   const seen = new Set<string>();
   for (const record of events) {
@@ -62,6 +63,11 @@ function countAnswerEvents(
       continue;
     }
     const day = localDay(stamp);
+    // A placement answer is evidence for the model, not learning activity.
+    answerDays.add(day);
+    if (payload["context"] === "placement") {
+      continue;
+    }
     counts.set(day, (counts.get(day) ?? 0) + 1);
   }
 }
@@ -69,6 +75,7 @@ function countAnswerEvents(
 function countStateDays(
   stateJson: string | null,
   counts: Map<string, number>,
+  answerDays: ReadonlySet<string>,
 ): void {
   if (!stateJson) {
     return;
@@ -88,7 +95,7 @@ function countStateDays(
       continue;
     }
     const day = localDay(stamp);
-    if (!counts.has(day) && !touched.has(day)) {
+    if (!counts.has(day) && !touched.has(day) && !answerDays.has(day)) {
       touched.add(day);
       counts.set(day, 1);
     }
@@ -115,8 +122,9 @@ export function activitySummary(
   now = Date.now(),
 ): ActivitySummary {
   const counts = new Map<string, number>();
-  countAnswerEvents(events, counts);
-  countStateDays(stateJson, counts);
+  const answerDays = new Set<string>();
+  countAnswerEvents(events, counts, answerDays);
+  countStateDays(stateJson, counts, answerDays);
   const days: ActivityDay[] = [];
   const cursor = new Date(now);
   cursor.setHours(12, 0, 0, 0);

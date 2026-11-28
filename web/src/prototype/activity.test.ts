@@ -48,4 +48,24 @@ describe("activity heatmap", () => {
     expect(summary.todayCount).toBe(1);
     expect(summary.bestStreak).toBe(2);
   });
+
+  it("does not count placement answers as learning activity", () => {
+    const now = new Date(2026, 10, 27, 12).getTime();
+    const state = JSON.stringify({ last_answer: { en: now } });
+    const summary = activitySummary(
+      [
+        {
+          event_id: "placement",
+          event: {
+            client_ts: now,
+            payload: { type: "answer", context: "placement" },
+          },
+        },
+      ],
+      state,
+      now,
+    );
+    expect(summary.todayCount).toBe(0);
+    expect(summary.total).toBe(0);
+  });
 });

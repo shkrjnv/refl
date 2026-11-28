@@ -106,6 +106,36 @@ function callCore(core: WasmCore, request: CoreRequest): JsonValue {
           request.elapsedMs,
         ),
       );
+    case "placementStart":
+      return parseWasm(
+        core.placementStart(
+          request.bundleJson,
+          request.snapshotJson,
+          request.subject,
+          request.nowMs,
+        ),
+      );
+    case "placementNext":
+      return parseWasm(
+        core.placementNext(
+          request.bundleJson,
+          request.snapshotJson,
+          request.placementJson,
+          request.nowMs,
+        ),
+      );
+    case "placementAnswer":
+      return parseWasm(
+        core.placementAnswer(
+          request.bundleJson,
+          request.snapshotJson,
+          request.placementJson,
+          request.itemRefJson,
+          request.slot,
+          request.correct,
+          request.nowMs,
+        ),
+      );
   }
 }
 
