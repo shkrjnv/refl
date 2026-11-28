@@ -65,7 +65,7 @@ describe("companion registry UI", () => {
       return;
     }
     expect(
-      within(sendo as HTMLElement).getByText("Opens with a library milestone"),
+      within(sendo as HTMLElement).getByText("Read 80% of a library book"),
     ).toBeTruthy();
     expect(
       within(sendo as HTMLElement).queryByText("Ready to travel"),

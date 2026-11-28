@@ -15515,3 +15515,10 @@ body.reader-focus .mobile-dock {
     align-self: flex-start;
   }
 }
+
+/* The Sendo unlock hint is a sentence, not a chip label. */
+.companion-card .status-meta {
+  max-width: 100%;
+  overflow-wrap: break-word;
+  white-space: normal;
+}
