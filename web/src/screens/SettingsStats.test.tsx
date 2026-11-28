@@ -8,7 +8,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ProfileResponse } from "../api/client";
 import { I18nProvider } from "../i18n";
@@ -192,6 +192,24 @@ describe("statistics, profile, and settings", () => {
     expect(screen.getByRole("heading", { name: "Appearance" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Back to profile" }));
     expect(screen.getByRole("heading", { name: "Learner" })).toBeTruthy();
+  });
+
+  it("copies the account id from settings", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    render(
+      <I18nProvider initialLocale="en">
+        <ProfileScreen {...profileProps()} />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy ID" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("learner-42"));
+    expect(screen.getByText("Copied")).toBeTruthy();
   });
 
   it("offers account export, erasure and the AGPL source link", async () => {
