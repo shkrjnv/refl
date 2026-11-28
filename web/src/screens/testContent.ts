@@ -30,14 +30,23 @@ const articleKc = (
 
 export function testContent(
   layout = { x: 500, y: 500 },
+  options: { neighbour?: boolean } = {},
 ): PrototypeContent {
   const kcId = "en.gram.article.a-an-sound";
+  const neighbourId = "en.gram.article.first-mention";
   const bundle = {
     format_version: 10,
     content_version: "test-content",
     content: {
-      kcs: [articleKc(kcId, "a or an", 1, layout)],
-      edges: [],
+      kcs: [
+        articleKc(kcId, "a or an", 1, layout),
+        ...(options.neighbour
+          ? [articleKc(neighbourId, "First mention", 1, { x: 500, y: 0 })]
+          : []),
+      ],
+      edges: options.neighbour
+        ? [{ kind: "requires", from: kcId, to: neighbourId }]
+        : [],
       lexemes: [
         {
           id: "en.lex.cat",

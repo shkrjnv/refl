@@ -83,6 +83,49 @@ describe("knowledge graph", () => {
   });
 });
 
+describe("knowledge graph stage", () => {
+  it("places cards in the same pixel space as the edge layer", () => {
+    renderGraph();
+    const world = document.querySelector<HTMLElement>(".graph-world");
+    const svg = document.querySelector("svg.graph-svg");
+    expect(world).not.toBeNull();
+    expect(svg?.getAttribute("viewBox")).toBe(
+      `0 0 ${parseFloat(world?.style.width ?? "0")} ${parseFloat(world?.style.height ?? "0")}`,
+    );
+    expect(svg?.getAttribute("preserveAspectRatio")).toBeNull();
+    for (const card of document.querySelectorAll<HTMLElement>(".graph-node")) {
+      expect(card.style.left).toMatch(/px$/);
+      expect(card.style.width).toMatch(/px$/);
+      expect(parseFloat(card.style.height)).toBeGreaterThanOrEqual(44);
+    }
+  });
+
+  it("zooms with the controls and fits back", () => {
+    renderGraph();
+    const world = document.querySelector<HTMLElement>(".graph-world");
+    const before = world?.style.transform;
+    fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
+    expect(world?.style.transform).not.toBe(before);
+    expect(world?.style.transform).toContain("scale(1.2)");
+    fireEvent.click(screen.getByRole("button", { name: "Fit" }));
+    expect(world?.style.transform).toBe(before);
+  });
+
+  it("walks back through visited topics and clears with Escape", () => {
+    renderGraph(testContent({ x: 500, y: 1000 }, { neighbour: true }));
+    const nodes = [...document.querySelectorAll<HTMLElement>(".graph-node")];
+    expect(nodes.length).toBeGreaterThan(1);
+    fireEvent.click(nodes[0] as HTMLElement);
+    fireEvent.click(nodes[1] as HTMLElement);
+    const back = screen.getByRole("button", { name: /^Back to / });
+    fireEvent.click(back);
+    expect(nodes[0]?.getAttribute("aria-pressed")).toBe("true");
+    expect(document.querySelectorAll(".graph-edge-requires").length).toBeGreaterThan(0);
+    fireEvent.keyDown(nodes[0] as HTMLElement, { key: "Escape" });
+    expect(screen.getByText("Select a topic to open its details.")).toBeTruthy();
+  });
+});
+
 describe("knowledge graph zero layout", () => {
   it("uses the generated fallback instead of stacking at zero", () => {
     renderGraph(testContent({ x: 0, y: 0 }));

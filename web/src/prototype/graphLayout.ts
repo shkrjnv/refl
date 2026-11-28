@@ -1,10 +1,24 @@
 import type { Edge } from "../generated/core/Edge";
 
-export interface GraphNodeLike {
+/**
+ * Knowledge-graph layout in one pixel coordinate space.
+ *
+ * Every card is sized from its text before layout, so positions, SVG edges
+ * and HTML cards share the same numbers: a box is its centre plus its
+ * rendered width and height in CSS pixels. Nothing is measured from the DOM
+ * after rendering, and nothing is stretched by a non-uniform `viewBox`.
+ */
+
+export interface GraphNodeInput {
   id: string;
+  /** Authored `layout_x`/`layout_y` in 0…1000. */
+  x: number;
+  y: number;
   levelRank: number;
   level: string;
   domain: string;
+  title: string;
+  statusLabel: string;
 }
 
 export interface Point {
@@ -12,17 +26,157 @@ export interface Point {
   y: number;
 }
 
-const X_MIN = 260;
-const X_MAX = 740;
-const Y_MIN = 160;
-const Y_MAX = 840;
-
-function clampX(value: number): number {
-  return Math.max(X_MIN, Math.min(X_MAX, value));
+/** A card: centre point and size, in CSS pixels. */
+export interface Box extends Point {
+  width: number;
+  height: number;
 }
 
-function clampY(value: number): number {
-  return Math.max(Y_MIN, Math.min(Y_MAX, value));
+export interface GraphLayout {
+  boxes: Map<string, Box>;
+  width: number;
+  height: number;
+  /** The bundle had no usable coordinates and tiers were derived from edges. */
+  fallback: boolean;
+}
+
+export type GraphMode = "layered" | "web";
+
+/** Measures a single line of text at a font size and weight, in pixels. */
+export type TextMeasure = (text: string, fontSize: number, weight: number) => number;
+
+/** Card typography and spacing; the CSS for `.graph-node` uses the same values. */
+export const CARD = {
+  titleSize: 13,
+  titleWeight: 650,
+  titleLineHeight: 1.3,
+  statusSize: 11,
+  statusWeight: 600,
+  statusLineHeight: 1.3,
+  padX: 14,
+  padY: 12,
+  border: 2,
+  dot: 8,
+  dotGap: 8,
+  rowGap: 4,
+  minWidth: 132,
+  baseWidth: 184,
+  maxWidth: 264,
+} as const;
+
+const NARROW = 520;
+
+interface Spacing {
+  margin: number;
+  gapX: number;
+  rowGap: number;
+  tierGap: number;
+}
+
+function spacingFor(viewportWidth: number): Spacing {
+  return viewportWidth < NARROW
+    ? { margin: 12, gapX: 12, rowGap: 16, tierGap: 44 }
+    : { margin: 28, gapX: 28, rowGap: 22, tierGap: 64 };
+}
+
+const NARROW_CHARS = new Set([..."iljtfrI.,:;'’!|()[] "]);
+const WIDE_CHARS = new Set([..."mwMWжшщюфыЖШЩЮФЫМм"]);
+
+/**
+ * Conservative per-character width estimate used when no font metrics are
+ * available (tests, very old browsers). It overestimates Geologica slightly
+ * so a card never ends up shorter than its wrapped title.
+ */
+export function estimateTextWidth(text: string, fontSize: number, weight = 400): number {
+  let em = 0;
+  for (const char of text) {
+    if (char === " ") {
+      em += 0.28;
+    } else if (NARROW_CHARS.has(char)) {
+      em += 0.32;
+    } else if (WIDE_CHARS.has(char)) {
+      em += 0.9;
+    } else if (/[0-9]/.test(char)) {
+      em += 0.6;
+    } else if (char !== char.toLocaleLowerCase()) {
+      em += 0.72;
+    } else {
+      em += 0.6;
+    }
+  }
+  return em * fontSize * (weight >= 600 ? 1.06 : 1);
+}
+
+/** Greedy word wrap that only ever breaks at whitespace. */
+export function wrapWords(
+  text: string,
+  maxWidth: number,
+  fontSize: number,
+  weight: number,
+  measure: TextMeasure = estimateTextWidth,
+): string[] {
+  const words = text.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (!current || measure(candidate, fontSize, weight) <= maxWidth) {
+      current = candidate;
+    } else {
+      lines.push(current);
+      current = word;
+    }
+  }
+  if (current) {
+    lines.push(current);
+  }
+  return lines.length > 0 ? lines : [""];
+}
+
+/** Size of one card for a title and status label at a target width. */
+export function cardSize(
+  title: string,
+  statusLabel: string,
+  targetWidth: number,
+  measure: TextMeasure = estimateTextWidth,
+): { width: number; height: number } {
+  const chrome = 2 * CARD.padX + 2 * CARD.border;
+  const titleChrome = chrome + CARD.dot + CARD.dotGap;
+  const longestWord = Math.max(
+    0,
+    ...title
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((word) => measure(word, CARD.titleSize, CARD.titleWeight)),
+  );
+  const statusWidth = measure(statusLabel, CARD.statusSize, CARD.statusWeight);
+  const width = Math.ceil(
+    Math.min(
+      CARD.maxWidth,
+      Math.max(targetWidth, longestWord + titleChrome, Math.min(statusWidth, 120) + chrome),
+    ),
+  );
+  const titleLines = wrapWords(
+    title,
+    width - titleChrome,
+    CARD.titleSize,
+    CARD.titleWeight,
+    measure,
+  ).length;
+  const statusLines = wrapWords(
+    statusLabel,
+    width - chrome,
+    CARD.statusSize,
+    CARD.statusWeight,
+    measure,
+  ).length;
+  const height =
+    2 * CARD.border +
+    2 * CARD.padY +
+    titleLines * CARD.titleSize * CARD.titleLineHeight +
+    CARD.rowGap +
+    statusLines * CARD.statusSize * CARD.statusLineHeight;
+  return { width, height: Math.ceil(height) };
 }
 
 export function hasUsableCoordinates(
@@ -38,77 +192,177 @@ export function hasUsableCoordinates(
   return positions.size === nodes.length;
 }
 
-/**
- * Deterministic fallback when a cached bundle has no layout (or every node
- * has the same coordinates). Groups by level and domain, wraps at three
- * columns, and leaves a vertical gap between groups. The result is in the
- * same 0…1000 space as the authored layout.
- */
-export function fallbackPositions(
-  nodes: readonly GraphNodeLike[],
-): Map<string, Point> {
-  const sorted = [...nodes].sort(
-    (left, right) =>
-      left.levelRank - right.levelRank ||
-      left.level.localeCompare(right.level) ||
-      left.domain.localeCompare(right.domain) ||
-      left.id.localeCompare(right.id),
-  );
-  const groups = new Map<string, GraphNodeLike[]>();
-  for (const node of sorted) {
-    const key = `${node.levelRank}:${node.level}:${node.domain}`;
-    groups.set(key, [...(groups.get(key) ?? []), node]);
-  }
-  const positions = new Map<string, Point>();
-  // Two columns keep a 140 px card readable on a 360 px stage; the taller
-  // row keeps three-line titles from touching the next row.
-  const rowHeight = 300;
-  const groupGap = 100;
-  let cursor = Y_MIN;
-  for (const group of groups.values()) {
-    const rows = Math.ceil(group.length / 2);
-    for (let row = 0; row < rows; row += 1) {
-      const rowNodes = group.slice(row * 2, row * 2 + 2);
-      const columns = rowNodes.length;
-      rowNodes.forEach((node, column) => {
-        const x =
-          columns === 1
-            ? 500
-            : X_MIN + ((X_MAX - X_MIN) * column) / Math.max(1, columns - 1);
-        positions.set(node.id, {
-          x: clampX(x),
-          y: cursor + row * rowHeight,
-        });
-      });
-    }
-    cursor += rows * rowHeight + groupGap;
-  }
-  // A single group of many nodes would run past the bottom: compress it
-  // linearly into the available vertical band.
-  const ys = [...positions.values()].map((point) => point.y);
-  const lowest = Math.max(...ys, Y_MIN);
-  if (lowest > Y_MAX) {
-    const span = lowest - Y_MIN;
-    for (const point of positions.values()) {
-      point.y = clampY(Y_MIN + ((point.y - Y_MIN) * (Y_MAX - Y_MIN)) / span);
+/** Longest `requires` path from a root, the same rule content-build uses. */
+export function requiresDepth(
+  ids: readonly string[],
+  edges: readonly Pick<Edge, "from" | "to" | "kind">[],
+): Map<string, number> {
+  const known = new Set(ids);
+  const prerequisites = new Map<string, string[]>();
+  for (const edge of edges) {
+    if (edge.kind === "requires" && known.has(edge.from) && known.has(edge.to)) {
+      prerequisites.set(edge.from, [...(prerequisites.get(edge.from) ?? []), edge.to]);
     }
   }
-  return positions;
+  const depth = new Map<string, number>();
+  const visiting = new Set<string>();
+  const visit = (id: string): number => {
+    const cached = depth.get(id);
+    if (cached !== undefined) {
+      return cached;
+    }
+    if (visiting.has(id)) {
+      // Cycles are rejected by content-build; stay finite if one slips in.
+      return 0;
+    }
+    visiting.add(id);
+    const parents = prerequisites.get(id) ?? [];
+    const value = parents.length === 0 ? 0 : 1 + Math.max(...parents.map(visit));
+    visiting.delete(id);
+    depth.set(id, value);
+    return value;
+  };
+  for (const id of ids) {
+    visit(id);
+  }
+  return depth;
 }
 
-/** Authored coordinates are clamped away from the stage edges for labels. */
-export function authoredPositions(
-  nodes: readonly { id: string; x: number; y: number }[],
-): Map<string, Point> {
-  return new Map(
-    nodes.map((node) => [
-      node.id,
-      {
-        x: clampX(X_MIN + (node.x / 1000) * (X_MAX - X_MIN)),
-        y: clampY(Y_MIN + (node.y / 1000) * (Y_MAX - Y_MIN)),
-      },
-    ]),
+interface Tier {
+  ids: string[];
+}
+
+function tiersFor(
+  nodes: readonly GraphNodeInput[],
+  edges: readonly Pick<Edge, "from" | "to" | "kind">[],
+  usable: boolean,
+): Tier[] {
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const keyed = new Map<number, string[]>();
+  if (usable) {
+    // Authored layers share one `layout_y`; order inside a layer is `layout_x`.
+    for (const node of nodes) {
+      keyed.set(node.y, [...(keyed.get(node.y) ?? []), node.id]);
+    }
+    for (const ids of keyed.values()) {
+      ids.sort(
+        (left, right) =>
+          (byId.get(left)?.x ?? 0) - (byId.get(right)?.x ?? 0) || left.localeCompare(right),
+      );
+    }
+  } else {
+    const depth = requiresDepth(
+      nodes.map((node) => node.id),
+      edges,
+    );
+    for (const node of nodes) {
+      const key = (depth.get(node.id) ?? 0) * 1000 + node.levelRank;
+      keyed.set(key, [...(keyed.get(key) ?? []), node.id]);
+    }
+    for (const ids of keyed.values()) {
+      ids.sort((left, right) => {
+        const a = byId.get(left);
+        const b = byId.get(right);
+        return (a?.domain ?? "").localeCompare(b?.domain ?? "") || left.localeCompare(right);
+      });
+    }
+  }
+  return [...keyed.entries()]
+    .sort(([left], [right]) => left - right)
+    .map(([, ids]) => ({ ids }));
+}
+
+function sizesFor(
+  nodes: readonly GraphNodeInput[],
+  viewportWidth: number,
+  measure: TextMeasure,
+): Map<string, { width: number; height: number }> {
+  const spacing = spacingFor(viewportWidth);
+  // Two cards side by side on a phone; a comfortable fixed width elsewhere.
+  const target = Math.max(
+    CARD.minWidth,
+    Math.min(
+      CARD.baseWidth,
+      Math.floor((viewportWidth - 2 * spacing.margin - spacing.gapX) / 2),
+    ),
   );
+  return new Map(
+    nodes.map((node) => [node.id, cardSize(node.title, node.statusLabel, target, measure)]),
+  );
+}
+
+/**
+ * Top-to-bottom tiers. A tier that is wider than the viewport wraps into
+ * several centred rows, so a phone never needs to shrink the cards.
+ */
+export function layeredLayout(
+  nodes: readonly GraphNodeInput[],
+  edges: readonly Pick<Edge, "from" | "to" | "kind">[],
+  viewportWidth: number,
+  measure: TextMeasure = estimateTextWidth,
+): GraphLayout {
+  const usable = hasUsableCoordinates(nodes);
+  const spacing = spacingFor(viewportWidth);
+  const sizes = sizesFor(nodes, viewportWidth, measure);
+  const available = Math.max(CARD.minWidth, viewportWidth - 2 * spacing.margin);
+  const rows: { ids: string[]; width: number; height: number; tierEnd: boolean }[] = [];
+  for (const tier of tiersFor(nodes, edges, usable)) {
+    let row: string[] = [];
+    let rowWidth = 0;
+    const flush = (tierEnd: boolean) => {
+      if (row.length === 0) {
+        return;
+      }
+      rows.push({
+        ids: row,
+        width: rowWidth,
+        height: Math.max(...row.map((id) => sizes.get(id)?.height ?? 0)),
+        tierEnd,
+      });
+      row = [];
+      rowWidth = 0;
+    };
+    for (const id of tier.ids) {
+      const width = sizes.get(id)?.width ?? CARD.baseWidth;
+      const next = row.length === 0 ? width : rowWidth + spacing.gapX + width;
+      if (row.length > 0 && next > available) {
+        flush(false);
+        row = [id];
+        rowWidth = width;
+      } else {
+        row.push(id);
+        rowWidth = next;
+      }
+    }
+    flush(true);
+  }
+  const widest = Math.max(0, ...rows.map((row) => row.width));
+  const width = Math.ceil(Math.max(viewportWidth, widest + 2 * spacing.margin));
+  const boxes = new Map<string, Box>();
+  let cursor = spacing.margin;
+  rows.forEach((row, index) => {
+    let left = (width - row.width) / 2;
+    for (const id of row.ids) {
+      const size = sizes.get(id) ?? { width: CARD.baseWidth, height: 60 };
+      boxes.set(id, {
+        x: left + size.width / 2,
+        y: cursor + row.height / 2,
+        width: size.width,
+        height: size.height,
+      });
+      left += size.width + spacing.gapX;
+    }
+    cursor += row.height;
+    if (index < rows.length - 1) {
+      cursor += row.tierEnd ? spacing.tierGap : spacing.rowGap;
+    }
+  });
+  return {
+    boxes,
+    width,
+    height: Math.ceil(cursor + spacing.margin),
+    fallback: !usable,
+  };
 }
 
 function random(seed: number): () => number {
@@ -122,7 +376,11 @@ function random(seed: number): () => number {
   };
 }
 
-function seedFrom(text: string): number {
+/** First 32 bits of `content_version` (hex) or an FNV hash of the string. */
+export function seedFrom(text: string): number {
+  if (/^[0-9a-f]{8}/i.test(text)) {
+    return Number.parseInt(text.slice(0, 8), 16) >>> 0;
+  }
   let seed = 2166136261;
   for (let index = 0; index < text.length; index += 1) {
     seed ^= text.charCodeAt(index);
@@ -131,241 +389,347 @@ function seedFrom(text: string): number {
   return seed >>> 0;
 }
 
-/** Deterministic 300-step force layout seeded by `contentVersion`. */
-export function webPositions(
-  nodes: readonly GraphNodeLike[],
-  initial: Map<string, Point>,
-  edges: readonly Pick<Edge, "from" | "to">[],
-  contentVersion: string,
-): Map<string, Point> {
-  const next = random(seedFrom(contentVersion));
-  const positions = new Map(
-    nodes.map((node) => {
-      const start = initial.get(node.id) ?? { x: 500, y: 500 };
-      return [
-        node.id,
-        { x: start.x + next() * 50 - 25, y: start.y + next() * 50 - 25 },
-      ];
-    }),
+export function boxesOverlap(left: Box, right: Box, gap = 0): boolean {
+  return (
+    Math.abs(left.x - right.x) < (left.width + right.width) / 2 + gap &&
+    Math.abs(left.y - right.y) < (left.height + right.height) / 2 + gap
   );
-  const ids = nodes.map((node) => node.id);
-  const links = edges.filter(
-    (edge) => positions.has(edge.from) && positions.has(edge.to),
-  );
-  for (let step = 0; step < 300; step += 1) {
-    const cooling = 1 - step / 300;
-    for (let i = 0; i < ids.length; i += 1) {
-      const left = positions.get(ids[i] ?? "");
-      if (!left) {
-        continue;
-      }
-      for (let j = i + 1; j < ids.length; j += 1) {
-        const right = positions.get(ids[j] ?? "");
-        if (!right) {
-          continue;
-        }
-        let dx = left.x - right.x;
-        let dy = left.y - right.y;
-        const distance = Math.max(1, Math.hypot(dx, dy));
-        const force = 24000 / (distance * distance);
-        dx /= distance;
-        dy /= distance;
-        left.x += dx * force * cooling;
-        left.y += dy * force * cooling;
-        right.x -= dx * force * cooling;
-        right.y -= dy * force * cooling;
-      }
-    }
-    for (const edge of links) {
-      const left = positions.get(edge.from);
-      const right = positions.get(edge.to);
-      if (!left || !right) {
-        continue;
-      }
-      const dx = right.x - left.x;
-      const dy = right.y - left.y;
-      const distance = Math.max(1, Math.hypot(dx, dy));
-      const force = (distance - 240) * 0.005 * cooling;
-      const ux = dx / distance;
-      const uy = dy / distance;
-      left.x += ux * force;
-      left.y += uy * force;
-      right.x -= ux * force;
-      right.y -= uy * force;
-    }
-    for (const id of ids) {
-      const point = positions.get(id);
-      if (point) {
-        point.x = clampX(point.x * 0.995 + 500 * 0.005);
-        point.y = clampY(point.y * 0.995 + 500 * 0.005);
-      }
-    }
-  }
-  // Hard separation for the narrow stage: a 140 px card is ~450 layout
-  // units wide, so five cards need a wide ring. Larger sets fall back to a
-  // tighter packing rather than pushing every card onto the clamp.
-  const area = (X_MAX - X_MIN) * (Y_MAX - Y_MIN);
-  const minimum = Math.round(
-    Math.max(300, Math.min(440, Math.sqrt(area / Math.max(1, ids.length)) * 1.7)),
-  );
-  for (let pass = 0; pass < 24; pass += 1) {
+}
+
+export interface SeparateOptions {
+  gap: number;
+  /** Horizontal bounds for box edges; vertical space is unbounded. */
+  minX?: number;
+  maxX?: number;
+  /** Boxes that never move (the centre of a local graph). */
+  fixed?: ReadonlySet<string>;
+  maxPasses?: number;
+}
+
+/**
+ * Pushes overlapping rectangles apart along the axis of least penetration.
+ * With horizontal bounds, a push that would leave the bounds goes vertical
+ * instead, so the loop always converges. Returns `true` when no overlap is
+ * left.
+ */
+export function separateBoxes(boxes: Map<string, Box>, options: SeparateOptions): boolean {
+  const ids = [...boxes.keys()].sort();
+  const { gap, minX = -Infinity, maxX = Infinity, fixed = new Set<string>() } = options;
+  const passes = options.maxPasses ?? 800;
+  const fitsX = (box: Box, x: number) =>
+    x - box.width / 2 >= minX - 0.01 && x + box.width / 2 <= maxX + 0.01;
+  for (let pass = 0; pass < passes; pass += 1) {
     let moved = false;
     for (let i = 0; i < ids.length; i += 1) {
-      const left = positions.get(ids[i] ?? "");
-      if (!left) {
+      const a = boxes.get(ids[i] ?? "");
+      if (!a) {
         continue;
       }
       for (let j = i + 1; j < ids.length; j += 1) {
-        const right = positions.get(ids[j] ?? "");
-        if (!right) {
+        const b = boxes.get(ids[j] ?? "");
+        if (!b || !boxesOverlap(a, b, gap)) {
           continue;
         }
-        let dx = right.x - left.x;
-        let dy = right.y - left.y;
-        let distance = Math.hypot(dx, dy);
-        if (distance >= minimum) {
+        const aFixed = fixed.has(ids[i] ?? "");
+        const bFixed = fixed.has(ids[j] ?? "");
+        if (aFixed && bFixed) {
           continue;
         }
-        if (distance < 1) {
-          const angle = ((i + 1) * 1.7 + (j + 1) * 0.9) % (Math.PI * 2);
-          dx = Math.cos(angle);
-          dy = Math.sin(angle);
-          distance = 1;
+        const shareA = aFixed ? 0 : bFixed ? 1 : 0.5;
+        const shareB = 1 - shareA;
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const penetrationX = (a.width + b.width) / 2 + gap - Math.abs(dx);
+        const penetrationY = (a.height + b.height) / 2 + gap - Math.abs(dy);
+        // Ties and coincident centres resolve by id order, never by chance.
+        const signX = dx === 0 ? 1 : Math.sign(dx);
+        const signY = dy === 0 ? 1 : Math.sign(dy);
+        const nextAX = a.x - signX * penetrationX * shareA;
+        const nextBX = b.x + signX * penetrationX * shareB;
+        const horizontal =
+          penetrationX <= penetrationY && fitsX(a, nextAX) && fitsX(b, nextBX);
+        if (horizontal) {
+          a.x = nextAX;
+          b.x = nextBX;
+        } else {
+          a.y -= signY * penetrationY * shareA;
+          b.y += signY * penetrationY * shareB;
         }
-        const push = (minimum - distance) / 2;
-        const ux = dx / distance;
-        const uy = dy / distance;
-        left.x = clampX(left.x - ux * push);
-        left.y = clampY(left.y - uy * push);
-        right.x = clampX(right.x + ux * push);
-        right.y = clampY(right.y + uy * push);
         moved = true;
       }
     }
     if (!moved) {
-      break;
+      return true;
     }
   }
-  return positions;
+  return false;
 }
 
-export function resolveGraphPositions(
-  nodes: readonly { id: string; x: number; y: number; levelRank: number; level: string; domain: string }[],
-  edges: readonly Pick<Edge, "from" | "to">[],
+/** Moves every box so the set starts at `margin` and reports the extent. */
+function normalize(
+  boxes: Map<string, Box>,
+  margin: number,
+  minWidth: number,
+): { width: number; height: number } {
+  const all = [...boxes.values()];
+  if (all.length === 0) {
+    return { width: minWidth, height: 2 * margin };
+  }
+  const left = Math.min(...all.map((box) => box.x - box.width / 2));
+  const top = Math.min(...all.map((box) => box.y - box.height / 2));
+  const right = Math.max(...all.map((box) => box.x + box.width / 2));
+  const bottom = Math.max(...all.map((box) => box.y + box.height / 2));
+  const contentWidth = right - left;
+  const width = Math.ceil(Math.max(minWidth, contentWidth + 2 * margin));
+  const offsetX = (width - contentWidth) / 2 - left;
+  for (const box of all) {
+    box.x += offsetX;
+    box.y += margin - top;
+  }
+  return { width, height: Math.ceil(bottom - top + 2 * margin) };
+}
+
+/**
+ * Force-directed "web" view: a deterministic 300-step Fruchterman–Reingold
+ * simulation seeded by `content_version`, started from the layered layout,
+ * then a rectangle collision pass so no two cards overlap.
+ */
+export function webLayout(
+  nodes: readonly GraphNodeInput[],
+  edges: readonly Pick<Edge, "from" | "to" | "kind">[],
   contentVersion: string,
-  mode: "layered" | "web",
-): { positions: Map<string, Point>; fallback: boolean } {
-  const fallback = !hasUsableCoordinates(nodes);
-  const base = fallback
-    ? fallbackPositions(
-        nodes.map((node) => ({
-          id: node.id,
-          levelRank: node.levelRank,
-          level: node.level,
-          domain: node.domain,
-        })),
-      )
-    : authoredPositions(nodes);
-  if (mode === "web") {
+  viewport: { width: number; height: number },
+  measure: TextMeasure = estimateTextWidth,
+): GraphLayout {
+  const base = layeredLayout(nodes, edges, viewport.width, measure);
+  const spacing = spacingFor(viewport.width);
+  const next = random(seedFrom(contentVersion));
+  const boxes = new Map<string, Box>();
+  const ids = nodes.map((node) => node.id).sort();
+  for (const id of ids) {
+    const start = base.boxes.get(id);
+    if (start) {
+      boxes.set(id, {
+        ...start,
+        x: start.x + next() * 40 - 20,
+        y: start.y + next() * 40 - 20,
+      });
+    }
+  }
+  const all = [...boxes.values()];
+  const meanWidth = all.reduce((sum, box) => sum + box.width, 0) / Math.max(1, all.length);
+  const meanHeight = all.reduce((sum, box) => sum + box.height, 0) / Math.max(1, all.length);
+  const ideal = Math.hypot(meanWidth, meanHeight) * 0.85;
+  const aspect = Math.max(0.5, Math.min(2.4, viewport.width / Math.max(1, viewport.height)));
+  const gravityX = 0.005 / Math.sqrt(aspect);
+  const gravityY = 0.005 * Math.sqrt(aspect);
+  const links = edges.filter((edge) => boxes.has(edge.from) && boxes.has(edge.to));
+  for (let step = 0; step < 300; step += 1) {
+    const temperature = ideal * 0.35 * (1 - step / 300) + 1;
+    const shift = new Map(ids.map((id) => [id, { x: 0, y: 0 }]));
+    for (let i = 0; i < ids.length; i += 1) {
+      const a = boxes.get(ids[i] ?? "");
+      const sa = shift.get(ids[i] ?? "");
+      if (!a || !sa) {
+        continue;
+      }
+      for (let j = i + 1; j < ids.length; j += 1) {
+        const b = boxes.get(ids[j] ?? "");
+        const sb = shift.get(ids[j] ?? "");
+        if (!b || !sb) {
+          continue;
+        }
+        let dx = a.x - b.x;
+        let dy = a.y - b.y;
+        let distance = Math.hypot(dx, dy);
+        if (distance < 0.01) {
+          dx = Math.cos(i + j);
+          dy = Math.sin(i + j);
+          distance = 1;
+        }
+        const force = (ideal * ideal) / distance;
+        sa.x += (dx / distance) * force;
+        sa.y += (dy / distance) * force;
+        sb.x -= (dx / distance) * force;
+        sb.y -= (dy / distance) * force;
+      }
+    }
+    for (const edge of links) {
+      const a = boxes.get(edge.from);
+      const b = boxes.get(edge.to);
+      const sa = shift.get(edge.from);
+      const sb = shift.get(edge.to);
+      if (!a || !b || !sa || !sb) {
+        continue;
+      }
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const distance = Math.max(0.01, Math.hypot(dx, dy));
+      const force = (distance * distance) / ideal;
+      sa.x += (dx / distance) * force;
+      sa.y += (dy / distance) * force;
+      sb.x -= (dx / distance) * force;
+      sb.y -= (dy / distance) * force;
+    }
+    const centerX = base.width / 2;
+    const centerY = base.height / 2;
+    for (const id of ids) {
+      const box = boxes.get(id);
+      const s = shift.get(id);
+      if (!box || !s) {
+        continue;
+      }
+      s.x -= (box.x - centerX) * gravityX * ideal;
+      s.y -= (box.y - centerY) * gravityY * ideal;
+      const length = Math.hypot(s.x, s.y);
+      if (length > 0) {
+        const limited = Math.min(length, temperature);
+        box.x += (s.x / length) * limited;
+        box.y += (s.y / length) * limited;
+      }
+    }
+  }
+  separateBoxes(boxes, { gap: spacing.gapX });
+  const extent = normalize(boxes, spacing.margin, viewport.width);
+  return { boxes, ...extent, fallback: base.fallback };
+}
+
+export function resolveGraphLayout(
+  nodes: readonly GraphNodeInput[],
+  edges: readonly Pick<Edge, "from" | "to" | "kind">[],
+  contentVersion: string,
+  mode: GraphMode,
+  viewport: { width: number; height: number },
+  measure: TextMeasure = estimateTextWidth,
+): GraphLayout {
+  return mode === "web"
+    ? webLayout(nodes, edges, contentVersion, viewport, measure)
+    : layeredLayout(nodes, edges, viewport.width, measure);
+}
+
+/** Where the segment from `box` centre toward `toward` leaves the box. */
+export function boxExit(box: Box, toward: Point, gap = 0): Point {
+  const dx = toward.x - box.x;
+  const dy = toward.y - box.y;
+  if (dx === 0 && dy === 0) {
+    return { x: box.x, y: box.y };
+  }
+  const tx = dx === 0 ? Infinity : box.width / 2 / Math.abs(dx);
+  const ty = dy === 0 ? Infinity : box.height / 2 / Math.abs(dy);
+  const t = Math.min(tx, ty);
+  const length = Math.hypot(dx, dy);
+  return {
+    x: box.x + dx * t + (dx / length) * gap,
+    y: box.y + dy * t + (dy / length) * gap,
+  };
+}
+
+export interface EdgeGeometry {
+  d: string;
+  mid: Point;
+}
+
+/**
+ * Edge path between two cards. Cards on different rows of the layered view
+ * get a vertical S-curve from bottom edge to top edge; everything else is a
+ * straight segment clipped to both card borders.
+ */
+export function edgeGeometry(from: Box, to: Box, mode: GraphMode, gap = 3): EdgeGeometry {
+  const verticalGap = Math.abs(to.y - from.y) - (from.height + to.height) / 2;
+  if (mode === "layered" && verticalGap > 8) {
+    const down = to.y > from.y ? 1 : -1;
+    const x1 = from.x;
+    const y1 = from.y + (down * from.height) / 2 + down * gap;
+    const x2 = to.x;
+    const y2 = to.y - (down * to.height) / 2 - down * gap;
+    const bend = (y2 - y1) / 2;
     return {
-      positions: webPositions(nodes, base, edges, contentVersion),
-      fallback,
+      d: `M ${x1} ${y1} C ${x1} ${y1 + bend} ${x2} ${y2 - bend} ${x2} ${y2}`,
+      mid: { x: (x1 + x2) / 2, y: (y1 + y2) / 2 },
     };
   }
-  return { positions: base, fallback };
+  const start = boxExit(from, to, gap);
+  const end = boxExit(to, from, gap);
+  return {
+    d: `M ${start.x} ${start.y} L ${end.x} ${end.y}`,
+    mid: { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 },
+  };
 }
 
-/** Rendered card size in the same 0…1000 units as graph positions. */
-export interface CardSize {
+export interface ViewTransform {
+  scale: number;
+  x: number;
+  y: number;
+}
+
+export const MIN_ZOOM = 0.35;
+export const MAX_ZOOM = 2;
+
+/** Largest scale (≤ 1) at which the whole world fits, centred. */
+export function fitTransform(
+  world: { width: number; height: number },
+  viewport: { width: number; height: number },
+): ViewTransform {
+  if (world.width <= 0 || world.height <= 0 || viewport.width <= 0 || viewport.height <= 0) {
+    return { scale: 1, x: 0, y: 0 };
+  }
+  const scale = Math.max(
+    MIN_ZOOM,
+    Math.min(1, viewport.width / world.width, viewport.height / world.height),
+  );
+  return {
+    scale,
+    x: (viewport.width - world.width * scale) / 2,
+    y: (viewport.height - world.height * scale) / 2,
+  };
+}
+
+/** Zooms by `factor` keeping the viewport point `anchor` fixed. */
+export function zoomAt(view: ViewTransform, factor: number, anchor: Point): ViewTransform {
+  const scale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, view.scale * factor));
+  const ratio = scale / view.scale;
+  return {
+    scale,
+    x: anchor.x - (anchor.x - view.x) * ratio,
+    y: anchor.y - (anchor.y - view.y) * ratio,
+  };
+}
+
+export interface EdgeLabel {
+  id: string;
+  at: Point;
   width: number;
   height: number;
 }
 
-const CARD_PADDING = 10;
-const CARD_GAP = 14;
-
 /**
- * Fits measured card boxes inside the stage and separates overlapping cards.
- * Positions are percentages of the stage, so widths are converted with the
- * stage width and heights with the stage height before this call.
+ * Nudges edge labels off cards and off each other. Cards are fixed; a label
+ * moves the shortest way out, so it stays next to its edge.
  */
-export function fitCardPositions(
-  positions: ReadonlyMap<string, Point>,
-  sizes: ReadonlyMap<string, CardSize>,
-  gap = CARD_GAP,
+export function placeEdgeLabels(
+  cards: ReadonlyMap<string, Box>,
+  labels: readonly EdgeLabel[],
+  gap = 3,
 ): Map<string, Point> {
-  const out = new Map(
-    [...positions.entries()].map(([id, point]) => [id, { ...point }]),
+  const boxes = new Map<string, Box>();
+  const fixed = new Set<string>();
+  for (const [id, box] of cards) {
+    boxes.set(`card:${id}`, { ...box });
+    fixed.add(`card:${id}`);
+  }
+  for (const label of labels) {
+    boxes.set(`label:${label.id}`, {
+      x: label.at.x,
+      y: label.at.y,
+      width: label.width,
+      height: label.height,
+    });
+  }
+  separateBoxes(boxes, { gap, fixed });
+  return new Map(
+    labels.map((label) => {
+      const box = boxes.get(`label:${label.id}`);
+      return [label.id, box ? { x: box.x, y: box.y } : label.at];
+    }),
   );
-  const ids = [...out.keys()].filter((id) => sizes.has(id));
-  const clampPoint = (id: string) => {
-    const point = out.get(id);
-    const size = sizes.get(id);
-    if (!point || !size) {
-      return;
-    }
-    const halfWidth = Math.min(500, size.width / 2);
-    const halfHeight = Math.min(500, size.height / 2);
-    point.x = Math.max(
-      halfWidth + CARD_PADDING,
-      Math.min(1000 - halfWidth - CARD_PADDING, point.x),
-    );
-    point.y = Math.max(
-      halfHeight + CARD_PADDING,
-      Math.min(1000 - halfHeight - CARD_PADDING, point.y),
-    );
-  };
-  for (const id of ids) {
-    clampPoint(id);
-  }
-  for (let pass = 0; pass < 80; pass += 1) {
-    let moved = false;
-    for (let i = 0; i < ids.length; i += 1) {
-      const left = out.get(ids[i] ?? "");
-      const leftSize = sizes.get(ids[i] ?? "");
-      if (!left || !leftSize) {
-        continue;
-      }
-      for (let j = i + 1; j < ids.length; j += 1) {
-        const right = out.get(ids[j] ?? "");
-        const rightSize = sizes.get(ids[j] ?? "");
-        if (!right || !rightSize) {
-          continue;
-        }
-        const requiredX = (leftSize.width + rightSize.width) / 2 + gap;
-        const requiredY = (leftSize.height + rightSize.height) / 2 + gap;
-        let dx = right.x - left.x;
-        let dy = right.y - left.y;
-        if (Math.abs(dx) >= requiredX || Math.abs(dy) >= requiredY) {
-          continue;
-        }
-        if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) {
-          const angle = ((i + 1) * 1.7 + (j + 1) * 0.9) % (Math.PI * 2);
-          dx = Math.cos(angle);
-          dy = Math.sin(angle);
-        }
-        const pushX = (requiredX - Math.abs(dx)) / 2;
-        const pushY = (requiredY - Math.abs(dy)) / 2;
-        if (!Number.isFinite(dx) || !Number.isFinite(dy)) {
-          continue;
-        }
-        if (pushX / requiredX <= pushY / requiredY) {
-          const direction = dx < 0 ? -1 : 1;
-          left.x -= direction * pushX;
-          right.x += direction * pushX;
-        } else {
-          const direction = dy < 0 ? -1 : 1;
-          left.y -= direction * pushY;
-          right.y += direction * pushY;
-        }
-        clampPoint(ids[i] ?? "");
-        clampPoint(ids[j] ?? "");
-        moved = true;
-      }
-    }
-    if (!moved) {
-      break;
-    }
-  }
-  return out;
 }
