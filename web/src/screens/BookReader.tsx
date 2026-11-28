@@ -9,6 +9,10 @@ import {
 } from "react";
 
 import { NotesPanel } from "../components/NotesPanel";
+import {
+  ReaderWordPopover,
+  type ReaderWordAnchor,
+} from "../components/ReaderWordPopover";
 import { StudioIcon } from "../components/StudioIcons";
 import { Button } from "../components/ui";
 import type { BookParagraph } from "../generated/core/BookParagraph";
@@ -72,8 +76,7 @@ interface WordCard {
   sentence: BookSentence;
   chapterId: string;
   paragraphId: string;
-  top: number;
-  left: number;
+  anchor: ReaderWordAnchor;
 }
 
 interface LocatedSentence {
@@ -551,8 +554,12 @@ export function BookReader({
       sentence,
       chapterId,
       paragraphId,
-      left: clamp(rect.left - 18, 8, Math.max(8, window.innerWidth - 336)),
-      top: clamp(rect.bottom + 8, 8, Math.max(8, window.innerHeight - 380)),
+      anchor: {
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        left: rect.left,
+      },
     });
   };
 
@@ -1336,64 +1343,19 @@ export function BookReader({
       ) : null}
 
       {word ? (
-        <aside
-          className="word-card word-popover"
-          role="dialog"
-          aria-label={t("reader-word-card")}
-          style={{ top: `${word.top}px`, left: `${word.left}px` }}
-        >
-          <header>
-            <h3>{word.text}</h3>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setWord(null)}
-            >
-              {t("notes-close")}
-            </Button>
-          </header>
-          {currentSense ? (
-            <>
-              {currentSense.sense.ipa_us || currentSense.sense.ipa_uk ? (
-                <p className="vocab-ipa">
-                  /{currentSense.sense.ipa_us || currentSense.sense.ipa_uk}/
-                </p>
-              ) : null}
-              <p>{currentSense.sense.definition_en}</p>
-              {locale === "uz" && currentSense.sense.gloss_uz ? (
-                <p className="vocab-gloss">{currentSense.sense.gloss_uz}</p>
-              ) : null}
-              {locale === "ru" && currentSense.sense.gloss_ru ? (
-                <p className="vocab-gloss">{currentSense.sense.gloss_ru}</p>
-              ) : null}
-            </>
-          ) : (
-            <>
-              <p className="bento-note">{t("reader-not-in-dictionary")}</p>
-              <label className="field">
-                <span>{t("vocab-form-definition")}</span>
-                <textarea
-                  className="answer-input"
-                  rows={2}
-                  value={customDefinition}
-                  onChange={(event) =>
-                    setCustomDefinition(event.currentTarget.value)
-                  }
-                />
-              </label>
-            </>
-          )}
-          <p className="bento-note">{word.sentence.text}</p>
-          <Button
-            type="button"
-            variant="primary"
-            disabled={busy || Boolean(custom)}
-            onClick={() => void addToVocabulary()}
-          >
-            {custom ? t("reader-in-vocabulary") : t("reader-add-vocabulary")}
-          </Button>
-        </aside>
+        <ReaderWordPopover
+          word={word.text}
+          anchor={word.anchor}
+          sense={currentSense?.sense ?? null}
+          locale={locale}
+          sentenceText={word.sentence.text}
+          customDefinition={customDefinition}
+          onCustomDefinitionChange={setCustomDefinition}
+          busy={busy}
+          inVocabulary={Boolean(custom)}
+          onAdd={() => void addToVocabulary()}
+          onClose={() => setWord(null)}
+        />
       ) : null}
 
       {noteMark ? (

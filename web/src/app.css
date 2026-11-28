@@ -15411,3 +15411,92 @@ body.reader-focus .mobile-dock {
     padding-bottom: calc(96px + env(safe-area-inset-bottom));
   }
 }
+
+/* Reader word card: a reader-theme popover that points at the tapped word. */
+.reader-word-popover {
+  position: fixed;
+  z-index: 240;
+  width: min(320px, calc(100vw - 16px));
+  max-height: min(60vh, 420px);
+  overflow-y: auto;
+  border: 1px solid var(--reader-border);
+  border-radius: var(--radius-md);
+  background: var(--reader-panel);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.22);
+  color: var(--reader-text);
+  padding: 16px;
+}
+
+.reader-word-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.reader-word-popover h3 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.reader-word-close {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--reader-text);
+  margin: -8px -8px 0 0;
+  padding: 0;
+}
+
+.reader-word-close:hover,
+.reader-word-close:focus-visible {
+  background: var(--reader-panel-2);
+}
+
+.reader-word-arrow {
+  position: absolute;
+  width: 14px;
+  height: 8px;
+  background: var(--reader-panel);
+  filter: drop-shadow(0 0 1px var(--reader-border));
+}
+
+.reader-word-popover[data-placement="below"] .reader-word-arrow {
+  top: -8px;
+  clip-path: polygon(50% 0, 0 100%, 100% 100%);
+}
+
+.reader-word-popover[data-placement="above"] .reader-word-arrow {
+  bottom: -8px;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+
+.reader-word-popover .field {
+  color: var(--reader-muted);
+}
+
+.reader-word-popover .bento-note {
+  color: var(--reader-muted);
+}
+
+.reader-word-input {
+  width: 100%;
+  min-height: var(--tap);
+  border: 1px solid var(--reader-border);
+  border-radius: var(--radius-md);
+  background: var(--reader-bg);
+  color: var(--reader-text);
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 1rem;
+  resize: vertical;
+}
+
+.reader-word-input::placeholder {
+  color: var(--reader-muted);
+}

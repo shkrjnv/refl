@@ -667,6 +667,7 @@ reader-bookmark-sentence = Gapga xatchoʻp
 reader-note-sentence = Gapga eslatma
 reader-marks-title = Xatchoʻplar va belgilar
 reader-word-card = Soʻz kartasi
+reader-word-card-close = Soʻz kartasini yopish
 reader-not-in-dictionary = Bu soʻz kurs bankida yoʻq. Uni oʻz taʼrifingiz bilan qoʻshing.
 reader-add-vocabulary = Lugʻatga qoʻshish
 reader-in-vocabulary = Lugʻatda

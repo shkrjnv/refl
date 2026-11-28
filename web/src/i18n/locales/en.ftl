@@ -673,6 +673,7 @@ reader-bookmark-sentence = Bookmark sentence
 reader-note-sentence = Note this sentence
 reader-marks-title = Bookmarks and highlights
 reader-word-card = Word card
+reader-word-card-close = Close word card
 reader-not-in-dictionary = This word is not in the course bank. Add it with your own definition.
 reader-add-vocabulary = Add to vocabulary
 reader-in-vocabulary = In vocabulary
