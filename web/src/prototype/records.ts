@@ -379,6 +379,14 @@ export class RecordStore {
   }
 
   async saveNote(stateJson: string, input: NoteInput): Promise<string> {
+    return (await this.saveNoteRecord(stateJson, input)).stateJson;
+  }
+
+  /** Saves a note and returns its stable id (the creation event id). */
+  async saveNoteRecord(
+    stateJson: string,
+    input: NoteInput,
+  ): Promise<{ stateJson: string; noteId: string }> {
     const body = input.body;
     if (new TextEncoder().encode(body).length > 4096) {
       throw new Error("note exceeds 4096 bytes");
@@ -406,7 +414,11 @@ export class RecordStore {
       const payload = event["payload"] as JsonObject;
       payload["note_id"] = event["event_id"] as string;
     }
-    return this.#append(stateJson, event);
+    const next = await this.#append(stateJson, event);
+    return {
+      stateJson: next,
+      noteId: input.noteId ?? (event["event_id"] as string),
+    };
   }
 
   async deleteNote(stateJson: string, noteId: string): Promise<string> {

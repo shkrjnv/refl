@@ -20,7 +20,15 @@ export interface LoadedBook {
   book: Book;
   /** Canonical asset JSON handed to `core-wasm::book_coverage`. */
   json: string;
+  /** Bundled typographic cover; a personal upload overrides it. */
+  coverUrl: string | null;
 }
+
+const BUILT_IN_COVERS: Record<string, string> = {
+  "book.aesop-lion-mouse": "/covers/aesop-lion-mouse.svg",
+  "book.aesop-north-wind-sun": "/covers/aesop-north-wind-sun.svg",
+  "book.ohenry-gift-magi": "/covers/ohenry-gift-magi.svg",
+};
 
 const assets = import.meta.glob("../generated/books/*.json", {
   eager: true,
@@ -44,6 +52,7 @@ export const BOOKS: LoadedBook[] = catalog.books.flatMap((meta) => {
       meta,
       book: asset as Book,
       json: JSON.stringify(asset),
+      coverUrl: BUILT_IN_COVERS[meta.id] ?? null,
     },
   ];
 });

@@ -26,6 +26,7 @@ export interface GraphScreenProps {
   recordsWriter: RecordStore;
   onStateChange: (stateJson: string) => void;
   onPractice: (kcId: string) => void;
+  onOpenNotes?: (noteId?: string) => void;
 }
 
 type GraphMode = "layered" | "web";
@@ -54,6 +55,7 @@ export function GraphScreen({
   recordsWriter,
   onStateChange,
   onPractice,
+  onOpenNotes,
 }: GraphScreenProps) {
   const { t } = useTranslation();
   const learner = useMemo(() => parseLearnerState(stateJson), [stateJson]);
@@ -362,6 +364,7 @@ export function GraphScreen({
               stateJson={stateJson}
               onStateChange={onStateChange}
               title={t("graph-note-title")}
+              onOpenWorkspace={onOpenNotes}
               onClose={() => setNoteOpen(false)}
             />
           ) : null}

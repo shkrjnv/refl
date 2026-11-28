@@ -4,7 +4,7 @@
  * it has activated the matching content pair (docs/13, «Обновление
  * приложения»).
  */
-const CACHE_NAME = "refl-shell-v2";
+const CACHE_NAME = "refl-shell-v3";
 const SHELL = [
   "/",
   "/index.html",
@@ -14,6 +14,9 @@ const SHELL = [
   "/fonts/Geologica-Variable.woff2",
   "/fonts/Geologica-IPA.woff2",
   "/fonts/PixelifySans-Variable.woff2",
+  "/covers/aesop-lion-mouse.svg",
+  "/covers/aesop-north-wind-sun.svg",
+  "/covers/ohenry-gift-magi.svg",
 ];
 
 self.addEventListener("install", (event) => {

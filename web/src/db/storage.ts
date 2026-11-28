@@ -1,3 +1,4 @@
+import type { Book } from "../generated/core/Book";
 import { isJsonObject, type JsonValue } from "../types/json";
 
 export const OUTBOX_PENDING = "pending";
@@ -82,6 +83,22 @@ export interface CachedBundleRecord {
   cached_at: number;
 }
 
+/** A book imported by the learner; lives only on this device. */
+export interface PersonalBookRecord {
+  learner_id: string;
+  book: Book;
+  imported_at: number;
+  bytes: number;
+}
+
+/** A 2:3 cover image stored as a compressed data URL for any shelf book. */
+export interface BookCoverRecord {
+  learner_id: string;
+  book_id: string;
+  data_url: string;
+  updated_at: number;
+}
+
 type MetaKey =
   | "cursor"
   | "clock_offset_ms"
@@ -93,7 +110,7 @@ interface MetaRecord {
   value: JsonValue;
 }
 
-const DATABASE_VERSION = 2;
+const DATABASE_VERSION = 3;
 const STORE_NAMES = [
   "snapshots",
   "events",
@@ -102,6 +119,8 @@ const STORE_NAMES = [
   "content",
   "bundle_cache",
   "meta",
+  "personal_books",
+  "book_covers",
 ] as const;
 type StoreName = (typeof STORE_NAMES)[number];
 
@@ -181,6 +200,12 @@ function openDatabase(
       }
       if (!db.objectStoreNames.contains("meta")) {
         db.createObjectStore("meta", { keyPath: "key" });
+      }
+      if (!db.objectStoreNames.contains("personal_books")) {
+        db.createObjectStore("personal_books", { keyPath: "book.id" });
+      }
+      if (!db.objectStoreNames.contains("book_covers")) {
+        db.createObjectStore("book_covers", { keyPath: "book_id" });
       }
     };
     request.onsuccess = () => {
@@ -618,6 +643,86 @@ export class LearnerStorage {
     };
   }
 
+  async listPersonalBooks(): Promise<PersonalBookRecord[]> {
+    const records = await requestResult<PersonalBookRecord[]>(
+      this.#db
+        .transaction("personal_books", "readonly")
+        .objectStore("personal_books")
+        .getAll(),
+    );
+    for (const record of records) {
+      checkLearner(record, this.learnerId);
+    }
+    return records.sort((left, right) => right.imported_at - left.imported_at);
+  }
+
+  async putPersonalBook(record: PersonalBookRecord): Promise<void> {
+    checkLearner(record, this.learnerId);
+    if (!/^book\.personal[-.]/.test(record.book.id)) {
+      throw new Error("a personal book id must start with book.personal");
+    }
+    await runTransaction(
+      this.#db,
+      "personal_books",
+      "readwrite",
+      async (transaction) => {
+        await requestResult(
+          transaction.objectStore("personal_books").put(record),
+        );
+      },
+    );
+  }
+
+  async deletePersonalBook(bookId: string): Promise<void> {
+    await runTransaction(
+      this.#db,
+      ["personal_books", "book_covers"],
+      "readwrite",
+      async (transaction) => {
+        await requestResult(
+          transaction.objectStore("personal_books").delete(bookId),
+        );
+        await requestResult(
+          transaction.objectStore("book_covers").delete(bookId),
+        );
+      },
+    );
+  }
+
+  async listBookCovers(): Promise<BookCoverRecord[]> {
+    const records = await requestResult<BookCoverRecord[]>(
+      this.#db
+        .transaction("book_covers", "readonly")
+        .objectStore("book_covers")
+        .getAll(),
+    );
+    for (const record of records) {
+      checkLearner(record, this.learnerId);
+    }
+    return records;
+  }
+
+  async putBookCover(record: BookCoverRecord): Promise<void> {
+    checkLearner(record, this.learnerId);
+    if (!record.data_url.startsWith("data:image/")) {
+      throw new Error("a cover must be a stored image data URL");
+    }
+    await runTransaction(
+      this.#db,
+      "book_covers",
+      "readwrite",
+      async (transaction) => {
+        await requestResult(transaction.objectStore("book_covers").put(record));
+      },
+    );
+  }
+
+  async deleteBookCover(bookId: string): Promise<void> {
+    await runTransaction(this.#db, "book_covers", "readwrite", async (tx) => {
+      await requestResult(tx.objectStore("book_covers").delete(bookId));
+    });
+  }
+
   async exportCache(): Promise<string> {
     const snapshot = await this.getSnapshot();
     const events = await this.listEvents();
@@ -628,6 +733,8 @@ export class LearnerStorage {
     const cursor = await this.getCursor();
     const clockOffset = await this.getClockOffset();
     const themeSelection = await this.getThemeSelection();
+    const personalBooks = await this.listPersonalBooks();
+    const bookCovers = await this.listBookCovers();
     return JSON.stringify(
       {
         exported_at: new Date().toISOString(),
@@ -641,6 +748,8 @@ export class LearnerStorage {
         active_content: active,
         cached_bundle: cached,
         theme_selection: themeSelection,
+        personal_books: personalBooks,
+        book_covers: bookCovers,
       },
       null,
       2,

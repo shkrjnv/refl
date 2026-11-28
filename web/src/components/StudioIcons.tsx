@@ -7,6 +7,7 @@ import {
   BookMarked,
   BookOpen,
   Bookmark,
+  Camera,
   Check,
   ChevronDown,
   ChevronUp,
@@ -14,18 +15,25 @@ import {
   Copy,
   Flame,
   Globe,
+  Image as ImageIcon,
   GripVertical,
   LibraryBig,
+  Link2,
+  List,
   Minus,
   Moon,
   Network,
   NotebookPen,
   Palette,
+  PanelRight,
+  Pencil,
   Plus,
   RefreshCw,
   Settings,
   Sparkles,
   Sun,
+  Trash2,
+  Upload,
   UserRound,
   WifiOff,
   X,
@@ -63,7 +71,15 @@ export type StudioIconName =
   | "copy"
   | "plus"
   | "minus"
-  | "chevron-up";
+  | "chevron-up"
+  | "camera"
+  | "image"
+  | "upload"
+  | "panel-right"
+  | "link"
+  | "list"
+  | "pencil"
+  | "trash";
 
 export interface StudioIconProps {
   name: StudioIconName;
@@ -104,6 +120,14 @@ const ICONS: Record<StudioIconName, LucideIcon> = {
   plus: Plus,
   minus: Minus,
   "chevron-up": ChevronUp,
+  camera: Camera,
+  image: ImageIcon,
+  upload: Upload,
+  "panel-right": PanelRight,
+  link: Link2,
+  list: List,
+  pencil: Pencil,
+  trash: Trash2,
 };
 
 export interface BrandLogoProps {

@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import "fake-indexeddb/auto";
+
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { LearnerStorage } from "../db/storage";
 import { I18nProvider } from "../i18n";
 import type { RecordStore } from "../prototype/records";
 import type { BookCoverageResult } from "../wasm/types";
@@ -37,7 +40,7 @@ function coverage(): Promise<BookCoverageResult> {
   });
 }
 
-function renderLibrary() {
+function renderLibrary(storage: LearnerStorage | null = null) {
   const store = fakeStore();
   render(
     <I18nProvider initialLocale="en">
@@ -49,6 +52,7 @@ function renderLibrary() {
         onStateChange={() => undefined}
         bookCoverage={coverage}
         onPractice={() => undefined}
+        storage={storage}
       />
     </I18nProvider>,
   );
@@ -72,11 +76,21 @@ describe("library and reader", () => {
 
   it("computes coverage and adds a tapped book word with its sentence", async () => {
     const store = renderLibrary();
-    expect(await screen.findByText("92% understood")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Open book" }));
+    expect((await screen.findAllByText("92% understood")).length).toBeGreaterThan(0);
+    const gift = screen
+      .getByRole("heading", { name: "The Gift of the Magi" })
+      .closest(".book-card");
+    expect(gift).not.toBeNull();
+    fireEvent.click(
+      within(gift as HTMLElement).getByRole("button", { name: "Open book" }),
+    );
     expect(
-      screen.getByRole("heading", { name: "The First Day" }),
+      screen.getByRole("heading", { level: 1, name: "The Gift of the Magi" }),
     ).toBeTruthy();
+    const prose = document.querySelector(".reader-paper")?.textContent ?? "";
+    expect(prose).toContain("ONE dollar and eighty-seven cents.");
+    expect(prose).toContain("“Mr. James Dillingham Young.”");
+    expect(document.querySelector(".reader-sentence-action")).toBeNull();
     const cat = screen
       .getAllByRole("button", { name: /^cat\b/ })
       .find((button) => button.classList.contains("reader-token"));
@@ -92,10 +106,52 @@ describe("library and reader", () => {
       bundleLexemeId: "en.lex.cat.animal",
       source: "book",
       context: {
-        text: "Mira sees a cat in the garden.",
-        bookId: "book.first-day",
-        sentenceId: "sentence.first-day.1.3.1",
+        text: expect.stringContaining("grey cat"),
+        bookId: "book.ohenry-gift-magi",
+        sentenceId: expect.stringContaining("sentence.ohenry-gift-magi."),
       },
     });
+  });
+
+  it("shows a personal book with its cover and removes it from the shelf", async () => {
+    const storage = await LearnerStorage.open(`library-${crypto.randomUUID()}`);
+    const book = {
+      id: "book.personal-test",
+      version: "1".repeat(64),
+      title: { en: "My Upload" },
+      level: "A2",
+      license: "personal",
+      source: "Uploaded by you",
+      chapters: [],
+    };
+    await storage.putPersonalBook({
+      learner_id: storage.learnerId,
+      book,
+      imported_at: 1,
+      bytes: JSON.stringify(book).length,
+    });
+    await storage.putBookCover({
+      learner_id: storage.learnerId,
+      book_id: book.id,
+      data_url: "data:image/webp;base64,AAAA",
+      updated_at: 1,
+    });
+    try {
+      renderLibrary(storage);
+      expect(
+        await screen.findByRole("heading", { name: "My Upload" }),
+      ).toBeTruthy();
+      expect(document.querySelector(".book-cover img")).not.toBeNull();
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: "Remove My Upload from the shelf",
+        }),
+      );
+      await waitFor(() =>
+        expect(screen.queryByRole("heading", { name: "My Upload" })).toBeNull(),
+      );
+    } finally {
+      await storage.wipe();
+    }
   });
 });

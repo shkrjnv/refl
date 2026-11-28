@@ -17,7 +17,7 @@ import {
   type CompanionId,
 } from "./companions/registry";
 import { BOOKS } from "./prototype/books";
-import { RecordStore } from "./prototype/records";
+import { parseRecords, RecordStore } from "./prototype/records";
 import { VocabularyScreen } from "./screens/VocabularyScreen";
 import { LibraryScreen } from "./screens/LibraryScreen";
 import { GraphScreen } from "./screens/GraphScreen";
@@ -67,6 +67,7 @@ import { PlacementScreen } from "./screens/PlacementScreen";
 import { ProfileScreen } from "./screens/ProfileScreen";
 import { ProgressScreen } from "./screens/ProgressScreen";
 import { SummaryScreen } from "./screens/SummaryScreen";
+import { NotesWorkspace } from "./screens/NotesWorkspace";
 import { TodayScreen } from "./screens/TodayScreen";
 import {
   clearSessionOwner,
@@ -119,6 +120,8 @@ export function App({ initialTheme, initialSkin }: AppProps) {
   const [theme, setTheme] = useState<ThemeName>(initialTheme);
   const [skin, setSkin] = useState<SkinName>(initialSkin);
   const [route, setRoute] = useState<VisibleRoute>("today");
+  const [notesTarget, setNotesTarget] = useState<string | null>(null);
+  const [notesReturn, setNotesReturn] = useState<AppRoute>("library");
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [storage, setStorage] = useState<LearnerStorage | null>(null);
   const [content, setContent] = useState<PrototypeContent | null>(null);
@@ -389,6 +392,12 @@ export function App({ initialTheme, initialSkin }: AppProps) {
 
   const practiceKc = () => {
     void startLesson(15);
+  };
+
+  const openNotes = (noteId?: string, from: AppRoute = "library") => {
+    setNotesTarget(noteId ?? null);
+    setNotesReturn(from);
+    setRoute("notes");
   };
 
   const syncNow = async (): Promise<boolean> => {
@@ -944,7 +953,11 @@ export function App({ initialTheme, initialSkin }: AppProps) {
   }
 
   const activeRoute: AppRoute =
-    route === "summary" ? "today" : route;
+    route === "summary"
+      ? "today"
+      : route === "notes"
+        ? "library"
+        : route;
   const learnerLabel = identity.label;
 
   return (
@@ -979,6 +992,7 @@ export function App({ initialTheme, initialSkin }: AppProps) {
             locale={locale}
             recordsWriter={recordsWriter}
             onStateChange={handleStateChange}
+            onOpenNotes={(noteId) => openNotes(noteId, "vocabulary")}
           />
         ) : null
       ) : null}
@@ -992,6 +1006,24 @@ export function App({ initialTheme, initialSkin }: AppProps) {
             onStateChange={handleStateChange}
             bookCoverage={bookCoverage}
             onPractice={practiceKc}
+            storage={storage}
+            onOpenNotes={(noteId) => openNotes(noteId, "library")}
+          />
+        ) : null
+      ) : null}
+      {route === "notes" ? (
+        recordsWriter && stateJson ? (
+          <NotesWorkspace
+            records={parseRecords(stateJson)}
+            content={content}
+            stateJson={stateJson}
+            locale={locale}
+            recordsWriter={recordsWriter}
+            onStateChange={handleStateChange}
+            books={BOOKS}
+            initialNoteId={notesTarget}
+            onBack={() => setRoute(notesReturn)}
+            onPractice={practiceKc}
           />
         ) : null
       ) : null}
@@ -1004,6 +1036,7 @@ export function App({ initialTheme, initialSkin }: AppProps) {
             recordsWriter={recordsWriter}
             onStateChange={handleStateChange}
             onPractice={practiceKc}
+            onOpenNotes={(noteId) => openNotes(noteId, "graph")}
           />
         ) : null
       ) : null}
@@ -1022,6 +1055,7 @@ export function App({ initialTheme, initialSkin }: AppProps) {
           companion={companion}
           recordsWriter={recordsWriter}
           onStateChange={handleStateChange}
+          onOpenNotes={() => openNotes(undefined, "today")}
         />
       ) : null}
       {route === "lesson" && runner && lessonView ? (
@@ -1033,6 +1067,7 @@ export function App({ initialTheme, initialSkin }: AppProps) {
           recordsWriter={recordsWriter}
           stateJson={stateJson ?? undefined}
           onStateChange={handleStateChange}
+          onOpenNotes={(noteId) => openNotes(noteId, "lesson")}
           onExit={() => {
             runner?.finish();
             coreRef.current?.updates.endSession();

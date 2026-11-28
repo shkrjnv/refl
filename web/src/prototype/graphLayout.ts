@@ -12,10 +12,10 @@ export interface Point {
   y: number;
 }
 
-const X_MIN = 160;
-const X_MAX = 840;
-const Y_MIN = 90;
-const Y_MAX = 910;
+const X_MIN = 260;
+const X_MAX = 740;
+const Y_MIN = 160;
+const Y_MAX = 840;
 
 function clampX(value: number): number {
   return Math.max(X_MIN, Math.min(X_MAX, value));
@@ -60,13 +60,15 @@ export function fallbackPositions(
     groups.set(key, [...(groups.get(key) ?? []), node]);
   }
   const positions = new Map<string, Point>();
-  const rowHeight = 190;
-  const groupGap = 90;
+  // Two columns keep a 140 px card readable on a 360 px stage; the taller
+  // row keeps three-line titles from touching the next row.
+  const rowHeight = 300;
+  const groupGap = 100;
   let cursor = Y_MIN;
   for (const group of groups.values()) {
-    const rows = Math.ceil(group.length / 3);
+    const rows = Math.ceil(group.length / 2);
     for (let row = 0; row < rows; row += 1) {
-      const rowNodes = group.slice(row * 3, row * 3 + 3);
+      const rowNodes = group.slice(row * 2, row * 2 + 2);
       const columns = rowNodes.length;
       rowNodes.forEach((node, column) => {
         const x =
@@ -75,7 +77,7 @@ export function fallbackPositions(
             : X_MIN + ((X_MAX - X_MIN) * column) / Math.max(1, columns - 1);
         positions.set(node.id, {
           x: clampX(x),
-          y: clampY(cursor + row * rowHeight),
+          y: cursor + row * rowHeight,
         });
       });
     }
@@ -199,10 +201,13 @@ export function webPositions(
       }
     }
   }
-  // Hard separation larger than a node card at the narrowest supported
-  // stage (360 px viewport ≈ 310 layout px, so a 96 px card spans ≈ 310
-  // units). The soft force alone can leave two nodes touching.
-  const minimum = 340;
+  // Hard separation for the narrow stage: a 140 px card is ~450 layout
+  // units wide, so five cards need a wide ring. Larger sets fall back to a
+  // tighter packing rather than pushing every card onto the clamp.
+  const area = (X_MAX - X_MIN) * (Y_MAX - Y_MIN);
+  const minimum = Math.round(
+    Math.max(300, Math.min(440, Math.sqrt(area / Math.max(1, ids.length)) * 1.7)),
+  );
   for (let pass = 0; pass < 24; pass += 1) {
     let moved = false;
     for (let i = 0; i < ids.length; i += 1) {

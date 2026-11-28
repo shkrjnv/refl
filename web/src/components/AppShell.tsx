@@ -18,7 +18,8 @@ export type AppRoute =
   | "graph"
   | "lesson"
   | "stats"
-  | "profile";
+  | "profile"
+  | "notes";
 
 export interface AppShellProps {
   active: AppRoute;

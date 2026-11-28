@@ -29,6 +29,7 @@ export interface VocabularyScreenProps {
   locale: Locale;
   recordsWriter: RecordStore;
   onStateChange: (stateJson: string) => void;
+  onOpenNotes?: (noteId?: string) => void;
 }
 
 type Status = "all" | "new" | "learning" | "in_memory" | "due";
@@ -103,6 +104,7 @@ export function VocabularyScreen({
   locale,
   recordsWriter,
   onStateChange,
+  onOpenNotes,
 }: VocabularyScreenProps) {
   const { t } = useTranslation();
   const records: PersonalRecords = useMemo(
@@ -801,6 +803,7 @@ export function VocabularyScreen({
           stateJson={stateJson}
           onStateChange={onStateChange}
           title={t("notes-panel-title")}
+          onOpenWorkspace={onOpenNotes}
           onClose={() => setNoteTarget(null)}
         />
       ) : null}

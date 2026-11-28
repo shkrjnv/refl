@@ -40,6 +40,7 @@ export interface TodayScreenProps {
   companion: CompanionId;
   recordsWriter: RecordStore | null;
   onStateChange: (stateJson: string) => void;
+  onOpenNotes?: () => void;
 }
 
 const DURATIONS = [10, 15, 25] as const;
@@ -113,6 +114,7 @@ export function TodayScreen({
   companion,
   recordsWriter,
   onStateChange,
+  onOpenNotes,
 }: TodayScreenProps) {
   const companionEntry = companionById(companion);
   const { t, locale } = useTranslation();
@@ -565,7 +567,18 @@ export function TodayScreen({
               <span className="bento-kicker">{t("today-notes-kicker")}</span>
               <h2 id="today-notes-title">{t("today-notes-title")}</h2>
             </div>
-            <StudioIcon name="practice" size={18} />
+            {onOpenNotes ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={onOpenNotes}
+              >
+                {t("notes-open-workspace")}
+              </Button>
+            ) : (
+              <StudioIcon name="practice" size={18} />
+            )}
           </div>
           {notes.length === 0 ? (
             <p className="bento-empty">{t("today-notes-empty")}</p>
@@ -590,6 +603,7 @@ export function TodayScreen({
                 stateJson={stateJson}
                 onStateChange={onStateChange}
                 title={t("today-private-notes-title")}
+                onOpenWorkspace={onOpenNotes}
               />
             ) : null}
           </details>

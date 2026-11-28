@@ -23,6 +23,7 @@ export interface LessonScreenProps {
   recordsWriter?: RecordStore | null;
   stateJson?: string;
   onStateChange?: (stateJson: string) => void;
+  onOpenNotes?: (noteId?: string) => void;
 }
 
 interface ChoiceInputProps {
@@ -224,6 +225,7 @@ export function LessonScreen({
   recordsWriter,
   stateJson,
   onStateChange,
+  onOpenNotes,
 }: LessonScreenProps) {
   const { t } = useTranslation();
   const [view, setView] = useState<LessonView>(initialView);
@@ -346,12 +348,13 @@ export function LessonScreen({
           records={parseRecords(stateJson)}
           anchor={{
             kind: "item",
-            id: ``,
+            id: `${item.ref.id}@${item.ref.version}`,
           }}
           recordsWriter={recordsWriter}
           stateJson={stateJson}
           onStateChange={onStateChange}
           title={t("notes-panel-title")}
+          onOpenWorkspace={onOpenNotes}
           onClose={() => setNoteOpen(false)}
         />
       ) : null}

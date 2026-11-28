@@ -8,7 +8,7 @@ import {
   type PersonalRecords,
   type RecordStore,
 } from "../prototype/records";
-import { RichText } from "./RichText";
+import { NoteMarkdown } from "./NoteMarkdown";
 import { Button } from "./ui";
 
 export interface NotesPanelProps {
@@ -19,6 +19,8 @@ export interface NotesPanelProps {
   onStateChange: (stateJson: string) => void;
   title?: string;
   onClose?: () => void;
+  initialDraft?: string;
+  onOpenWorkspace?: (noteId?: string) => void;
 }
 
 function noteAnchorMatches(
@@ -31,42 +33,7 @@ function noteAnchorMatches(
 
 /** Renders the small Markdown subset notes allow, without HTML. */
 export function NoteBody({ body }: { body: string }) {
-  const lines = body.split("\n");
-  const blocks: React.ReactNode[] = [];
-  let list: string[] = [];
-  const flush = (key: number) => {
-    if (list.length > 0) {
-      blocks.push(
-        <ul key={`list-${key}`}>
-          {list.map((item, index) => (
-            <li key={index}>
-              <RichText text={item} />
-            </li>
-          ))}
-        </ul>,
-      );
-      list = [];
-    }
-  };
-  lines.forEach((line, index) => {
-    const trimmed = line.trim();
-    if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
-      list.push(trimmed.slice(2));
-      return;
-    }
-    flush(index);
-    if (trimmed.startsWith("### ")) {
-      blocks.push(<h4 key={index}>{trimmed.slice(4)}</h4>);
-    } else if (trimmed.startsWith("## ")) {
-      blocks.push(<h3 key={index}>{trimmed.slice(3)}</h3>);
-    } else if (trimmed.startsWith("> ")) {
-      blocks.push(<blockquote key={index}>{trimmed.slice(2)}</blockquote>);
-    } else if (trimmed.length > 0) {
-      blocks.push(<p key={index}><RichText text={trimmed} /></p>);
-    }
-  });
-  flush(lines.length);
-  return <div className="note-markdown">{blocks}</div>;
+  return <NoteMarkdown body={body} />;
 }
 
 export function NotesPanel({
@@ -77,13 +44,15 @@ export function NotesPanel({
   onStateChange,
   title,
   onClose,
+  initialDraft = "",
+  onOpenWorkspace,
 }: NotesPanelProps) {
   const { t } = useTranslation();
   const notes = useMemo(
     () => activeNotes(records, anchor),
     [records, anchor],
   );
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useState(initialDraft);
   const [editing, setEditing] = useState<NoteView | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -125,11 +94,23 @@ export function NotesPanel({
     <section className="notes-panel" aria-label={title ?? t("notes-panel-title")}>
       <header className="notes-panel-head">
         <h3>{title ?? t("notes-panel-title")}</h3>
-        {onClose ? (
-          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-            {t("notes-close")}
-          </Button>
-        ) : null}
+        <div className="notes-panel-head-actions">
+          {onOpenWorkspace ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => onOpenWorkspace(editing?.note_id ?? notes[0]?.note_id)}
+            >
+              {t("notes-open-workspace")}
+            </Button>
+          ) : null}
+          {onClose ? (
+            <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+              {t("notes-close")}
+            </Button>
+          ) : null}
+        </div>
       </header>
       {notes.length === 0 ? (
         <p className="notes-empty">{t("notes-empty-anchor")}</p>
