@@ -251,3 +251,11 @@
 - Settings now opens on Account & Sync, with tabs ordered Account & Sync → Offline & Data → Appearance → Admin. Learner identity, linked methods, language, sync, and sign-out are reachable immediately; sign-out remains inside the account card and was not moved to the workspace. The embedded settings note was updated in EN/RU/UZ to match the new order.
 - Coverage now includes the auth confirmation checkmark (label, 140ms animation, zero pulse), the copy action's checkmark with no pulse, and the account-first tab order/default selection in both ProfileScreen's embedded settings and the settings screen. All 100 web tests pass.
 - `just fmt-check`, `just lint`, `just test`, and `just web` pass; the commit is local and not pushed.
+
+## W20 — confirmation checkmarks that stay visible
+
+- Auth confirmation now holds for 450ms before entering the workspace (220ms under `prefers-reduced-motion`). The hold is exposed through `confirmationHoldMs()` so the timing is testable; the form region is remeasured when the check appears.
+- `.auth-confirm-check` is a 20px inline-flex, centre-aligned slot using `var(--text)` and a 2.4 stroke. It sits inline with the title, stays fully inside the measured form region, has no opacity-held state, and keeps only the 140ms fade/scale animation (disabled under reduced motion).
+- Audited the other confirmation marks: lesson correct verdicts carry an 18px check in the verdict colour, invite copying uses the active `CrossfadeIcon` check with no pulse, and manual sync swaps its button icon to the active check. Crossfade active layers are explicitly asserted at `opacity: 1`, and no `PulseConfirm` remains.
+- Coverage now includes 450ms/220ms hold selection, inline-flex/high-contrast/uncropped auth check CSS, sync and copy check states, and the lesson verdict check. All 102 web tests pass.
+- `just fmt-check`, `just lint`, `just test`, and `just web` pass; the commit is local and not pushed.

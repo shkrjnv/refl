@@ -80,7 +80,18 @@ const TELEGRAM_QUERY_KEYS = [
   "hash",
 ] as const;
 const CODE_LENGTH = 6;
-const CONFIRMATION_HOLD_MS = 160;
+const CONFIRMATION_HOLD_MS = 450;
+const REDUCED_MOTION_CONFIRMATION_HOLD_MS = 220;
+
+export function confirmationHoldMs(): number {
+  const reduced =
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  return reduced
+    ? REDUCED_MOTION_CONFIRMATION_HOLD_MS
+    : CONFIRMATION_HOLD_MS;
+}
 
 function clearTelegramParams(): void {
   if (typeof window === "undefined") {
@@ -192,7 +203,7 @@ export function AuthScreen({
     return () => {
       observer.disconnect();
     };
-  }, [stage, error, sent, inviteCode]);
+  }, [stage, error, sent, inviteCode, confirmed]);
 
   const completeAuthentication = (tokens: AuthTokens, method: AuthMethod) => {
     setConfirmed(true);
@@ -202,7 +213,7 @@ export function AuthScreen({
     confirmationTimerRef.current = window.setTimeout(() => {
       confirmationTimerRef.current = null;
       callbacksRef.current.onAuthenticated(tokens, method);
-    }, CONFIRMATION_HOLD_MS);
+    }, confirmationHoldMs());
   };
 
   const handleResponse = (response: VerifyCodeResponse, method: AuthMethod) => {

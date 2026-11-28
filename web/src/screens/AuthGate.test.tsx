@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { AuthTokens, VerifyCodeResponse } from "../api/client";
 import { I18nProvider } from "../i18n";
 import { applyTheme, storeTheme, type ThemeName } from "../theme/tokens";
-import type { AuthApi } from "./AuthScreen";
+import { confirmationHoldMs, type AuthApi } from "./AuthScreen";
 import { AuthGate } from "./AuthGate";
 
 afterEach(() => {
@@ -31,6 +31,26 @@ function cssRule(css: string, selector: string): string {
 }
 
 describe("auth and access flow", () => {
+  it("holds the confirmation check long enough, shorter under reduced motion", () => {
+    expect(confirmationHoldMs()).toBe(450);
+    const original = window.matchMedia;
+    window.matchMedia = ((query: string): MediaQueryList => ({
+      matches: true,
+      media: query,
+      onchange: null,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      dispatchEvent: () => false,
+    })) as typeof window.matchMedia;
+    try {
+      expect(confirmationHoldMs()).toBe(220);
+    } finally {
+      window.matchMedia = original;
+    }
+  });
+
   it("keeps the invite and moves to pending approval", async () => {
     window.history.replaceState(
       {},
@@ -425,8 +445,17 @@ describe("auth and access flow", () => {
     expect(document.querySelector(".auth-success")).toBeNull();
 
     const css = readFileSync("src/app.css", "utf8");
-    const checkRule = css.slice(css.indexOf(".auth-confirm-check {"));
+    const checkStart = css.indexOf(".auth-confirm-check {");
+    const checkRule = css.slice(
+      checkStart,
+      css.indexOf("}", checkStart) + 1,
+    );
+    expect(checkRule).toContain("display: inline-flex");
+    expect(checkRule).toContain("align-items: center");
+    expect(checkRule).toContain("color: var(--text)");
+    expect(checkRule).toContain("flex: none");
     expect(checkRule).toContain("animation: auth-confirm-in 140ms");
+    expect(checkRule).not.toContain("opacity: 0");
     expect(checkRule).not.toContain("blur");
     expect(css).toMatch(
       /prefers-reduced-motion: reduce[\s\S]*?\.auth-confirm-check/,

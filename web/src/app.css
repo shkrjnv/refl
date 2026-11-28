@@ -10893,18 +10893,21 @@ input:focus-visible {
 /* ========================================================================== */
 
 .auth-confirm-check {
-  display: inline-grid;
+  display: inline-flex;
   width: 20px;
   height: 20px;
+  align-items: center;
+  justify-content: center;
+  flex: none;
   margin-left: 8px;
-  place-items: center;
-  color: var(--green);
+  color: var(--text);
+  line-height: 1;
   vertical-align: middle;
   animation: auth-confirm-in 140ms ease-out both;
 }
 
 .auth-confirm-check .studio-icon {
-  stroke-width: 2.2;
+  stroke-width: 2.4;
 }
 
 @keyframes auth-confirm-in {

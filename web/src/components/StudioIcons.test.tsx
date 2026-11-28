@@ -87,6 +87,15 @@ describe("studio identity", () => {
     expect(crossfade).toContain("opacity 140ms ease");
     expect(crossfade).not.toContain("filter: blur(4px)");
     expect(crossfade).toContain("scale(0.94)");
+    const activeToStart = css.indexOf(
+      '.crossfade-icon[data-active="true"] .crossfade-icon-state-to {',
+    );
+    const activeTo = css.slice(
+      activeToStart,
+      css.indexOf("}", activeToStart) + 1,
+    );
+    expect(activeTo).toContain("opacity: 1");
+    expect(activeTo).not.toContain("opacity: 0");
     expect(css).toMatch(
       /prefers-reduced-motion: reduce[\s\S]*?\.crossfade-icon-state/,
     );

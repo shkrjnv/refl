@@ -1,6 +1,13 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { I18nProvider } from "../i18n";
@@ -164,7 +171,7 @@ describe("statistics, profile, and settings", () => {
     expect(screen.getByRole("heading", { name: "Learner" })).toBeTruthy();
   });
 
-  it("switches language, palette, skin, navigation, and sign-out from settings", () => {
+  it("switches language, palette, skin, navigation, and sign-out from settings", async () => {
     let locale = "en";
     let selectedPalette = "cream-paper";
     let selectedSkin = "living-studio";
@@ -201,6 +208,7 @@ describe("statistics, profile, and settings", () => {
           onLogout={() => {
             signedOut = true;
           }}
+          onSyncNow={async () => true}
         />
       </I18nProvider>,
     );
@@ -210,6 +218,13 @@ describe("statistics, profile, and settings", () => {
         "aria-selected",
       ),
     ).toBe("true");
+    const sync = screen.getByRole("button", { name: "Retry sync" });
+    fireEvent.click(sync);
+    await waitFor(() =>
+      expect(
+        sync.querySelector(".crossfade-icon")?.getAttribute("data-active"),
+      ).toBe("true"),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Russian" }));
     expect(screen.getByText("learner-42")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
